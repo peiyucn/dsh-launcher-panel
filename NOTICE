@@ -1,11 +1,11 @@
 DSH Launcher Panel — third-party notices
 ========================================
 
-resources/icon.svg and the status bar icon font resources/dsh-icon.woff are
-derived from the Spouting Whale (🐳) emoji artwork in Google's Noto Emoji
-project (https://github.com/googlefonts/noto-emoji), Copyright Google LLC,
-licensed under the Apache License, Version 2.0
-(https://www.apache.org/licenses/LICENSE-2.0).
+resources/icon.svg and the status bar icon font resources/dsh-icon.woff use
+the Spouting Whale (🐳) artwork from Twemoji
+(https://github.com/jdecked/twemoji), created by Twitter, Inc. and other
+contributors, licensed under the Creative Commons Attribution 4.0
+International license (https://creativecommons.org/licenses/by/4.0/).
 
 Modifications: recolored to the DSH brand palette (#4D6BFE family), and
 recomposed into a monochrome silhouette plus two splash animation frames for

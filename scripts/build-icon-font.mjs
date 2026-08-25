@@ -24,15 +24,21 @@ const silhouette = (svg) =>
 
 // The splash is the "url(#splash)" group in icon.svg (spout cloud + drops).
 // Wrap it in a scale group for the two animation frames.
-// The splash is the light-blue shapes in icon.svg. Two forms exist: a
-// gradient group (url(#splash), newer artwork) or flat #7FA3FF shapes
-// (Noto-derived artwork) — support both, so icon.svg edits keep working.
+// The splash is the spout artwork in icon.svg. Twemoji-derived icons give
+// the spout a dedicated color (#8FB2FF, a run of same-colored shapes); older
+// artwork used a url(#splash) gradient group — support both forms.
+const SPLASH_COLOR = '#8FB2FF'
 const splashUrlMatch = icon.match(/<g fill="url\(#[0-9A-Za-z]+\)">[\s\S]*?<\/g>/)
-const splashFlatMatch = icon.match(/<path[^>]*fill="#7FA3FF"[^>]*\/>(?:\s*<ellipse[^>]*fill="#7FA3FF"[^>]*\/>)*/)
+const splashFlatMatch = icon.match(
+  new RegExp(
+    `<(?:path|ellipse|circle)[^>]*fill="${SPLASH_COLOR}"[^>]*/>(?:\\s*<(?:path|ellipse|circle)[^>]*fill="${SPLASH_COLOR}"[^>]*/>)*`,
+  ),
+)
 const splashToken = splashUrlMatch?.[0] ?? splashFlatMatch?.[0]
 if (!splashToken) throw new Error('splash not found in resources/icon.svg')
 const splashInner = splashToken.replace(/^<g[^>]*>/, '').replace(/<\/g>$/, '')
-const [scx, scy] = splashUrlMatch ? [76, 24] : [56, 27]
+const isTwemoji = icon.includes('viewBox="0 0 36 36"')
+const [scx, scy] = splashUrlMatch ? [76, 24] : isTwemoji ? [8, 6] : [56, 27]
 // Replace the splash FIRST (while it still carries its original markup),
 // then flatten to a silhouette — otherwise the match string never appears.
 const frame = (scale) =>
