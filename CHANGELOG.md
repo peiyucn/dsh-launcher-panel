@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1]
+
+- The status bar shows the whale icon only (no "DSH" text) and opens a quick-pick command menu on click: Open Web UI / Open Dashboard / Stop while running, Open Dashboard / Stop while starting or installing, Start & Open Web UI / Open Dashboard when stopped, plus Open Settings.
+- The whale artwork is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0 — see NOTICE) shown as a monochrome silhouette with the eye and a belly band punched through: consistent in the activity bar, the status bar icon font and the marketplace icon; the view title is plain "DSH WebUI" text.
+- While starting or installing, the spout above the whale pulses between two animation frames every 150 ms (replacing the braille dots).
+- Fixed: the status bar item no longer paints its text in the brand blue only — on themes with a blue status bar the text was invisible. When the server is running it now uses its own blue background with white foreground (theme colors `dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`, overridable per theme), keeping readable contrast on every theme.
+
 ## [0.2.0]
 
 - Source mode: a freshly cloned checkout is set up (`pnpm install` + build) automatically — the extra "Setup now?" prompt right after the clone is gone (existing checkouts still ask before being set up).

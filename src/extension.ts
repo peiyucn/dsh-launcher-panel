@@ -4,9 +4,20 @@ import { actionStart, actionStop } from './actions'
 import { DshPanelProvider } from './panel'
 import { dshBaseDir } from './common'
 import { checkNodeOnce, currentStatus, dbg, registerConfigWatcher, setLogPath, stopLogTail } from './server'
+import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu'
 
 const STATUS_REFRESH_INTERVAL_MS = 4_000
 const STATUS_SPIN_INTERVAL_MS = 150
+// Running state paints its own background + foreground as theme colors
+// (contributed in package.json), so the item stays readable on any theme.
+const RUNNING_BACKGROUND_COLOR = 'dsh.statusBar.runningBackground'
+const RUNNING_FOREGROUND_COLOR = 'dsh.statusBar.runningForeground'
+// Status bar uses the launcher's own icon font (resources/dsh-icon.woff,
+// derived from the 🐳 artwork — see NOTICE): a whale glyph plus two splash
+// frames that are alternated while starting/installing, so the spout pulses.
+const STATUS_TEXT = '$(dsh-whale)'
+const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
+const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -24,10 +35,11 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(registerConfigWatcher())
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-  statusBar.command = 'dsh.start'
+  // Clicking the item opens a command menu (like other status bar entries)
+  // instead of starting the server directly.
+  statusBar.command = 'dsh.statusMenu'
   statusBar.show()
 
-  const SPIN_CHARS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
   let spinnerTimer: ReturnType<typeof setInterval> | undefined
   const stopSpinner = (): void => {
     if (spinnerTimer) {
@@ -40,33 +52,75 @@ export function activate(context: vscode.ExtensionContext): void {
     const status = await currentStatus()
     if (status.running) {
       stopSpinner()
-      statusBar.text = '🐳\uFE0E DSH'
-      statusBar.color = '#4D6BFE'
-      statusBar.tooltip = `DeepSeek Harness running at ${status.url} — click to open`
+      statusBar.text = STATUS_TEXT
+      statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
+      statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
+      statusBar.tooltip = `DeepSeek Harness running at ${status.url} — click for options`
     } else if (status.starting || status.installing) {
+      stopSpinner()
+      statusBar.text = STATUS_SPLASH_SMALL
+      statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = status.installing ? 'DeepSeek Harness installing — click to open when ready' : 'DeepSeek Harness starting — click to open when ready'
-      if (!spinnerTimer) {
-        let i = 0
-        statusBar.text = '🐳\uFE0E DSH ⠋'
-        spinnerTimer = setInterval(() => {
-          statusBar.text = `🐳\uFE0E DSH ${SPIN_CHARS[i++ % SPIN_CHARS.length]}`
-        }, STATUS_SPIN_INTERVAL_MS)
-      }
+      statusBar.tooltip = status.installing ? 'DeepSeek Harness installing — click for options' : 'DeepSeek Harness starting — click for options'
+      // Pulse the whale's spout between the small and large splash frames.
+      spinnerTimer = setInterval(() => {
+        statusBar.text = statusBar.text === STATUS_SPLASH_SMALL ? STATUS_SPLASH_LARGE : STATUS_SPLASH_SMALL
+      }, STATUS_SPIN_INTERVAL_MS)
+    } else if (status.stopping) {
+      stopSpinner()
+      statusBar.text = STATUS_TEXT
+      statusBar.backgroundColor = undefined
+      statusBar.color = undefined
+      statusBar.tooltip = 'DeepSeek Harness stopping — click for options'
     } else {
       stopSpinner()
-      statusBar.text = '🐳\uFE0E DSH'
+      statusBar.text = STATUS_TEXT
+      statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = 'DeepSeek Harness stopped — click to start & open'
+      statusBar.tooltip = 'DeepSeek Harness stopped — click for options'
     }
   }
 
   void refreshStatusBar().catch(() => {})
   const statusTimer = setInterval(() => void refreshStatusBar().catch(() => {}), STATUS_REFRESH_INTERVAL_MS)
 
+  const runMenuAction = async (action: StatusMenuAction): Promise<void> => {
+    switch (action) {
+      case 'start':
+      case 'open':
+        await actionStart()
+        break
+      case 'stop':
+        await actionStop()
+        break
+      case 'dashboard':
+        try {
+          await vscode.commands.executeCommand('dsh.panel.focus')
+        } catch {
+          await vscode.commands.executeCommand('workbench.view.extension.dsh')
+        }
+        break
+      case 'settings':
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:peiyucn.dsh-launcher-panel')
+        break
+    }
+  }
+
   context.subscriptions.push(
     statusBar,
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
+    vscode.commands.registerCommand('dsh.statusMenu', async () => {
+      const items = buildStatusMenuItems(await currentStatus()).map((item) => ({
+        label: item.label,
+        iconPath: new vscode.ThemeIcon(item.icon),
+        action: item.action,
+      }))
+      const picked = await vscode.window.showQuickPick(items, {
+        title: '🐳 DSH',
+        placeHolder: 'DeepSeek Harness — choose an action',
+      })
+      if (picked) await runMenuAction(picked.action)
+    }),
     vscode.commands.registerCommand('dsh.start', () => actionStart()),
     vscode.commands.registerCommand('dsh.stop', () => actionStop()),
   )

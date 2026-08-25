@@ -1,0 +1,12 @@
+DSH Launcher Panel — third-party notices
+========================================
+
+resources/icon.svg and the status bar icon font resources/dsh-icon.woff use
+the Spouting Whale (🐳) artwork from Twemoji
+(https://github.com/jdecked/twemoji), created by Twitter, Inc. and other
+contributors, licensed under the Creative Commons Attribution 4.0
+International license (https://creativecommons.org/licenses/by/4.0/).
+
+Modifications: recolored to the DSH brand palette (#4D6BFE family), and
+recomposed into a monochrome silhouette plus two splash animation frames for
+the status bar icon font.
