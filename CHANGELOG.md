@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1]
+
+- Fixed: the status bar "🐳 DSH" item no longer paints its text in the brand blue only — on themes with a blue status bar the text was invisible. When the server is running it now uses its own blue background with white foreground (theme colors `dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`, overridable per theme), keeping readable contrast on every theme.
+
 ## [0.2.0]
 
 - Source mode: a freshly cloned checkout is set up (`pnpm install` + build) automatically — the extra "Setup now?" prompt right after the clone is gone (existing checkouts still ask before being set up).

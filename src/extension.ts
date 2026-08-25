@@ -7,6 +7,10 @@ import { checkNodeOnce, currentStatus, dbg, registerConfigWatcher, setLogPath, s
 
 const STATUS_REFRESH_INTERVAL_MS = 4_000
 const STATUS_SPIN_INTERVAL_MS = 150
+// Running state paints its own background + foreground as theme colors
+// (contributed in package.json), so the item stays readable on any theme.
+const RUNNING_BACKGROUND_COLOR = 'dsh.statusBar.runningBackground'
+const RUNNING_FOREGROUND_COLOR = 'dsh.statusBar.runningForeground'
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -41,9 +45,11 @@ export function activate(context: vscode.ExtensionContext): void {
     if (status.running) {
       stopSpinner()
       statusBar.text = '🐳\uFE0E DSH'
-      statusBar.color = '#4D6BFE'
+      statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
+      statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
       statusBar.tooltip = `DeepSeek Harness running at ${status.url} — click to open`
     } else if (status.starting || status.installing) {
+      statusBar.backgroundColor = undefined
       statusBar.color = undefined
       statusBar.tooltip = status.installing ? 'DeepSeek Harness installing — click to open when ready' : 'DeepSeek Harness starting — click to open when ready'
       if (!spinnerTimer) {
@@ -56,6 +62,7 @@ export function activate(context: vscode.ExtensionContext): void {
     } else {
       stopSpinner()
       statusBar.text = '🐳\uFE0E DSH'
+      statusBar.backgroundColor = undefined
       statusBar.color = undefined
       statusBar.tooltip = 'DeepSeek Harness stopped — click to start & open'
     }
