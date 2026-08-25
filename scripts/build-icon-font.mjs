@@ -40,7 +40,8 @@ const glyphs = [
   { name: 'dsh-whale-splash-large', unicode: '\uE902', body: frame(1.25) },
 ]
 
-const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">${body}</svg>`
+// Same 6% padding as resources/icon.svg so glyph and icon render alike.
+const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><g transform="translate(2.16 2.16) scale(0.88)">${body}</g></svg>`
 
 const fontStream = new SVGIcons2SVGFontStream({ fontName: 'dsh-icon', normalize: true, fontHeight: 1000 })
 let svgFont = ''
