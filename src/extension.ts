@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Node is probed exactly once, here, at activation.
   void checkNodeOnce()
 
-  const panelProvider = new DshPanelProvider(context.extension.packageJSON.version ?? '0.0.0')
+  const panelProvider = new DshPanelProvider(context.extensionUri, context.extension.packageJSON.version ?? '0.0.0')
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(DshPanelProvider.viewType, panelProvider, {
       webviewOptions: { retainContextWhenHidden: true },

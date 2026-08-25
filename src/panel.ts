@@ -17,7 +17,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined
   private timer: ReturnType<typeof setInterval> | undefined
 
-  constructor(private readonly version: string) {}
+  constructor(private readonly extensionUri: vscode.Uri, private readonly version: string) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
@@ -44,11 +44,12 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 
   private getHtml(): string {
     const nonce = getNonce()
+    const glyphFontUrl = this.view!.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'dsh-icon.woff'))
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${this.view!.webview.cspSource};">
 <style>
   html, body { height: 100%; }
   body { font-family: var(--vscode-font-family); font-size: 12px; color: var(--vscode-foreground); padding: 10px; margin: 0; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; overflow-y: auto; }
@@ -127,9 +128,17 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--vscode-descriptionForeground); opacity: .65; }
+  @font-face { font-family: 'dsh-icon'; src: url('${glyphFontUrl}') format('woff'); font-display: swap; }
+  .panel-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .dsh-glyph { font-family: 'dsh-icon'; font-size: 16px; line-height: 1; display: inline-block; }
+  .dsh-glyph::before { content: '\\e900'; }
 </style>
 </head>
 <body>
+  <div class="panel-title">
+    <span class="dsh-glyph" aria-hidden="true"></span>
+    <span>DSH Launcher Panel</span>
+  </div>
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
     <div class="loading-text">Loading…</div>

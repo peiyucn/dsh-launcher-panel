@@ -1,8 +1,13 @@
 // Builds resources/dsh-icon.woff — the status bar icon font.
 //
-// Derived from the original 🐳 artwork in resources/icon.svg: one silhouette
-// glyph plus two splash animation frames (the splash shrinks/grows), which the
-// status bar alternates while starting/installing so the spout pulses.
+// Derived from the Twemoji spouting whale artwork in resources/icon.svg
+// (recolored to the brand palette): one silhouette glyph plus two splash
+// animation frames (the spout shrinks/grows), which the status bar alternates
+// while starting/installing so the whale's spout pulses.
+//
+// The silhouette keeps the eye and the belly line as counter-wound sub-paths
+// merged into the body path (holes under nonzero winding), so the details
+// survive in the single-color glyph.
 //
 // Run: npm run build:icon-font
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -16,46 +21,35 @@ import ttf2woff from 'ttf2woff'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const icon = readFileSync(join(root, 'resources', 'icon.svg'), 'utf8')
 
-/** Flatten every shape (including gradient fills) into one silhouette color. */
-const silhouette = (svg) =>
-  svg
-    .replace(/fill="url\(#[0-9A-Za-z]+\)"/g, 'fill="#000000"')
-    .replace(/fill="#[0-9A-Fa-f]{6}"/g, 'fill="#000000"')
+// Path order in icon.svg (Twemoji whale, brand colors): body, belly band,
+// tail, spout, spout. The eye is a <circle>.
+const ds = [...icon.matchAll(/<path[^>]*d="([^"]+)"/g)].map((m) => m[1])
+if (ds.length < 5) throw new Error('unexpected icon.svg structure — expected 5 paths')
 
-// The splash is the "url(#splash)" group in icon.svg (spout cloud + drops).
-// Wrap it in a scale group for the two animation frames.
-// The splash is the spout artwork in icon.svg. Twemoji-derived icons give
-// the spout a dedicated color (#8FB2FF, a run of same-colored shapes); older
-// artwork used a url(#splash) gradient group — support both forms.
-const SPLASH_COLOR = '#8FB2FF'
-const splashUrlMatch = icon.match(/<g fill="url\(#[0-9A-Za-z]+\)">[\s\S]*?<\/g>/)
-const splashFlatMatch = icon.match(
-  new RegExp(
-    `<(?:path|ellipse|circle)[^>]*fill="${SPLASH_COLOR}"[^>]*/>(?:\\s*<(?:path|ellipse|circle)[^>]*fill="${SPLASH_COLOR}"[^>]*/>)*`,
-  ),
-)
-const splashToken = splashUrlMatch?.[0] ?? splashFlatMatch?.[0]
-if (!splashToken) throw new Error('splash not found in resources/icon.svg')
-const splashInner = splashToken.replace(/^<g[^>]*>/, '').replace(/<\/g>$/, '')
-const isTwemoji = icon.includes('viewBox="0 0 36 36"')
-const [scx, scy] = splashUrlMatch ? [76, 24] : isTwemoji ? [8, 6] : [56, 27]
-// Replace the splash FIRST (while it still carries its original markup),
-// then flatten to a silhouette — otherwise the match string never appears.
+// Counter-wound details (holes under nonzero winding): the eye hole at the
+// icon's eye position, and the belly band reversed (= the belly line).
+const EYE_HOLE = 'M5 25.5a1.5 1.5 0 0 0 3 0a1.5 1.5 0 0 0 -3 0Z'
+const BELLY_HOLE = 'M6.5 30.8C11 33 17 33.6 22 33.1C17 32.3 11 31.7 6.5 30.8Z'
+
+const path = (d) => `<path fill="#000000" d="${d}"/>`
+// Body, eye hole and belly hole live in ONE path so nonzero winding applies.
+const silhouette = path(ds[0] + EYE_HOLE + BELLY_HOLE) + path(ds[2]) + path(ds[3]) + path(ds[4])
+
+// The spout (last two paths) is wrapped in a scale group for the frames.
+const spout = path(ds[3]) + path(ds[4])
 const frame = (scale) =>
-  silhouette(
-    icon.replace(
-      splashToken,
-      `<g transform="translate(${scx} ${scy}) scale(${scale}) translate(${-scx} ${-scy})">${splashInner}</g>`,
-    ),
+  silhouette.replace(
+    spout,
+    `<g transform="translate(8 6) scale(${scale}) translate(-8 -6)">${spout}</g>`,
   )
 
 const glyphs = [
-  { name: 'dsh-whale', unicode: '\uE900', body: silhouette(icon) },
+  { name: 'dsh-whale', unicode: '\uE900', body: silhouette },
   { name: 'dsh-whale-splash-small', unicode: '\uE901', body: frame(0.8) },
   { name: 'dsh-whale-splash-large', unicode: '\uE902', body: frame(1.25) },
 ]
 
-const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">${body}</svg>`
+const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">${body}</svg>`
 
 const fontStream = new SVGIcons2SVGFontStream({ fontName: 'dsh-icon', normalize: true, fontHeight: 1000 })
 let svgFont = ''
