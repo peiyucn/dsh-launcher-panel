@@ -6,20 +6,20 @@ const base = { running: false, starting: false, installing: false, stopping: fal
 const actions = (status: typeof base) => buildStatusMenuItems(status).map((item) => item.action)
 
 test('stopped status menu offers start first, then dashboard', () => {
-  assert.deepEqual(actions(base), ['start', 'dashboard'])
+  assert.deepEqual(actions(base), ['start', 'dashboard', 'settings'])
 })
 
 test('running status menu offers open, dashboard and stop', () => {
-  assert.deepEqual(actions({ ...base, running: true }), ['open', 'dashboard', 'stop'])
+  assert.deepEqual(actions({ ...base, running: true }), ['open', 'dashboard', 'stop', 'settings'])
 })
 
 test('starting or installing status menu offers dashboard and stop', () => {
-  assert.deepEqual(actions({ ...base, starting: true }), ['dashboard', 'stop'])
-  assert.deepEqual(actions({ ...base, installing: true }), ['dashboard', 'stop'])
+  assert.deepEqual(actions({ ...base, starting: true }), ['dashboard', 'stop', 'settings'])
+  assert.deepEqual(actions({ ...base, installing: true }), ['dashboard', 'stop', 'settings'])
 })
 
 test('stopping status menu offers dashboard only', () => {
-  assert.deepEqual(actions({ ...base, stopping: true }), ['dashboard'])
+  assert.deepEqual(actions({ ...base, stopping: true }), ['dashboard', 'settings'])
 })
 
 test('every menu item carries a label and a codicon id', () => {

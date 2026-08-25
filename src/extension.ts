@@ -15,9 +15,9 @@ const RUNNING_FOREGROUND_COLOR = 'dsh.statusBar.runningForeground'
 // Status bar uses the launcher's own icon font (resources/dsh-icon.woff,
 // derived from the 🐳 artwork — see NOTICE): a whale glyph plus two splash
 // frames that are alternated while starting/installing, so the spout pulses.
-const STATUS_TEXT = '$(dsh-whale) DSH'
-const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small) DSH'
-const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large) DSH'
+const STATUS_TEXT = '$(dsh-whale)'
+const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
+const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Node is probed exactly once, here, at activation.
   void checkNodeOnce()
 
-  const panelProvider = new DshPanelProvider(context.extensionUri, context.extension.packageJSON.version ?? '0.0.0')
+  const panelProvider = new DshPanelProvider(context.extension.packageJSON.version ?? '0.0.0')
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(DshPanelProvider.viewType, panelProvider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -99,6 +99,9 @@ export function activate(context: vscode.ExtensionContext): void {
         } catch {
           await vscode.commands.executeCommand('workbench.view.extension.dsh')
         }
+        break
+      case 'settings':
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:peiyucn.dsh-launcher-panel')
         break
     }
   }

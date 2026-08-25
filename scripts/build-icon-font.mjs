@@ -1,13 +1,10 @@
 // Builds resources/dsh-icon.woff — the status bar icon font.
 //
-// Derived from the Twemoji spouting whale artwork in resources/icon.svg
-// (recolored to the brand palette): one silhouette glyph plus two splash
+// resources/icon.svg is the single source of the whale artwork: a silhouette
+// with the eye and the belly line punched as counter-wound sub-paths (holes
+// under nonzero winding). This script turns it into one glyph plus two splash
 // animation frames (the spout shrinks/grows), which the status bar alternates
 // while starting/installing so the whale's spout pulses.
-//
-// The silhouette keeps the eye and the belly line as counter-wound sub-paths
-// merged into the body path (holes under nonzero winding), so the details
-// survive in the single-color glyph.
 //
 // Run: npm run build:icon-font
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -21,22 +18,16 @@ import ttf2woff from 'ttf2woff'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const icon = readFileSync(join(root, 'resources', 'icon.svg'), 'utf8')
 
-// Path order in icon.svg (Twemoji whale, brand colors): body, belly band,
-// tail, spout, spout. The eye is a <circle>.
+// Path order in resources/icon.svg: merged body (with punched eye + belly
+// holes), tail, spout, spout.
 const ds = [...icon.matchAll(/<path[^>]*d="([^"]+)"/g)].map((m) => m[1])
-if (ds.length < 5) throw new Error('unexpected icon.svg structure — expected 5 paths')
-
-// Counter-wound details (holes under nonzero winding): the eye hole at the
-// icon's eye position, and the belly band reversed (= the belly line).
-const EYE_HOLE = 'M5 25.5a1.5 1.5 0 0 0 3 0a1.5 1.5 0 0 0 -3 0Z'
-const BELLY_HOLE = 'M6.5 30.8C11 33 17 33.6 22 33.1C17 32.3 11 31.7 6.5 30.8Z'
+if (ds.length < 4) throw new Error('unexpected icon.svg structure — expected 4 paths')
 
 const path = (d) => `<path fill="#000000" d="${d}"/>`
-// Body, eye hole and belly hole live in ONE path so nonzero winding applies.
-const silhouette = path(ds[0] + EYE_HOLE + BELLY_HOLE) + path(ds[2]) + path(ds[3]) + path(ds[4])
+const silhouette = ds.map((d) => path(d)).join('')
 
 // The spout (last two paths) is wrapped in a scale group for the frames.
-const spout = path(ds[3]) + path(ds[4])
+const spout = path(ds[2]) + path(ds[3])
 const frame = (scale) =>
   silhouette.replace(
     spout,

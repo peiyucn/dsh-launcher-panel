@@ -17,7 +17,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined
   private timer: ReturnType<typeof setInterval> | undefined
 
-  constructor(private readonly extensionUri: vscode.Uri, private readonly version: string) {}
+  constructor(private readonly version: string) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
@@ -44,12 +44,11 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 
   private getHtml(): string {
     const nonce = getNonce()
-    const iconUrl = this.view!.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'icon.svg'))
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${this.view!.webview.cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   html, body { height: 100%; }
   body { font-family: var(--vscode-font-family); font-size: 12px; color: var(--vscode-foreground); padding: 10px; margin: 0; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; overflow-y: auto; }
@@ -128,15 +127,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--vscode-descriptionForeground); opacity: .65; }
-  .panel-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-  .dsh-icon-img { width: 14px; height: 14px; flex: none; }
 </style>
 </head>
 <body>
-  <div class="panel-title">
-    <img class="dsh-icon-img" src="${iconUrl}" alt="">
-    <span>DSH Launcher Panel</span>
-  </div>
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
     <div class="loading-text">Loading…</div>

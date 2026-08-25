@@ -1,6 +1,6 @@
 import type { ServerStatus } from './server'
 
-export type StatusMenuAction = 'start' | 'stop' | 'open' | 'dashboard'
+export type StatusMenuAction = 'start' | 'stop' | 'open' | 'dashboard' | 'settings'
 
 export interface StatusMenuItem {
   label: string
@@ -8,6 +8,8 @@ export interface StatusMenuItem {
   icon: string
   action: StatusMenuAction
 }
+
+const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Settings', icon: 'settings-gear', action: 'settings' }
 
 /**
  * Contextual quick-pick menu for the status bar 🐳 DSH item: clicking the item
@@ -17,24 +19,26 @@ export interface StatusMenuItem {
 export function buildStatusMenuItems(
   status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping'>,
 ): StatusMenuItem[] {
+  let items: StatusMenuItem[]
   if (status.running) {
-    return [
+    items = [
       { label: 'Open Web UI', icon: 'globe', action: 'open' },
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
       { label: 'Stop DeepSeek Harness', icon: 'debug-stop', action: 'stop' },
     ]
-  }
-  if (status.starting || status.installing) {
-    return [
+  } else if (status.starting || status.installing) {
+    items = [
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
       { label: 'Stop DeepSeek Harness', icon: 'debug-stop', action: 'stop' },
     ]
+  } else if (status.stopping) {
+    items = [{ label: 'Open Dashboard', icon: 'browser', action: 'dashboard' }]
+  } else {
+    items = [
+      { label: 'Start & Open Web UI', icon: 'play', action: 'start' },
+      { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
+    ]
   }
-  if (status.stopping) {
-    return [{ label: 'Open Dashboard', icon: 'browser', action: 'dashboard' }]
-  }
-  return [
-    { label: 'Start & Open Web UI', icon: 'play', action: 'start' },
-    { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-  ]
+  items.push(OPEN_SETTINGS)
+  return items
 }

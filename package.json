@@ -60,7 +60,7 @@
       "activitybar": [
         {
           "id": "dsh",
-          "title": "🐳DSH WebUI",
+          "title": "$(dsh-whale) DSH WebUI",
           "icon": "resources/icon.svg"
         }
       ]
