@@ -5,6 +5,7 @@ AGENTS.md
 src/**
 tsconfig.json
 package-lock.json
+scripts/**
 **/*.map
 *.vsix
 resources/dsh-launcher-panel.png

@@ -36,6 +36,26 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "iconFonts": [
+      {
+        "id": "dsh-icon-font",
+        "src": [{ "path": "resources/dsh-icon.woff", "format": "woff" }]
+      }
+    ],
+    "icons": {
+      "dsh-whale": {
+        "description": "DSH whale (spouting)",
+        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e900" }
+      },
+      "dsh-whale-splash-small": {
+        "description": "DSH whale, small splash (animation frame)",
+        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e901" }
+      },
+      "dsh-whale-splash-large": {
+        "description": "DSH whale, large splash (animation frame)",
+        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e902" }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -148,6 +168,7 @@
     }
   },
   "scripts": {
+    "build:icon-font": "node scripts/build-icon-font.mjs",
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
     "package": "vsce package",
@@ -158,7 +179,10 @@
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
+    "svg2ttf": "^6.1.0",
+    "svgicons2svgfont": "^16.0.0",
     "tsx": "^4.23.12",
+    "ttf2woff": "^3.0.0",
     "typescript": "^5.5.0"
   }
 }

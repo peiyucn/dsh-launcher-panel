@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.1]
 
-- Fixed: the status bar "🐳 DSH" item no longer paints its text in the brand blue only — on themes with a blue status bar the text was invisible. When the server is running it now uses its own blue background with white foreground (theme colors `dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`, overridable per theme), keeping readable contrast on every theme.
+- The status bar 🐳 DSH item now opens a quick-pick command menu on click (like the built-in status bar entries): Open Web UI / Open Dashboard / Stop while running, Open Dashboard / Stop while starting or installing, and Start & Open Web UI / Open Dashboard when stopped.
+- The activity bar / panel whale icon is redrawn as a brand-blue 🐳 (derived from Google Noto Emoji, Apache-2.0 — see NOTICE), and the status bar uses the same artwork as its own icon font: the whale plus two splash frames, so the spout above the whale pulses while starting or installing (replacing the braille dots).
+- Fixed: the status bar item no longer paints its text in the brand blue only — on themes with a blue status bar the text was invisible. When the server is running it now uses its own blue background with white foreground (theme colors `dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`, overridable per theme), keeping readable contrast on every theme.
 
 ## [0.2.0]
 
