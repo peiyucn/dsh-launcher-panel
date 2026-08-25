@@ -26,7 +26,7 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 
 ## Usage
 
-Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**.
+Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: Open Web UI / Open Dashboard / Stop / Open Settings.
 
 ## Settings
 
@@ -52,7 +52,7 @@ Settings → search "dsh":
 * The panel shows where dsh lives (`package` in pkg mode, `source` in source mode) and the `data` (`~/.dsh`) locations; the dsh row has Update and Check updates buttons.
 * Start/stop is idempotent: it probes the port first and does not start twice.
 * Closing VS Code does not stop the server; stop it from the panel or command palette.
-* The 🐳 whale artwork (activity bar icon + status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0) recolored to the DSH brand palette — see NOTICE.
+* The 🐳 whale artwork (activity bar icon + status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0) rendered as a monochrome silhouette with punched eye and belly-band details — see NOTICE.
 * The **API Status** card supports DeepSeek only for now — it only shows when a DeepSeek model is configured in dsh.
 * Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `server.log` (server output), alongside the managed package/source dirs; both are clickable in the panel. The managed dirs live directly under the user's home directory (`%USERPROFILE%` on Windows).
 * DSH cannot run "minimal mode" properly on Windows for now.
