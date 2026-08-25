@@ -52,7 +52,7 @@
 * 面板显示 dsh 本体位置（pkg 模式为 `package`，source 模式为 `source`）和 `data`（`~/.dsh`）两处路径；dsh 行带 Update 和 Check updates 按钮。
 * 启动/停止是幂等的：会先探测端口，不会重复启动。
 * 关闭 VS Code 不会停止服务；请从面板或命令面板停止。
-* 🐳 鲸鱼图形（活动栏图标与状态栏图标字体）为品牌色原创卡通设计。
+* 🐳 鲸鱼图形（活动栏图标与状态栏图标字体）派生自 Google Noto Emoji（Apache-2.0），详见 NOTICE。
 * **API Status** 卡片目前仅支持 DeepSeek — 只有在 dsh 里配置了 DeepSeek 模型时才会显示。
 * 日志文件：`~/.dsh-launcher-panel/logs/client.log`（启动器活动）与 `server.log`（服务端输出），与自管的 package/source 同位于 `.dsh-launcher-panel` 下的姊妹目录（logs 子目录）中；面板中均可点击打开。自管目录直接放在用户主目录下（Windows 为 `%USERPROFILE%`）。
 * DSH 在 Windows 下暂无法正常运行“极简模式”。

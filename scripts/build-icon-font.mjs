@@ -24,17 +24,22 @@ const silhouette = (svg) =>
 
 // The splash is the "url(#splash)" group in icon.svg (spout cloud + drops).
 // Wrap it in a scale group for the two animation frames.
-const splashInner = icon.match(/<g fill="url\(#splash\)">([\s\S]*?)<\/g>/)?.[1]
-if (!splashInner) throw new Error('splash group not found in resources/icon.svg')
-
-const realSplash = `<g fill="url(#splash)">${splashInner}</g>`
-// Replace the splash group FIRST (it still carries the url(#splash) ref),
+// The splash is the light-blue shapes in icon.svg. Two forms exist: a
+// gradient group (url(#splash), newer artwork) or flat #7FA3FF shapes
+// (Noto-derived artwork) — support both, so icon.svg edits keep working.
+const splashUrlMatch = icon.match(/<g fill="url\(#[0-9A-Za-z]+\)">[\s\S]*?<\/g>/)
+const splashFlatMatch = icon.match(/<path[^>]*fill="#7FA3FF"[^>]*\/>(?:\s*<ellipse[^>]*fill="#7FA3FF"[^>]*\/>)*/)
+const splashToken = splashUrlMatch?.[0] ?? splashFlatMatch?.[0]
+if (!splashToken) throw new Error('splash not found in resources/icon.svg')
+const splashInner = splashToken.replace(/^<g[^>]*>/, '').replace(/<\/g>$/, '')
+const [scx, scy] = splashUrlMatch ? [76, 24] : [56, 27]
+// Replace the splash FIRST (while it still carries its original markup),
 // then flatten to a silhouette — otherwise the match string never appears.
 const frame = (scale) =>
   silhouette(
     icon.replace(
-      realSplash,
-      `<g fill="url(#splash)" transform="translate(76 24) scale(${scale}) translate(-76 -24)">${splashInner}</g>`,
+      splashToken,
+      `<g transform="translate(${scx} ${scy}) scale(${scale}) translate(${-scx} ${-scy})">${splashInner}</g>`,
     ),
   )
 
