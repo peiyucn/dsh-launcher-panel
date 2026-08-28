@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2]
+
+- Source mode runs `pnpm run clean` before building (when the checkout provides the script): after a git pull upgrades a checkout to a version that removed packages, stale `lib/` leftovers no longer break the build with missing-export errors; the clean step is skipped for older checkouts without the script and a failed clean warns but does not block the build.
+
 ## [0.2.1]
 
 - The status bar shows the whale icon only (no "DSH" text) and opens a quick-pick command menu on click: Open Web UI / Open Dashboard / Stop while running, Open Dashboard / Stop while starting or installing, Start & Open Web UI / Open Dashboard when stopped, plus Open Settings.
