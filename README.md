@@ -19,7 +19,7 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 ## Features
 
 * **Start / Stop** — installs dsh into a launcher-managed location (first run), then runs `pnpm exec dsh web` and opens the web UI once it is ready.
-* **Source run** — clones deepseek-harness automatically into a managed location and runs it (a custom `dsh.path` overrides the clone location); an existing checkout at that path is reused as-is. On first start it also runs `pnpm install` + build, using dsh's official build profile so the web UI shows the same DeepSeek Harness brand as the packaged dsh.
+* **Source run** — clones deepseek-harness automatically into a managed location and runs it (a custom `dsh.path` overrides the clone location); an existing checkout at that path is reused as-is. On first start it also runs `pnpm install` + build; the build is preceded by `pnpm run clean` (when the checkout provides the script) to clear stale build residue, and uses dsh's official build profile so the web UI shows the same DeepSeek Harness brand as the packaged dsh.
 * **Dashboard panel** — server status, a live console (with clickable log files), the official DeepSeek API status with Peak / Off-peak pricing (weekends are billed at the off-peak rate), and your account balance.
 * **DSH Update** — click the refresh button (⟳) to check; when a new version is available, an Update button appears next to the dsh version (pkg reinstalls the latest, source pulls the checkout).
 * **Browser choice** — built-in or system browser.

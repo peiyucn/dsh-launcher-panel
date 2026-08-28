@@ -76,6 +76,9 @@ export const DSH_INSTALL_MANIFEST_NAME = 'dsh-install'
 /** The root package.json script that builds with the official client profile. */
 export const BUILD_OFFICIAL_SCRIPT = 'build:official'
 
+/** The root package.json script that clears generated build state and orphan package residue. */
+export const BUILD_CLEAN_SCRIPT = 'clean'
+
 // --- Limits ---
 
 export const ACTIVITY_MAX_LINES = 200
@@ -245,6 +248,17 @@ export function checkoutSupportsOfficialBuild(checkout: string): boolean {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
     return typeof pkg.scripts?.[BUILD_OFFICIAL_SCRIPT] === 'string'
+  } catch {
+    // not a readable manifest
+  }
+  return false
+}
+
+/** Whether a checkout's root build ships the `clean` script (dsh's residue cleaner). */
+export function checkoutSupportsClean(checkout: string): boolean {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
+    return typeof pkg.scripts?.[BUILD_CLEAN_SCRIPT] === 'string'
   } catch {
     // not a readable manifest
   }

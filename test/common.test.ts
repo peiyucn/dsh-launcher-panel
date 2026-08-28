@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsOfficialBuild, dshBaseDir, dshVersionAtLeast, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, dshBaseDir, dshVersionAtLeast, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
 
 test('canTransition allows only valid server phase transitions', () => {
   assert.equal(canTransition('stopped', 'starting'), true)
@@ -152,6 +152,21 @@ test('checkoutSupportsOfficialBuild detects the build:official script', () => {
     assert.equal(checkoutSupportsOfficialBuild(root), true)
     writeFileSync(join(root, 'package.json'), '{not json')
     assert.equal(checkoutSupportsOfficialBuild(root), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('checkoutSupportsClean detects the clean script', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-clean-supports-'))
+  try {
+    assert.equal(checkoutSupportsClean(root), false)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'tsx scripts/build.ts' } }))
+    assert.equal(checkoutSupportsClean(root), false)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'tsx scripts/build.ts', [BUILD_CLEAN_SCRIPT]: 'tsx scripts/clean.ts' } }))
+    assert.equal(checkoutSupportsClean(root), true)
+    writeFileSync(join(root, 'package.json'), '{not json')
+    assert.equal(checkoutSupportsClean(root), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

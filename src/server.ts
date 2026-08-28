@@ -27,6 +27,7 @@ import {
   STOP_POLL_PROBE_MS,
   canTransition,
   checkoutHasOfficialBrand,
+  checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   dshBaseDir,
   dshVersionAtLeast,
@@ -1107,6 +1108,21 @@ async function ensureCheckoutReady(checkout: string, freshClone = false): Promis
   if (!depsReady || needsBrandBuild) {
     if (depsReady) {
       addActivity('ℹ Web UI lacks the official brand — rebuilding once so it matches the packaged dsh')
+    }
+    // Clear stale build outputs first: after a git pull, packages removed
+    // from the tree leave orphan lib/ dirs behind (git does not delete ignored
+    // files), and tsdown still globs them — breaking the build with
+    // MISSING_EXPORT errors. dsh's own clean script removes that residue, so
+    // the build below always starts from a clean tree. Older checkouts without
+    // the script keep the previous behaviour.
+    if (checkoutSupportsClean(checkout)) {
+      addActivity(`▶ Setup: pnpm --dir "${checkout}" run clean`)
+      const cleanOk = await runInstalling(() => runInTerminal('Setup deepseek-harness (pnpm run clean)', 'pnpm', ['--dir', checkout, 'run', 'clean']))
+      if (!cleanOk) {
+        // Do not hard-block: the build still gets a chance and reports its own
+        // errors, but keep the clean failure visible for diagnosis.
+        addActivity('⚠ pnpm run clean failed — continuing to the build anyway')
+      }
     }
     addActivity(`▶ Setup: pnpm --dir "${checkout}" run build (official brand)`)
     const buildOk = await runInstalling(() => runInTerminal(
