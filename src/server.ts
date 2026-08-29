@@ -383,6 +383,26 @@ async function httpOk(url: string, timeoutMs: number): Promise<boolean> {
 }
 
 /**
+ * Whether a token URL proves the server is up. dsh ≥ 0.1.2-alpha.1 answers a
+ * valid launch token with a 303 cookie-minting redirect; following it without
+ * a cookie jar lands back on a 401 (undici's fetch keeps no cookies), so the
+ * probe stops at the redirect — the browser performs the cookie dance itself
+ * when the tab opens the token URL.
+ */
+async function tokenAccepted(url: string, timeoutMs: number): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'manual' })
+    return res.status === 303 || res.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * The URL that actually serves the web UI, or undefined while it is not ready
  * yet. Version-agnostic by probing instead of assuming: older dsh versions
  * (pkg or source) serve the plain URL directly, so it is tried first; dsh ≥
@@ -400,7 +420,7 @@ async function resolveWebUrl(host: string, port: number, timeoutMs: number, toke
   }
   if (token) {
     const tokenUrl = `http://${host}:${port}/?token=${token}`
-    if (await httpOk(tokenUrl, timeoutMs)) return tokenUrl
+    if (await tokenAccepted(tokenUrl, timeoutMs)) return tokenUrl
     // Stale or not yet accepted: drop the cache so the next poll rescans.
     webToken = undefined
   }
