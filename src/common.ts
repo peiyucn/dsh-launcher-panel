@@ -76,6 +76,9 @@ export const DSH_INSTALL_MANIFEST_NAME = 'dsh-install'
 /** The root package.json script that builds with the official client profile. */
 export const BUILD_OFFICIAL_SCRIPT = 'build:official'
 
+/** The root package.json script that clears generated build state and orphan package residue. */
+export const BUILD_CLEAN_SCRIPT = 'clean'
+
 // --- Limits ---
 
 export const ACTIVITY_MAX_LINES = 200
@@ -116,6 +119,16 @@ export function dshVersionAtLeast(version: string, target: string): boolean {
   return true
 }
 
+/**
+ * One-line summary of the last dsh update check for the panel console. A
+ * failed check must never read as "up to date" — it is reported as failed.
+ */
+export function describeDshUpdate(update: { hasUpdate: boolean; label: string; failed?: boolean } | undefined): string {
+  if (update?.failed) return '⚠ Update check failed'
+  if (update?.hasUpdate) return `✓ Update available → ${update.label}`
+  return '✓ dsh is up to date'
+}
+
 /** Strip non-ASCII characters and trailing parentheticals to yield an English name. */
 export function toEnglish(text: string): string {
   return text
@@ -123,6 +136,14 @@ export function toEnglish(text: string): string {
     .replace(/[（(][^）)]*[）)]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/** The one-time web access token dsh ≥ 0.1.2-alpha.1 prints in its startup URL. */
+const WEB_TOKEN_RE = /[?&]token=([A-Za-z0-9_-]{8,})/
+
+/** Extract the web access token from a server output line (undefined when absent). */
+export function extractWebToken(line: string): string | undefined {
+  return WEB_TOKEN_RE.exec(line)?.[1]
 }
 
 /** Whether a process id is still alive. */
@@ -245,6 +266,17 @@ export function checkoutSupportsOfficialBuild(checkout: string): boolean {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
     return typeof pkg.scripts?.[BUILD_OFFICIAL_SCRIPT] === 'string'
+  } catch {
+    // not a readable manifest
+  }
+  return false
+}
+
+/** Whether a checkout's root build ships the `clean` script (dsh's residue cleaner). */
+export function checkoutSupportsClean(checkout: string): boolean {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
+    return typeof pkg.scripts?.[BUILD_CLEAN_SCRIPT] === 'string'
   } catch {
     // not a readable manifest
   }

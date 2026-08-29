@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
+import { describeDshUpdate } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
@@ -541,9 +542,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
           addActivity(
             !st.dshVersion
               ? 'ℹ dsh is not installed yet — use Install & Start'
-              : st.update && st.update.hasUpdate
-                ? `✓ Update available → ${st.update.label}`
-                : '✓ dsh is up to date',
+              : describeDshUpdate(st.update),
           )
         }
         finishBusy()

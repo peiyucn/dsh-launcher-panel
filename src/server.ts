@@ -27,9 +27,11 @@ import {
   STOP_POLL_PROBE_MS,
   canTransition,
   checkoutHasOfficialBrand,
+  checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   dshBaseDir,
   dshVersionAtLeast,
+  extractWebToken,
   findPnpm,
   installedDshVersion,
   isDshCheckout,
@@ -106,6 +108,8 @@ export interface ServerStatus {
 export interface DshUpdate {
   hasUpdate: boolean
   label: string
+  /** True when the check could not run (network etc.) — not "no update". */
+  failed?: boolean
 }
 
 let trackedChild: ChildProcess | undefined
@@ -201,8 +205,42 @@ export function registerConfigWatcher(): vscode.Disposable {
   })
 }
 
+/** The web access token of the current run (dsh ≥ 0.1.2-alpha.1 prints one). */
+let webToken: string | undefined
+
 export function uiUrl(cfg: DshConfig = readConfig()): string {
+  const token = webToken ? `/?token=${webToken}` : ''
+  return `http://${LOOPBACK_HOST}:${cfg.port}${token}`
+}
+
+/** The URL shown in the panel/status line — never carries the auth token (uiUrl is for opening the browser). */
+export function displayUrl(cfg: DshConfig = readConfig()): string {
   return `http://${LOOPBACK_HOST}:${cfg.port}`
+}
+
+/**
+ * The token dsh ≥ 0.1.2-alpha.1 prints on startup (e.g.
+ * `dsh web: http://127.0.0.1:3080/?token=…`): the web UI answers 401 without
+ * it. Read it from the server log — the single output sink on every platform —
+ * and cache it for the run.
+ */
+function readServerToken(): string | undefined {
+  if (webToken) return webToken
+  try {
+    const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/)
+    // Newest line first: with dsh.clearServerLogOnStart off, the log may hold
+    // several runs, and the current run's token is the most recent one.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const token = extractWebToken(lines[i])
+      if (token) {
+        webToken = token
+        return token
+      }
+    }
+  } catch {
+    // log not written yet
+  }
+  return undefined
 }
 
 export function setLogPath(value: string): void {
@@ -337,18 +375,63 @@ function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TIMEOUT_M
   })
 }
 
-/** Whether the web server is serving (an HTTP request succeeds), not just bound. */
-async function isHttpReady(host: string, port: number, timeoutMs: number): Promise<boolean> {
+/** Whether a GET against `url` answers 2xx (resolves without throwing). */
+async function httpOk(url: string, timeoutMs: number): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(`http://${host}:${port}/`, { signal: controller.signal })
+    const res = await fetch(url, { signal: controller.signal })
     return res.ok
   } catch {
     return false
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * Whether a token URL proves the server is up. dsh ≥ 0.1.2-alpha.1 answers a
+ * valid launch token with a 303 cookie-minting redirect; following it without
+ * a cookie jar lands back on a 401 (undici's fetch keeps no cookies), so the
+ * probe stops at the redirect — the browser performs the cookie dance itself
+ * when the tab opens the token URL.
+ */
+async function tokenAccepted(url: string, timeoutMs: number): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'manual' })
+    return res.status === 303 || res.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * The URL that actually serves the web UI, or undefined while it is not ready
+ * yet. Version-agnostic by probing instead of assuming: older dsh versions
+ * (pkg or source) serve the plain URL directly, so it is tried first; dsh ≥
+ * 0.1.2-alpha.1 answers token-less requests with 401 and needs the token URL
+ * it prints on startup. A cached token that no longer works is dropped, so
+ * the next poll rescans the log instead of being stuck on a dead token.
+ */
+async function resolveWebUrl(host: string, port: number, timeoutMs: number, token: string | undefined): Promise<string | undefined> {
+  const plain = `http://${host}:${port}/`
+  if (await httpOk(plain, timeoutMs)) {
+    // The plain URL serves: whatever token was cached belongs to another run
+    // (or the version never prints one), so the browser gets the plain URL.
+    webToken = undefined
+    return plain
+  }
+  if (token) {
+    const tokenUrl = `http://${host}:${port}/?token=${token}`
+    if (await tokenAccepted(tokenUrl, timeoutMs)) return tokenUrl
+    // Stale or not yet accepted: drop the cache so the next poll rescans.
+    webToken = undefined
+  }
+  return undefined
 }
 
 /** Node.js engines range the harness requires: ^22.19 || >=24. */
@@ -873,6 +956,8 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
 function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell = false, env?: Record<string, string>): void {
   trackedPid = undefined
   moduleLoadCount = 0
+  // Each run mints its own web token; drop the previous run's.
+  webToken = undefined
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
   } catch {
@@ -1000,8 +1085,10 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       return false
     }
     // The port binds before the web app finishes booting; wait for an HTTP
-    // response so the browser doesn't open onto a blank page.
-    if (await isHttpReady(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS)) {
+    // response so the browser doesn't open onto a blank page. resolveWebUrl
+    // handles both dsh ≥ 0.1.2-alpha.1 (token URL) and older versions (plain
+    // URL) by probing whichever actually answers 2xx.
+    if ((await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())) !== undefined) {
       // Stop can complete while the HTTP probe is in flight (it takes up to
       // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
       // server back to 'running'.
@@ -1012,7 +1099,7 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       setServerPhase('running')
       const secs = Math.round((Date.now() - startedAt) / 1000)
       const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
-      addActivity(`✓ Server started ${uiUrl(cfg)} in ${dur}`)
+      addActivity(`✓ Server started ${displayUrl(cfg)} in ${dur}`)
       finishBusy()
       return true
     }
@@ -1108,6 +1195,21 @@ async function ensureCheckoutReady(checkout: string, freshClone = false): Promis
     if (depsReady) {
       addActivity('ℹ Web UI lacks the official brand — rebuilding once so it matches the packaged dsh')
     }
+    // Clear stale build outputs first: after a git pull, packages removed
+    // from the tree leave orphan lib/ dirs behind (git does not delete ignored
+    // files), and tsdown still globs them — breaking the build with
+    // MISSING_EXPORT errors. dsh's own clean script removes that residue, so
+    // the build below always starts from a clean tree. Older checkouts without
+    // the script keep the previous behaviour.
+    if (checkoutSupportsClean(checkout)) {
+      addActivity(`▶ Setup: pnpm --dir "${checkout}" run clean`)
+      const cleanOk = await runInstalling(() => runInTerminal('Setup deepseek-harness (pnpm run clean)', 'pnpm', ['--dir', checkout, 'run', 'clean']))
+      if (!cleanOk) {
+        // Do not hard-block: the build still gets a chance and reports its own
+        // errors, but keep the clean failure visible for diagnosis.
+        addActivity('⚠ pnpm run clean failed — continuing to the build anyway')
+      }
+    }
     addActivity(`▶ Setup: pnpm --dir "${checkout}" run build (official brand)`)
     const buildOk = await runInstalling(() => runInTerminal(
       'Setup deepseek-harness (pnpm run build)',
@@ -1132,7 +1234,12 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   if (await isPortOpen(LOOPBACK_HOST, cfg.port)) {
     nodeState = 'ok'
     dshState = 'ok'
-    addActivity(`✓ Server already running ${uiUrl(cfg)}`)
+    // A server that outlived this extension host (e.g. after a VS Code reload)
+    // still needs the right URL: probe the running server so the browser
+    // opens the token URL for dsh ≥ 0.1.2-alpha.1 and the plain URL for
+    // versions that do not use one.
+    await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())
+    addActivity(`✓ Server already running ${displayUrl(cfg)}`)
     return true
   }
 
@@ -1261,6 +1368,7 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
     killPid(owner)
   }
   setServerPhase('stopped')
+  webToken = undefined
   stopLogTail()
   if (pids.length === 0) {
     addActivity(wasStarting ? '■ Setup interrupted — no server will be started' : '■ Server not running')
@@ -1304,7 +1412,11 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     const installed = pkgInstalledVersion(cfg)
     if (!installed) return { hasUpdate: false, label: '' }
     const latest = await latestDshVersion(cfg.channel)
-    if (latest && latest !== installed && dshVersionAtLeast(latest, installed)) {
+    if (!latest) {
+      addActivity('⚠ Update check failed — could not resolve the latest dsh version')
+      return { hasUpdate: false, label: '', failed: true }
+    }
+    if (latest !== installed && dshVersionAtLeast(latest, installed)) {
       return { hasUpdate: true, label: `v${latest}` }
     }
     return { hasUpdate: false, label: '' }
@@ -1317,10 +1429,13 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     // update — the user should know the check could not run.
     const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || 'git fetch failed'
     addActivity(`⚠ Update check failed (network) — ${last}`)
-    return { hasUpdate: false, label: '' }
+    return { hasUpdate: false, label: '', failed: true }
   }
   const r = await runFile('git', ['-C', checkout, 'rev-list', '--count', 'HEAD..@{upstream}'], GIT_OP_TIMEOUT_MS)
-  if (!r.ok) return { hasUpdate: false, label: '' }
+  if (!r.ok) {
+    addActivity('⚠ Update check failed — could not compare the checkout with its upstream')
+    return { hasUpdate: false, label: '', failed: true }
+  }
   const count = Number(r.stdout.trim())
   if (!Number.isFinite(count) || count <= 0) return { hasUpdate: false, label: '' }
   // Prefer the upstream version number; fall back to the commit count.
@@ -1404,7 +1519,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     installing: serverPhase === 'installing',
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
-    url: uiUrl(cfg),
+    url: displayUrl(cfg),
     node: nodeState,
     dsh: dshState,
     dshVersion,

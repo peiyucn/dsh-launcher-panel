@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsOfficialBuild, dshBaseDir, dshVersionAtLeast, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
 
 test('canTransition allows only valid server phase transitions', () => {
   assert.equal(canTransition('stopped', 'starting'), true)
@@ -30,6 +30,13 @@ test('dshVersionAtLeast compares prerelease versions numerically', () => {
   assert.equal(dshVersionAtLeast('0.1.0-rc.7', '0.1.0-rc.8'), false)
   assert.equal(dshVersionAtLeast('', '0.1.0-rc.8'), false)
   assert.equal(dshVersionAtLeast('0.2.0', '0.1.0-rc.8'), true)
+})
+
+test('describeDshUpdate distinguishes update, failure, and up-to-date', () => {
+  assert.equal(describeDshUpdate({ hasUpdate: true, label: 'v0.2.0' }), '✓ Update available → v0.2.0')
+  assert.equal(describeDshUpdate({ hasUpdate: false, label: '', failed: true }), '⚠ Update check failed')
+  assert.equal(describeDshUpdate({ hasUpdate: false, label: '' }), '✓ dsh is up to date')
+  assert.equal(describeDshUpdate(undefined), '✓ dsh is up to date')
 })
 
 test('maskPath abbreviates long Windows paths to drive + last segment', () => {
@@ -66,6 +73,13 @@ test('psQuote doubles single quotes', () => {
 test('toEnglish strips non-ASCII and parentheticals', () => {
   assert.equal(toEnglish('DeepSeek V3 Chat API（对话）'), 'DeepSeek V3 Chat API')
   assert.equal(toEnglish('全是中文'), '')
+})
+
+test('extractWebToken reads the token from dsh web startup output', () => {
+  assert.equal(extractWebToken('dsh web: http://127.0.0.1:3080/?token=e9FDDvp1cDfkePv9wnWBMCJLPOjzoi7qLaSIQghrElE'), 'e9FDDvp1cDfkePv9wnWBMCJLPOjzoi7qLaSIQghrElE')
+  assert.equal(extractWebToken('dsh web: http://127.0.0.1:3080'), undefined)
+  assert.equal(extractWebToken('token=abc'), undefined)
+  assert.equal(extractWebToken(''), undefined)
 })
 
 test('isProcessAlive reports own pid alive and an impossible pid dead', () => {
@@ -152,6 +166,21 @@ test('checkoutSupportsOfficialBuild detects the build:official script', () => {
     assert.equal(checkoutSupportsOfficialBuild(root), true)
     writeFileSync(join(root, 'package.json'), '{not json')
     assert.equal(checkoutSupportsOfficialBuild(root), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('checkoutSupportsClean detects the clean script', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-clean-supports-'))
+  try {
+    assert.equal(checkoutSupportsClean(root), false)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'tsx scripts/build.ts' } }))
+    assert.equal(checkoutSupportsClean(root), false)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'tsx scripts/build.ts', [BUILD_CLEAN_SCRIPT]: 'tsx scripts/clean.ts' } }))
+    assert.equal(checkoutSupportsClean(root), true)
+    writeFileSync(join(root, 'package.json'), '{not json')
+    assert.equal(checkoutSupportsClean(root), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
