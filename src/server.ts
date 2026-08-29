@@ -211,6 +211,11 @@ export function uiUrl(cfg: DshConfig = readConfig()): string {
   return `http://${LOOPBACK_HOST}:${cfg.port}${token}`
 }
 
+/** The URL shown in the panel/status line — never carries the auth token (uiUrl is for opening the browser). */
+export function displayUrl(cfg: DshConfig = readConfig()): string {
+  return `http://${LOOPBACK_HOST}:${cfg.port}`
+}
+
 /**
  * The token dsh ≥ 0.1.2-alpha.1 prints on startup (e.g.
  * `dsh web: http://127.0.0.1:3080/?token=…`): the web UI answers 401 without
@@ -1092,7 +1097,7 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       setServerPhase('running')
       const secs = Math.round((Date.now() - startedAt) / 1000)
       const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
-      addActivity(`✓ Server started ${uiUrl(cfg)} in ${dur}`)
+      addActivity(`✓ Server started ${displayUrl(cfg)} in ${dur}`)
       finishBusy()
       return true
     }
@@ -1232,7 +1237,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // opens the token URL for dsh ≥ 0.1.2-alpha.1 and the plain URL for
     // versions that do not use one.
     await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())
-    addActivity(`✓ Server already running ${uiUrl(cfg)}`)
+    addActivity(`✓ Server already running ${displayUrl(cfg)}`)
     return true
   }
 
@@ -1505,7 +1510,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     installing: serverPhase === 'installing',
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
-    url: uiUrl(cfg),
+    url: displayUrl(cfg),
     node: nodeState,
     dsh: dshState,
     dshVersion,

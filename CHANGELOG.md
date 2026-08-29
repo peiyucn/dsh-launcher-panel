@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.2]
 
-- The launcher follows dsh 0.1.2-alpha.1's one-time-token web URL without breaking older versions: it extracts the token from the server output and probes both URLs, preferring the plain URL when the running dsh serves it and falling back to the token URL when the plain one answers 401 (a valid token answers with a 303 cookie-minting redirect, which the probe stops at and the browser completes) — previously the panel stayed on Starting forever and the browser never opened.
+- The launcher follows dsh 0.1.2-alpha.1's one-time-token web URL without breaking older versions: it extracts the token from the server output and probes both URLs, preferring the plain URL when the running dsh serves it and falling back to the token URL when the plain one answers 401 (a valid token answers with a 303 cookie-minting redirect, which the probe stops at and the browser completes) — previously the panel stayed on Starting forever and the browser never opened; the token is only used to open the browser and never shown in the status bar or panel URL.
 - Source mode runs `pnpm run clean` before building (when the checkout provides the script): after a git pull upgrades a checkout to a version that removed packages, stale `lib/` leftovers no longer break the build with missing-export errors; the clean step is skipped for older checkouts without the script and a failed clean warns but does not block the build.
 
 ## [0.2.1]
