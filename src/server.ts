@@ -368,12 +368,11 @@ function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TIMEOUT_M
   })
 }
 
-/** Whether the web server is serving (an HTTP request succeeds), not just bound. */
-async function isHttpReady(host: string, port: number, timeoutMs: number, token?: string): Promise<boolean> {
+/** Whether a GET against `url` answers 2xx (resolves without throwing). */
+async function httpOk(url: string, timeoutMs: number): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const url = token ? `http://${host}:${port}/?token=${token}` : `http://${host}:${port}/`
     const res = await fetch(url, { signal: controller.signal })
     return res.ok
   } catch {
@@ -381,6 +380,31 @@ async function isHttpReady(host: string, port: number, timeoutMs: number, token?
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * The URL that actually serves the web UI, or undefined while it is not ready
+ * yet. Version-agnostic by probing instead of assuming: older dsh versions
+ * (pkg or source) serve the plain URL directly, so it is tried first; dsh ≥
+ * 0.1.2-alpha.1 answers token-less requests with 401 and needs the token URL
+ * it prints on startup. A cached token that no longer works is dropped, so
+ * the next poll rescans the log instead of being stuck on a dead token.
+ */
+async function resolveWebUrl(host: string, port: number, timeoutMs: number, token: string | undefined): Promise<string | undefined> {
+  const plain = `http://${host}:${port}/`
+  if (await httpOk(plain, timeoutMs)) {
+    // The plain URL serves: whatever token was cached belongs to another run
+    // (or the version never prints one), so the browser gets the plain URL.
+    webToken = undefined
+    return plain
+  }
+  if (token) {
+    const tokenUrl = `http://${host}:${port}/?token=${token}`
+    if (await httpOk(tokenUrl, timeoutMs)) return tokenUrl
+    // Stale or not yet accepted: drop the cache so the next poll rescans.
+    webToken = undefined
+  }
+  return undefined
 }
 
 /** Node.js engines range the harness requires: ^22.19 || >=24. */
@@ -1034,10 +1058,10 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       return false
     }
     // The port binds before the web app finishes booting; wait for an HTTP
-    // response so the browser doesn't open onto a blank page. dsh ≥
-    // 0.1.2-alpha.1 answers token-less requests with 401, so probe through
-    // its startup token once that appears in the server output.
-    if (await isHttpReady(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())) {
+    // response so the browser doesn't open onto a blank page. resolveWebUrl
+    // handles both dsh ≥ 0.1.2-alpha.1 (token URL) and older versions (plain
+    // URL) by probing whichever actually answers 2xx.
+    if ((await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())) !== undefined) {
       // Stop can complete while the HTTP probe is in flight (it takes up to
       // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
       // server back to 'running'.
@@ -1184,8 +1208,10 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     nodeState = 'ok'
     dshState = 'ok'
     // A server that outlived this extension host (e.g. after a VS Code reload)
-    // still needs its token before the browser can load the UI.
-    readServerToken()
+    // still needs the right URL: probe the running server so the browser
+    // opens the token URL for dsh ≥ 0.1.2-alpha.1 and the plain URL for
+    // versions that do not use one.
+    await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())
     addActivity(`✓ Server already running ${uiUrl(cfg)}`)
     return true
   }
