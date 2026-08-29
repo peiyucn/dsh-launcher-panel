@@ -108,6 +108,8 @@ export interface ServerStatus {
 export interface DshUpdate {
   hasUpdate: boolean
   label: string
+  /** True when the check could not run (network etc.) — not "no update". */
+  failed?: boolean
 }
 
 let trackedChild: ChildProcess | undefined
@@ -1410,7 +1412,11 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     const installed = pkgInstalledVersion(cfg)
     if (!installed) return { hasUpdate: false, label: '' }
     const latest = await latestDshVersion(cfg.channel)
-    if (latest && latest !== installed && dshVersionAtLeast(latest, installed)) {
+    if (!latest) {
+      addActivity('⚠ Update check failed — could not resolve the latest dsh version')
+      return { hasUpdate: false, label: '', failed: true }
+    }
+    if (latest !== installed && dshVersionAtLeast(latest, installed)) {
       return { hasUpdate: true, label: `v${latest}` }
     }
     return { hasUpdate: false, label: '' }
@@ -1423,10 +1429,13 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     // update — the user should know the check could not run.
     const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || 'git fetch failed'
     addActivity(`⚠ Update check failed (network) — ${last}`)
-    return { hasUpdate: false, label: '' }
+    return { hasUpdate: false, label: '', failed: true }
   }
   const r = await runFile('git', ['-C', checkout, 'rev-list', '--count', 'HEAD..@{upstream}'], GIT_OP_TIMEOUT_MS)
-  if (!r.ok) return { hasUpdate: false, label: '' }
+  if (!r.ok) {
+    addActivity('⚠ Update check failed — could not compare the checkout with its upstream')
+    return { hasUpdate: false, label: '', failed: true }
+  }
   const count = Number(r.stdout.trim())
   if (!Number.isFinite(count) || count <= 0) return { hasUpdate: false, label: '' }
   // Prefer the upstream version number; fall back to the commit count.

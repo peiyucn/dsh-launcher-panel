@@ -119,6 +119,16 @@ export function dshVersionAtLeast(version: string, target: string): boolean {
   return true
 }
 
+/**
+ * One-line summary of the last dsh update check for the panel console. A
+ * failed check must never read as "up to date" — it is reported as failed.
+ */
+export function describeDshUpdate(update: { hasUpdate: boolean; label: string; failed?: boolean } | undefined): string {
+  if (update?.failed) return '⚠ Update check failed'
+  if (update?.hasUpdate) return `✓ Update available → ${update.label}`
+  return '✓ dsh is up to date'
+}
+
 /** Strip non-ASCII characters and trailing parentheticals to yield an English name. */
 export function toEnglish(text: string): string {
   return text
