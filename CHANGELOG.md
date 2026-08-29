@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.2]
 
+- The launcher follows dsh 0.1.2-alpha.1's one-time-token web URL: it extracts the token from the server output, probes startup readiness through it, and opens the browser with it — previously the panel stayed on Starting and the web UI answered 401 to the plain URL.
 - Source mode runs `pnpm run clean` before building (when the checkout provides the script): after a git pull upgrades a checkout to a version that removed packages, stale `lib/` leftovers no longer break the build with missing-export errors; the clean step is skipped for older checkouts without the script and a failed clean warns but does not block the build.
 
 ## [0.2.1]

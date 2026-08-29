@@ -31,6 +31,7 @@ import {
   checkoutSupportsOfficialBuild,
   dshBaseDir,
   dshVersionAtLeast,
+  extractWebToken,
   findPnpm,
   installedDshVersion,
   isDshCheckout,
@@ -202,8 +203,37 @@ export function registerConfigWatcher(): vscode.Disposable {
   })
 }
 
+/** The web access token of the current run (dsh ≥ 0.1.2-alpha.1 prints one). */
+let webToken: string | undefined
+
 export function uiUrl(cfg: DshConfig = readConfig()): string {
-  return `http://${LOOPBACK_HOST}:${cfg.port}`
+  const token = webToken ? `/?token=${webToken}` : ''
+  return `http://${LOOPBACK_HOST}:${cfg.port}${token}`
+}
+
+/**
+ * The token dsh ≥ 0.1.2-alpha.1 prints on startup (e.g.
+ * `dsh web: http://127.0.0.1:3080/?token=…`): the web UI answers 401 without
+ * it. Read it from the server log — the single output sink on every platform —
+ * and cache it for the run.
+ */
+function readServerToken(): string | undefined {
+  if (webToken) return webToken
+  try {
+    const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/)
+    // Newest line first: with dsh.clearServerLogOnStart off, the log may hold
+    // several runs, and the current run's token is the most recent one.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const token = extractWebToken(lines[i])
+      if (token) {
+        webToken = token
+        return token
+      }
+    }
+  } catch {
+    // log not written yet
+  }
+  return undefined
 }
 
 export function setLogPath(value: string): void {
@@ -339,11 +369,12 @@ function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TIMEOUT_M
 }
 
 /** Whether the web server is serving (an HTTP request succeeds), not just bound. */
-async function isHttpReady(host: string, port: number, timeoutMs: number): Promise<boolean> {
+async function isHttpReady(host: string, port: number, timeoutMs: number, token?: string): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(`http://${host}:${port}/`, { signal: controller.signal })
+    const url = token ? `http://${host}:${port}/?token=${token}` : `http://${host}:${port}/`
+    const res = await fetch(url, { signal: controller.signal })
     return res.ok
   } catch {
     return false
@@ -874,6 +905,8 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
 function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell = false, env?: Record<string, string>): void {
   trackedPid = undefined
   moduleLoadCount = 0
+  // Each run mints its own web token; drop the previous run's.
+  webToken = undefined
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
   } catch {
@@ -1001,8 +1034,10 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       return false
     }
     // The port binds before the web app finishes booting; wait for an HTTP
-    // response so the browser doesn't open onto a blank page.
-    if (await isHttpReady(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS)) {
+    // response so the browser doesn't open onto a blank page. dsh ≥
+    // 0.1.2-alpha.1 answers token-less requests with 401, so probe through
+    // its startup token once that appears in the server output.
+    if (await isHttpReady(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())) {
       // Stop can complete while the HTTP probe is in flight (it takes up to
       // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
       // server back to 'running'.
@@ -1148,6 +1183,9 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   if (await isPortOpen(LOOPBACK_HOST, cfg.port)) {
     nodeState = 'ok'
     dshState = 'ok'
+    // A server that outlived this extension host (e.g. after a VS Code reload)
+    // still needs its token before the browser can load the UI.
+    readServerToken()
     addActivity(`✓ Server already running ${uiUrl(cfg)}`)
     return true
   }
@@ -1277,6 +1315,7 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
     killPid(owner)
   }
   setServerPhase('stopped')
+  webToken = undefined
   stopLogTail()
   if (pids.length === 0) {
     addActivity(wasStarting ? '■ Setup interrupted — no server will be started' : '■ Server not running')

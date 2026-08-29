@@ -128,6 +128,14 @@ export function toEnglish(text: string): string {
     .trim()
 }
 
+/** The one-time web access token dsh ≥ 0.1.2-alpha.1 prints in its startup URL. */
+const WEB_TOKEN_RE = /[?&]token=([A-Za-z0-9_-]{8,})/
+
+/** Extract the web access token from a server output line (undefined when absent). */
+export function extractWebToken(line: string): string | undefined {
+  return WEB_TOKEN_RE.exec(line)?.[1]
+}
+
 /** Whether a process id is still alive. */
 export function isProcessAlive(pid: number): boolean {
   try {
