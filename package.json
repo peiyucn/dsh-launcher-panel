@@ -177,7 +177,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.134.0",
     "@vscode/vsce": "^3.0.0",
     "svg2ttf": "^6.1.0",
     "svgicons2svgfont": "^16.0.0",
