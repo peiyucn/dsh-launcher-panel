@@ -176,7 +176,7 @@
     "verify": "npm run compile && npm test && npm run package"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.4.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
     "svg2ttf": "^6.1.0",
