@@ -137,14 +137,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .log-size { color: var(--lap-fg2); font-size: 10px; opacity: .65; flex: none; }
   .console-header { display: flex; align-items: center; gap: 6px; }
   .console-title { font-weight: 600; font-size: 11px; }
-  /* 官方 Switch 同款：胶囊轨道 + 圆形滑块（滑块与轨道边缘留 2px 内边距）；状态文字在轨道内。 */
-  .switch { box-sizing: border-box; position: relative; flex: 0 0 auto; width: 72px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: var(--lap-border-soft); cursor: pointer; margin-left: auto; }
-  .switchOn { background: var(--lap-accent); }
-  .switch:disabled { cursor: default; opacity: .5; }
-  .switch-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; line-height: 1; color: var(--lap-fg2); padding-left: 18px; pointer-events: none; transition: color .12s, padding .12s; }
-  .switchOn .switch-text { color: #fff; padding-left: 0; padding-right: 18px; }
-  .thumb { position: absolute; top: 2px; left: 2px; display: block; width: 16px; height: 16px; border-radius: 50%; corner-shape: round; background: #fff; transition: transform 120ms ease; }
-  .switchOn .thumb { transform: translateX(52px); }
+  /* debug 状态药丸：文字在按钮内，on = 绿色点亮（owner 拍板恢复原方式）。 */
+  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 999px; corner-shape: round; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; margin-left: auto; }
+  .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
   .console-header .mini-btn { flex: none; }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
   .icon-btn:hover { color: var(--lap-accent); }
@@ -247,7 +242,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   <div class="console-header">
     <span class="console-title">Console</span>
     <button class="mini-btn" id="clearConsoleBtn" title="Clear console log">Clear</button>
-    <button class="switch" id="debugToggle" role="switch" aria-checked="false" title="Toggle NODE_DEBUG=module in source mode"><span class="switch-text">debug off</span><span class="thumb"></span></button>
+    <button class="debug-pill" id="debugToggle" title="Toggle NODE_DEBUG=module in source mode">debug off</button>
   </div>
   <pre class="console" id="log"></pre>
   <div class="log-files">
@@ -405,10 +400,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       }
       pill.style.display = ''
       const on = !!(status && status.sourceDebug)
-      pill.classList.toggle('switchOn', on)
-      pill.setAttribute('aria-checked', String(on))
-      const text = pill.querySelector('.switch-text')
-      if (text) text.textContent = on ? 'debug on' : 'debug off'
+      pill.textContent = on ? 'debug on' : 'debug off'
+      pill.className = 'debug-pill' + (on ? ' on' : '')
     }
 
     function renderDs(ds) {
