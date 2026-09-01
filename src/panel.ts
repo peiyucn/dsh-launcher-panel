@@ -113,7 +113,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
   .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-surface); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 2px; gap: 2px; flex: none; }
-  .mode-option { border: none; border-radius: 8px; padding: 2px 8px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
+  .mode-option { border: none; border-radius: 999px; corner-shape: round; padding: 2px 8px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
   .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -137,8 +137,13 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .log-size { color: var(--lap-fg2); font-size: 10px; opacity: .65; flex: none; }
   .console-header { display: flex; align-items: center; gap: 6px; }
   .console-title { font-weight: 600; font-size: 11px; }
-  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; }
-  .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
+  /* 官方 Switch 同款：胶囊轨道 + 圆形滑块（外方内圆）。 */
+  .switch { box-sizing: border-box; position: relative; flex: 0 0 auto; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: var(--lap-border-soft); cursor: pointer; }
+  .switchOn { background: var(--lap-accent); }
+  .switch:disabled { cursor: default; opacity: .5; }
+  .thumb { display: block; width: 16px; height: 16px; border-radius: 50%; corner-shape: round; background: #fff; transition: transform 120ms ease; }
+  .switchOn .thumb { transform: translateX(16px); }
+  .debug-label { font-size: 10px; color: var(--lap-fg2); flex: none; }
   .console-header .mini-btn { flex: none; }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
   .icon-btn:hover { color: var(--lap-accent); }
@@ -240,7 +245,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   </div>
   <div class="console-header">
     <span class="console-title">Console</span>
-    <button class="debug-pill" id="debugToggle" title="Toggle NODE_DEBUG=module in source mode">debug off</button>
+    <span class="debug-label">debug</span>
+    <button class="switch" id="debugToggle" role="switch" aria-checked="false" title="Toggle NODE_DEBUG=module in source mode"><span class="thumb"></span></button>
     <button class="mini-btn" id="clearConsoleBtn" title="Clear console log">Clear</button>
   </div>
   <pre class="console" id="log"></pre>
@@ -399,8 +405,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       }
       pill.style.display = ''
       const on = !!(status && status.sourceDebug)
-      pill.textContent = on ? 'debug on' : 'debug off'
-      pill.className = 'debug-pill' + (on ? ' on' : '')
+      pill.classList.toggle('switchOn', on)
+      pill.setAttribute('aria-checked', String(on))
     }
 
     function renderDs(ds) {
