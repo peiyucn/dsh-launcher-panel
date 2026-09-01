@@ -183,10 +183,11 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
   .lap-select { position: relative; flex: none; margin-left: auto; }
-  .lap-select-trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+  .lap-select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; box-sizing: border-box; width: 96px; height: 28px; padding: 0 8px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
   .lap-select-trigger:hover { background: var(--lap-hover); }
   .lap-select-trigger:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
-  .lap-select-chevron { color: var(--lap-fg2); flex: none; }
+  .lap-select-chevron { color: var(--lap-fg2); flex: none; transition: transform 120ms ease; }
+  .lap-select-trigger[aria-expanded="true"] .lap-select-chevron { transform: rotate(180deg); }
   .lap-select-menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 218px; padding: 4px; display: flex; flex-direction: column; border: 0.5px solid var(--lap-border); border-radius: 20px; background: var(--lap-menu); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24); }
   .lap-select-menu[hidden] { display: none; }
   .lap-select-option { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border: none; border-radius: 10px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
