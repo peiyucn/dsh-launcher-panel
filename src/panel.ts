@@ -114,7 +114,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
-  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: none; border-radius: 999px; corner-shape: round; padding: 2px; gap: 2px; flex: none; }
+  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 2px; gap: 2px; flex: none; }
   .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; corner-shape: round; width: 26px; height: 26px; padding: 0; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
   .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
@@ -182,7 +182,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   /* 官方全局规则的同款曲率：非圆角形状一律走 superellipse(1.5)（不支持的引擎退普通圆角）。 */
   @supports (corner-shape: superellipse(1.5)) {
-    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .setting select, .card, .console { corner-shape: superellipse(1.5); }
+    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .setting select, .card, .console, .mode-toggle { corner-shape: superellipse(1.5); }
   }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
