@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  package-check:
-    name: Verify vsce package
+  verify:
+    name: verify
     runs-on: ubuntu-latest
 
     steps:
@@ -24,14 +24,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck (tsc)
-        run: npm run compile
-
-      - name: Run tests
-        run: npm test
-
-      - name: Package extension (verify)
-        run: npx --yes @vscode/vsce package --no-dependencies
+      - name: Verify (typecheck + tests + vsce package)
+        run: npm run verify
 
       - name: Verify VSIX artifact exists
         run: |
