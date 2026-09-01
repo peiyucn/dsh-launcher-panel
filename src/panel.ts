@@ -113,7 +113,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
   .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-surface); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 2px; gap: 2px; flex: none; }
-  .mode-option { border: none; border-radius: 999px; corner-shape: round; padding: 2px 8px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
+  .mode-option { border: none; border-radius: 999px; corner-shape: round; padding: 3px 12px; min-width: 34px; text-align: center; line-height: 16px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
   .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
