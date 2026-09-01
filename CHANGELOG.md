@@ -6,10 +6,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.4]
 
-- The Dashboard visual language now follows the official DSH design system: light/dark static palette, 0.5px hairline strokes, 16px section cards, and 14px superellipse buttons; the pkg/src mode toggle is now the official "rounded frame with a circular selected cell" shape, and the status bar / Dashboard accent color uses the official DeepSeek blue #4176E6.
-- The Browser selector is now a self-drawn dropdown in the official menu style (elevated surface, hairline border, check-marked selection) that opens upward.
-- Console row layout: Clear sits next to the Console title and the debug state pill sits on the far right (green when on).
-- Start button hover colors follow the official info-fill pair (lighter in the light theme, darker in the dark theme).
+- The Dashboard visual style now follows the official DSH design style.
 
 ## [0.2.3]
 
