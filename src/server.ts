@@ -70,6 +70,8 @@ export interface DshConfig {
   port: number
   /** Print module-loading progress in source mode (NODE_DEBUG=module). */
   sourceDebug: boolean
+  /** Open the browser automatically after Start (dsh.autoOpenBrowser; explicit 'New Tab' clicks always open). */
+  autoOpenBrowser: boolean
 }
 
 export type ConditionState = 'unknown' | 'ok' | 'missing'
@@ -183,6 +185,7 @@ export function readConfig(): DshConfig {
     nodePath: c.get<string>('nodePath') ?? '',
     port: Number.isInteger(port) && port > 0 && port <= MAX_PORT ? port : DEFAULT_PORT,
     sourceDebug: c.get<boolean>('sourceDebug') ?? false,
+    autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
   }
 }
 

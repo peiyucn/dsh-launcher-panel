@@ -120,6 +120,16 @@ export function dshVersionAtLeast(version: string, target: string): boolean {
 }
 
 /**
+ * Whether a start action should open the browser. An explicit re-open (the
+ * Start button when the server is already running) always opens; the
+ * automatic open after a fresh start honours dsh.autoOpenBrowser (default on).
+ */
+export function shouldOpenBrowser(autoOpenBrowser: boolean | undefined, alreadyRunning: boolean): boolean {
+  if (alreadyRunning) return true
+  return autoOpenBrowser !== false
+}
+
+/**
  * One-line summary of the last dsh update check for the panel console. A
  * failed check must never read as "up to date" — it is reported as failed.
  */

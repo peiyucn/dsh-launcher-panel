@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
-import { ensureRunning, readConfig, stopServer, uiUrl } from './server'
+import { shouldOpenBrowser } from './common'
+import { currentStatus, ensureRunning, readConfig, stopServer, uiUrl } from './server'
 
 /** Open a URL per dsh.browser: built-in Simple Browser (with fallback) or external. */
 export async function openUrl(url: string): Promise<void> {
@@ -30,8 +31,12 @@ export async function actionStart(): Promise<void> {
     const cfg = readConfig()
     // No launch notification: the dashboard already shows the live status
     // and console, so start silently and let the panel report progress.
+    const alreadyRunning = (await currentStatus()).running
     const ok = await ensureRunning(cfg)
     if (!ok) return
+    // dsh.autoOpenBrowser off → no automatic tab; the explicit 'New Tab'
+    // click (alreadyRunning) always opens per dsh.browser.
+    if (!shouldOpenBrowser(cfg.autoOpenBrowser, alreadyRunning)) return
     // Debounce browser opens so rapid clicks on the status bar (or the panel
     // Start button while running) don't spawn one tab per click.
     const now = Date.now()

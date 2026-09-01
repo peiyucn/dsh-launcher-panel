@@ -2,7 +2,7 @@
   "name": "dsh-launcher-panel",
   "displayName": "DSH Launcher Panel",
   "description": "Start DeepSeek Harness (dsh) and open its web UI in VS Code's built-in browser.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "icon": "resources/icon.png",
   "publisher": "peiyucn",
   "license": "MIT",
@@ -128,6 +128,11 @@
           ],
           "default": "built-in",
           "description": "Which browser to open the UI in. 'built-in' uses VS Code's Simple Browser (falls back to external if disabled); 'external' opens the system browser."
+        },
+        "dsh.autoOpenBrowser": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the browser after dsh starts. Turn off to keep your current tab (the official page shows a reconnect prompt); the Start button's 'New Tab' click still opens one per dsh.browser."
         },
         "dsh.hideConsole": {
           "type": "boolean",
