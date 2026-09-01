@@ -189,7 +189,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .lap-select-chevron { color: var(--lap-fg2); flex: none; }
   .lap-select-menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 218px; padding: 4px; display: flex; flex-direction: column; border: 0.5px solid var(--lap-border); border-radius: 20px; background: var(--lap-menu); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24); }
   .lap-select-menu[hidden] { display: none; }
-  .lap-select-option { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 10px; border: none; border-radius: 10px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 14px; line-height: 22px; text-align: left; cursor: pointer; }
+  .lap-select-option { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border: none; border-radius: 10px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
   .lap-select-option:hover { background: var(--lap-menu-hover); }
   .lap-select-check { margin-left: auto; width: 16px; height: 16px; flex: none; color: var(--lap-accent); visibility: hidden; }
   .lap-select-option[aria-selected='true'] .lap-select-check { visibility: visible; }
