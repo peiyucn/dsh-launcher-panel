@@ -367,6 +367,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       if (upd && upd.hasUpdate) {
         updateBtn.style.display = ''
         updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
+        // Mirror the server-side guard: updating under a running/starting/
+        // stopping server can break it.
+        updateBtn.disabled = !!(status.running || status.starting || status.installing || status.stopping)
       } else {
         updateBtn.style.display = 'none'
       }
@@ -485,7 +488,12 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ command: b.dataset.cmd })
       })
     })
-    document.getElementById('updateBtn').addEventListener('click', () => vscode.postMessage({ command: 'updateDsh' }))
+    document.getElementById('updateBtn').addEventListener('click', () => {
+      const btn = document.getElementById('updateBtn')
+      if (btn.disabled) return
+      btn.disabled = true
+      vscode.postMessage({ command: 'updateDsh' })
+    })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))
@@ -752,10 +760,13 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     try {
       const status = await currentStatus()
       const activity = getActivity()
-      const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? 'built-in'
       const showDs = hasDeepSeekModel()
       const dsStatus = showDs ? await getDsStatus() : undefined
       const balance = showDs ? getDshBalance() : undefined
+      // Read browser AFTER the slow awaits: a refresh that started before a
+      // setBrowser click would otherwise deliver a stale value and flip the
+      // trigger back for one cycle.
+      const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? 'built-in'
       await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -785,7 +796,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         serverLogPathShort: '',
         consoleLogSize: 0,
         serverLogSize: 0,
-        sourceDebug: false,
+        sourceDebug: cfg.sourceDebug,
       }
       try {
         // Carry the REAL browser setting even on failure: a hardcoded 'built-in'

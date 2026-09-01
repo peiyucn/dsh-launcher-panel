@@ -935,17 +935,19 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
   child.stderr?.on('error', () => {})
 
   child.once('error', (error) => {
-    trackedChild = undefined
+    // Do not clear trackedChild here: 'close' always follows and owns the
+    // cleanup, so its fail-fast below can still observe the child. Clearing
+    // early made the close guard dead code and left a dead spawn spinning in
+    // waitForPort forever.
     void vscode.window.showErrorMessage(`DeepSeek Harness: failed to start (${error.message}).`)
   })
-  child.once('exit', () => {
-    trackedChild = undefined
-  })
-  // 'close' fires after stdout is fully delivered; this launcher exits right
-  // after Start-Process. If no PID was ever reported, the server never came
-  // up — fail the start instead of letting waitForPort spin forever.
+  // 'close' fires after 'exit' and after stdout is fully delivered; this
+  // launcher exits right after Start-Process. If no PID was ever reported,
+  // the server never came up — fail the start instead of letting waitForPort
+  // spin forever.
   child.once('close', () => {
-    if (trackedChild === child && trackedPid === undefined && serverPhase === 'starting') {
+    if (trackedChild === child) trackedChild = undefined
+    if (trackedPid === undefined && serverPhase === 'starting') {
       setServerPhase('stopped')
       addActivity('✗ Server failed to launch — no process id was reported (see the log above)')
     }
@@ -1370,10 +1372,13 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
     pids.push(owner)
     killPid(owner)
   }
-  setServerPhase('stopped')
+  // Keep the phase at 'stopping' through the kill + port polling below:
+  // moving to 'stopped' early made the panel show Running/New Tab and accept
+  // a Start while the kill was still in flight.
   webToken = undefined
   stopLogTail()
   if (pids.length === 0) {
+    setServerPhase('stopped')
     addActivity(wasStarting ? '■ Setup interrupted — no server will be started' : '■ Server not running')
     return false
   }
@@ -1381,11 +1386,13 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   for (let i = 0; i < STOP_POLL_ATTEMPTS; i++) {
     await sleep(STOP_POLL_INTERVAL_MS)
     if (!(await isPortOpen(LOOPBACK_HOST, cfg.port, STOP_POLL_PROBE_MS))) {
+      setServerPhase('stopped')
       addActivity('■ Server stopped')
       return true
     }
   }
   const stillOpen = await isPortOpen(LOOPBACK_HOST, cfg.port, STOP_POLL_PROBE_MS)
+  setServerPhase('stopped')
   addActivity(stillOpen ? '⚠ Could not stop the server — the port is still in use' : '■ Server stopped')
   return !stillOpen
 }
@@ -1455,8 +1462,30 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   return { hasUpdate: true, label }
 }
 
+let updateInFlight = false
+
 /** Update dsh: pkg reinstalls the latest published version; source pulls the checkout. */
 export async function runDshUpdate(): Promise<void> {
+  // No phase state covers an update, so guard it directly: coalesce repeat
+  // clicks onto one run, and refuse to update while the server is up (a git
+  // pull / pnpm install under a running dsh can break it).
+  if (updateInFlight) {
+    addActivity('↑ Update already in progress')
+    return
+  }
+  if (serverPhase !== 'stopped') {
+    addActivity('↑ Stop dsh before updating')
+    return
+  }
+  updateInFlight = true
+  try {
+    await runDshUpdateInner()
+  } finally {
+    updateInFlight = false
+  }
+}
+
+async function runDshUpdateInner(): Promise<void> {
   const cfg = readConfig()
   if (cfg.mode === 'pnpm') {
     const pnpm = await ensurePnpmAvailable()
