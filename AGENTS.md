@@ -133,7 +133,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
   * PR:`gh pr create`、`gh pr view`、`gh pr merge --squash`
   * Release:`gh release create vX.Y.Z`
   * 安全功能状态:`gh api repos/peiyucn/{repo} --jq .security_and_analysis`(dsh-launcher-panel 已开启:CodeQL default setup、Dependabot alerts + security updates、secret scanning + push protection)
-* 统一安全基线见 pyai-meta-repo AGENTS.md《统一安全基线》；本仓库为 **A 级**（接受外部 PR）：外部 PR 需 CI 绿 + owner 审核合并（Squash-only）；master 有 CI 门禁分支保护，dev 有 rulesets 轻保护
+* 统一安全基线见 pyai-meta-repo AGENTS.md《统一安全基线》；本仓库为公开仓库、接受外部 PR：外部 PR 需 CI 绿 + owner 审核合并（Squash-only）；master 有 CI 门禁分支保护，dev 有 rulesets 轻保护
 * 网络:`gh api` 可直连 api.github.com(不需代理);`git push/fetch` 需要代理(127.0.0.1:7897)
 
 ***
