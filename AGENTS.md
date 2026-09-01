@@ -104,7 +104,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 ### 发布（Tag 触发）
 
-发布走 **git tag** 触发 GitHub Actions 自动发布（见 `.github/workflows/release.yml`），流程：
+发布走 **git tag** 触发 GitHub Actions 自动发布（见 `.github/workflows/publish.yml`），流程：
 
 ```
 改代码 → commit → 验证（测试 + 打包）→ push dev → 合并 dev 到 master → push master → 打 tag → push tag 触发 release
@@ -142,8 +142,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
-| `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 三个标准过程 job：`typecheck`（tsc）/ `test`（node:test）/ `package`（vsce 打包 + VSIX 存在检查） |
-| `.github/workflows/release.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release |
+| `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 七过程 job：`typecheck`（tsc --noEmit）/ `test`（node:test）/ `build`（tsc → out/ + 产物检查）/ `package`（vsce + VSIX 检查）；`publish`/`deploy`/`sync` 空跑占位 |
+| `.github/workflows/publish.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release |
 
 * 发布需要仓库配置 `VSCE_PAT` Secret（VS Code Marketplace 发布令牌）
 * 发布令牌获取：VS Code 市场管理页 → Personal Access Tokens → 创建 `Marketplace: Manage` 权限的 token

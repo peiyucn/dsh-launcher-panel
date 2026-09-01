@@ -169,11 +169,12 @@
   },
   "scripts": {
     "build:icon-font": "node scripts/build-icon-font.mjs",
+    "typecheck": "tsc -p ./ --noEmit",
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
     "package": "vsce package",
     "test": "node --import tsx --test",
-    "verify": "npm run compile && npm test && npm run package"
+    "verify": "npm run typecheck && npm test && npm run compile && npm run package"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

@@ -20,8 +20,8 @@ jobs:
           node-version: '24'
       - name: Install dependencies
         run: npm ci
-      - name: Typecheck (tsc)
-        run: npm run compile
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
 
   test:
     name: test
@@ -37,6 +37,22 @@ jobs:
       - name: Run tests
         run: npm test
 
+  build:
+    name: build
+    needs: [typecheck, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build (tsc → out/)
+        run: npm run compile
+      - name: Verify output file
+        run: test -f out/extension.js || (echo "out/extension.js missing" && exit 1)
+
   package:
     name: package
     needs: [typecheck, test]
@@ -48,11 +64,35 @@ jobs:
           node-version: '24'
       - name: Install dependencies
         run: npm ci
-      - name: Compile
+      - name: Build (tsc → out/)
         run: npm run compile
-      - name: Package extension
+      - name: Package extension (vsce)
         run: npm run package
       - name: Verify VSIX artifact exists
         run: |
           ls -la *.vsix
           test -f *.vsix || (echo "VSIX not produced" && exit 1)
+
+  publish:
+    name: publish
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "publish 实质由 publish.yml 在 tag 触发时执行，此处空跑占位"
+
+  deploy:
+    name: deploy
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "deploy 空跑（本仓库无部署目标）"
+
+  sync:
+    name: sync
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "sync 空跑（本仓库无数据同步）"
