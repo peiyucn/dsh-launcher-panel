@@ -146,5 +146,6 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 | `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 真实过程 `typecheck`（tsc --noEmit）→ `test`（node:test + JUnit 报告 artifact）→ `build`（tsc → out/ + 产物检查）→ `package`（vsce + VSIX 检查） |
 | `.github/workflows/publish.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼接两份 CHANGELOG 当前版本条目） |
 
+* publish job 挂 `environment: marketplace-publish`（2026-09 起，dsh-sparrow / pi 仓库同款做法）：Deployments 页留下每次发布记录；不设审批门禁（tag 推送即发布），无 release-control
 * 发布需要仓库配置 `VSCE_PAT` Secret（VS Code Marketplace 发布令牌）
 * 发布令牌获取：VS Code 市场管理页 → Personal Access Tokens → 创建 `Marketplace: Manage` 权限的 token
