@@ -138,7 +138,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .console-header { display: flex; align-items: center; gap: 6px; }
   .console-title { font-weight: 600; font-size: 11px; }
   /* debug 状态药丸：文字在按钮内，on = 绿色点亮（owner 拍板恢复原方式）。 */
-  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 999px; corner-shape: round; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; margin-left: auto; }
+  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; margin-left: auto; }
   .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
   .console-header .mini-btn { flex: none; }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
