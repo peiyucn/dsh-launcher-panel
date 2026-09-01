@@ -47,7 +47,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 #### 文档对齐
 
 * README（中英）Settings 表与 `package.json` 的 `contributes.configuration` 一一对应
-* 文件路径、日志文件、行为描述与当前实现一致；CHANGELOG 当前版本条目（单一文件、每个版本条目英文在上中文在下）覆盖本版本全部用户可感知改动，GitHub Release 说明由 publish.yml 自动取该条目
+* 文件路径、日志文件、行为描述与当前实现一致；CHANGELOG 当前版本条目（中英双份：`CHANGELOG.md` 英文 + `CHANGELOG.zh-CN.md` 中文，顶部互链，与 README 同规）覆盖本版本全部用户可感知改动，GitHub Release 说明由 publish.yml 拼接两份对应条目
 
 #### 死代码
 
@@ -113,7 +113,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 **严格顺序：**
 
 1. **确认改动已提交并推送**到 `dev`
-2. **更新 `CHANGELOG.md`**：新版本条目放文件最顶（英文在上、中文在下）
+2. **更新 `CHANGELOG.md` + `CHANGELOG.zh-CN.md`**：新版本条目放文件最顶（英文、中文各一份）
 3. **更新 `package.json` 版本号**（`version` 字段）
 4. **更新 `README.md` + `README.zh-CN.md`**：如有功能变更，同步更新文档
 5. **再次验证**：`npm run verify`（测试 + 打包）
@@ -122,7 +122,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 8. **打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>" && git push origin vX.Y.Z`
 9. **切回 dev 继续开发**：`git checkout dev`
 
-> tag 推送后 GitHub Actions 自动：打包 VSIX → 发布到 VS Code Marketplace → 创建 GitHub Release 并附上 VSIX（Release 说明取 CHANGELOG 当前版本条目）。
+> tag 推送后 GitHub Actions 自动：打包 VSIX → 发布到 VS Code Marketplace → 创建 GitHub Release 并附上 VSIX（Release 说明由 publish.yml 拼接两份 CHANGELOG 当前版本条目）。
 
 ***
 
@@ -144,7 +144,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
 | `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 真实过程 `typecheck`（tsc --noEmit）→ `test`（node:test + JUnit 报告 artifact）→ `build`（tsc → out/ + 产物检查）→ `package`（vsce + VSIX 检查） |
-| `.github/workflows/publish.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明取 CHANGELOG 当前版本条目） |
+| `.github/workflows/publish.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼接两份 CHANGELOG 当前版本条目） |
 
 * 发布需要仓库配置 `VSCE_PAT` Secret（VS Code Marketplace 发布令牌）
 * 发布令牌获取：VS Code 市场管理页 → Personal Access Tokens → 创建 `Marketplace: Manage` 权限的 token
