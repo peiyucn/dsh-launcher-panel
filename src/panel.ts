@@ -72,8 +72,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-surface: #F6F7F9;
     --lap-track: #F6F7F9;
     --lap-accent: #4176E6;
-    --lap-accent-hover: #679EFE;
-    --lap-accent-active: #4868B2;
+    --lap-accent-hover: #4868B2;
     --lap-danger: #EC1313;
     --lap-danger-bg: rgba(236, 19, 19, 0.10);
     --lap-success: #22C55E;
@@ -94,8 +93,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-surface: #151517;
     --lap-track: #232324;
     --lap-accent: #679EFE;
-    --lap-accent-hover: #86A9FE;
-    --lap-accent-active: #4D8BFE;
+    --lap-accent-hover: #4176E6;
     --lap-danger: #F24242;
     --lap-danger-bg: rgba(242, 66, 66, 0.12);
     --lap-success: #22C55E;
