@@ -177,6 +177,10 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
   .balance-btn:hover { background: var(--lap-hover); }
   .balance-btn:disabled { opacity: .6; cursor: progress; }
+  /* 官方全局规则的同款曲率：非圆角形状一律走 superellipse(1.5)（不支持的引擎退普通圆角）。 */
+  @supports (corner-shape: superellipse(1.5)) {
+    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .setting select, .card, .console { corner-shape: superellipse(1.5); }
+  }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
 </style>
