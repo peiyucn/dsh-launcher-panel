@@ -52,82 +52,133 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   html, body { height: 100%; }
-  body { font-family: var(--vscode-font-family); font-size: 12px; color: var(--vscode-foreground); padding: 10px; margin: 0; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; overflow-y: auto; }
-  .card { border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    padding: 10px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    /* 官方 dsh 静态色板（design-platform.css）关键值；明暗主题跟随 VS Code 主题类。 */
+    --lap-bg: #FFFFFF;
+    --lap-fg: #0F1115;
+    --lap-fg2: #61666B;
+    --lap-border: rgba(15, 17, 21, 0.16);
+    --lap-border-soft: rgba(15, 17, 21, 0.12);
+    --lap-hover: rgba(15, 17, 21, 0.06);
+    --lap-surface: #F6F7F9;
+    --lap-accent: #4176E6;
+    --lap-accent-hover: #679EFE;
+    --lap-accent-active: #4868B2;
+    --lap-danger: #EC1313;
+    --lap-danger-bg: rgba(236, 19, 19, 0.10);
+    --lap-success: #22C55E;
+    --lap-success-bg: rgba(34, 197, 94, 0.12);
+    --lap-warning: #F59E0B;
+    --lap-warning-bg: rgba(245, 158, 11, 0.12);
+    --lap-info: #316DCA;
+    background: var(--lap-bg);
+    color: var(--lap-fg);
+  }
+  body.vscode-dark {
+    --lap-bg: #1B1B1C;
+    --lap-fg: #F5F6F7;
+    --lap-fg2: #81868C;
+    --lap-border: rgba(255, 255, 255, 0.20);
+    --lap-border-soft: rgba(255, 255, 255, 0.16);
+    --lap-hover: rgba(255, 255, 255, 0.08);
+    --lap-surface: #151517;
+    --lap-accent: #679EFE;
+    --lap-accent-hover: #86A9FE;
+    --lap-accent-active: #4D8BFE;
+    --lap-danger: #F24242;
+    --lap-danger-bg: rgba(242, 66, 66, 0.12);
+    --lap-success: #22C55E;
+    --lap-success-bg: rgba(34, 197, 94, 0.16);
+    --lap-warning: #F59E0B;
+    --lap-warning-bg: rgba(245, 158, 11, 0.16);
+    --lap-info: #4D8BFE;
+  }
+  /* 卡片：官方 rowCard 同款（0.5px hairline l4 + r16）。 */
+  .card { border: 0.5px solid var(--lap-border); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
   .status { display: flex; align-items: center; gap: 8px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #c00; flex: none; }
-  .dot.running { background: #2ea043; box-shadow: 0 0 0 3px rgba(46,160,67,.16); }
-  .dot.working { background: #d29922; animation: pulse 1s ease-in-out infinite; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
+  .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
+  .dot.working { background: var(--lap-warning); animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
-  .status-sub { color: var(--vscode-descriptionForeground); font-size: 11px; word-break: break-all; }
-  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--vscode-input-background); border: 1px solid var(--vscode-panel-border); border-radius: 999px; padding: 2px; gap: 2px; flex: none; }
-  .mode-option { border: none; border-radius: 999px; padding: 2px 8px; background: transparent; color: var(--vscode-descriptionForeground); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
-  .mode-option.active { background: #4176E6; color: #fff; }
-  .runtime-section { border-top: 1px solid var(--vscode-panel-border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
+  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-surface); border: 0.5px solid var(--lap-border-soft); border-radius: 999px; corner-shape: round; padding: 2px; gap: 2px; flex: none; }
+  .mode-option { border: none; border-radius: 999px; corner-shape: round; padding: 2px 8px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
+  .mode-option.active { background: var(--lap-accent); color: #fff; }
+  .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .runtime-label { flex: none; width: 52px; color: var(--vscode-descriptionForeground); font-size: 10px; opacity: .65; }
-  .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--vscode-foreground); }
-  .runtime-path, .runtime-data { font-size: 11px; color: var(--vscode-descriptionForeground); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
-  .runtime-path:hover, .runtime-data:hover { color: var(--vscode-textLink-foreground); text-decoration: underline; }
+  .runtime-label { flex: none; width: 52px; color: var(--lap-fg2); font-size: 10px; opacity: .65; }
+  .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--lap-fg); }
+  .runtime-path, .runtime-data { font-size: 11px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
+  .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
   .buttons { display: flex; gap: 8px; }
-  button { border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
-  button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); flex: 1; }
-  button.primary:hover { background: var(--vscode-button-hoverBackground); }
+  /* 按钮：官方 Button 几何（h28 + r14 胶囊 + 超椭圆；无支持时退普通圆角）。 */
+  button { height: 28px; border: none; border-radius: 14px; padding: 0 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
+  button.primary { background: var(--lap-accent); color: #fff; flex: 1; }
+  button.primary:hover { background: var(--lap-accent-hover); }
   button:disabled { opacity: .45; cursor: not-allowed; }
-  button.primary:disabled:hover { background: var(--vscode-button-background); }
-  button.secondary { background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border); }
-  button.secondary:hover { background: var(--vscode-toolbar-hoverBackground); }
-  button.danger:hover { border-color: #f85149; color: #f85149; background: rgba(248,81,73,.1); }
-  .console { height: 200px; margin: 0; padding: 8px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--vscode-descriptionForeground); font-family: var(--vscode-editor-font-family); font-size: 11px; }
+  button.primary:disabled:hover { background: var(--lap-accent); }
+  button.secondary { background: transparent; color: var(--lap-fg); border: 0.5px solid var(--lap-border-soft); }
+  button.secondary:hover { background: var(--lap-hover); }
+  button.danger:hover { border-color: var(--lap-danger); color: var(--lap-danger); background: var(--lap-danger-bg); }
+  .console { height: 200px; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
   .log-files { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
   .log-file-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .log-size { color: var(--vscode-descriptionForeground); font-size: 10px; opacity: .65; flex: none; }
+  .log-size { color: var(--lap-fg2); font-size: 10px; opacity: .65; flex: none; }
   .console-header { display: flex; align-items: center; gap: 6px; }
   .console-title { font-weight: 600; font-size: 11px; }
-  .debug-pill { border: 1px solid var(--vscode-panel-border); border-radius: 999px; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--vscode-descriptionForeground); flex: none; font-family: inherit; }
-  .debug-pill.on { color: #2ea043; border-color: rgba(46,160,67,.4); background: rgba(46,160,67,.12); }
+  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 999px; corner-shape: round; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; }
+  .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
   .console-header .mini-btn { flex: none; }
-  .icon-btn { background: transparent; border: none; border-radius: 4px; color: var(--vscode-foreground); cursor: pointer; padding: 2px 4px; font-size: 12px; flex: none; }
-  .icon-btn:hover { color: var(--vscode-textLink-foreground); }
+  .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
+  .icon-btn:hover { color: var(--lap-accent); }
   .icon-btn.spinning { animation: spin 1s linear infinite; }
   .spin { display: inline-block; width: 1em; text-align: center; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--vscode-editor-background); z-index: 10; transition: opacity .2s ease; }
+  .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--lap-bg); z-index: 10; transition: opacity .2s ease; }
   .loading-overlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-spinner { width: 28px; height: 28px; border: 3px solid var(--vscode-panel-border); border-top-color: #4D6BFE; border-radius: 50%; animation: spin 1s linear infinite; }
-  .loading-text { color: var(--vscode-descriptionForeground); font-size: 12px; }
-  .mini-btn { background: transparent; border: 1px solid var(--vscode-panel-border); border-radius: 4px; color: var(--vscode-foreground); cursor: pointer; padding: 0 6px; font-size: 10px; font-weight: 500; flex: none; }
-  .mini-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+  .loading-spinner { width: 28px; height: 28px; border: 3px solid var(--lap-border-soft); border-top-color: var(--lap-accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  .loading-text { color: var(--lap-fg2); font-size: 12px; }
+  .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
+  .mini-btn:hover { background: var(--lap-hover); }
   .ds-header { display: flex; align-items: center; gap: 6px; }
   .ds-title { font-weight: 600; }
-  .ds-open { background: transparent; border: none; color: var(--vscode-textLink-foreground); cursor: pointer; padding: 0; font-size: 11px; flex: none; text-decoration: none; margin-left: auto; }
+  .ds-open { background: transparent; border: none; color: var(--lap-accent); cursor: pointer; padding: 0; font-size: 11px; flex: none; text-decoration: none; margin-left: auto; height: auto; }
   .ds-open:hover { text-decoration: underline; }
-  .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 16px; }
-  .ds-pricing.peak { color: #f85149; background: rgba(248,81,73,.12); }
-  .ds-pricing.offpeak { color: #2ea043; background: rgba(46,160,67,.12); }
+  .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
+  .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
+  .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
   .ds-components { display: flex; flex-direction: column; gap: 4px; }
   .ds-comp { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-  .ds-comp-name { flex: 1; min-width: 0; color: var(--vscode-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ds-comp-name { flex: 1; min-width: 0; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cdot { width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: #888; flex: none; }
-  .cdot.ok { background: #2ea043; }
-  .cdot.degraded { background: #d29922; }
-  .cdot.down { background: #f85149; }
-  .cdot.maintenance { background: #316dca; }
+  .cdot.ok { background: var(--lap-success); }
+  .cdot.degraded { background: var(--lap-warning); }
+  .cdot.down { background: var(--lap-danger); }
+  .cdot.maintenance { background: var(--lap-info); }
   .ds-incidents { display: flex; flex-direction: column; gap: 3px; }
-  .ds-incident { font-size: 11px; color: #f85149; word-break: break-all; }
-  .ds-empty { font-size: 11px; color: var(--vscode-descriptionForeground); }
-  .balance-row { border-top: 1px solid var(--vscode-panel-border); padding-top: 6px; margin-top: 2px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .balance-value { color: var(--vscode-foreground); }
-  .footer { border-top: 1px solid var(--vscode-panel-border); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--vscode-descriptionForeground); }
+  .ds-incident { font-size: 11px; color: var(--lap-danger); word-break: break-all; }
+  .ds-empty { font-size: 11px; color: var(--lap-fg2); }
+  .balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .balance-value { color: var(--lap-fg); }
+  .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
   .setting { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-  .setting select { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 4px; padding: 2px 6px; font-family: inherit; font-size: 12px; }
-  .balance-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 4px; padding: 2px 10px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; }
-  .balance-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+  .setting select { background: var(--lap-surface); color: var(--lap-fg); border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 2px 8px; font-family: inherit; font-size: 12px; height: 22px; }
+  .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
+  .balance-btn:hover { background: var(--lap-hover); }
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
-  .plugin-version { font-size: 10px; color: var(--vscode-descriptionForeground); opacity: .65; }
+  .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
 </style>
 </head>
 <body>
