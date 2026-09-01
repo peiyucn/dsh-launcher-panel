@@ -38,12 +38,20 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
+      - name: Extract changelog for release
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          awk -v ver="^## \[${VERSION}\]" '
+            $0 ~ ver { found=1; next }
+            found && /^## \[/ { exit }
+            found
+          ' CHANGELOG.md > release-body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
-          body: |
-            ## ${{ github.ref_name }}
-
-            See [CHANGELOG](https://github.com/peiyucn/dsh-launcher-panel/blob/master/CHANGELOG.md) and [README](https://github.com/peiyucn/dsh-launcher-panel#readme).
+          body_path: release-body.md
           files: releases/*.vsix
