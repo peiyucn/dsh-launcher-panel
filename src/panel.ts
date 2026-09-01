@@ -49,7 +49,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:;">
 <style>
   html, body { height: 100%; }
   body {
@@ -174,7 +174,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-value { color: var(--lap-fg); }
   .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
   .setting { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-  .setting select { background: var(--lap-surface); color: var(--lap-fg); border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 2px 8px; font-family: inherit; font-size: 12px; height: 22px; }
+  .setting select { appearance: none; -webkit-appearance: none; height: 28px; padding: 0 26px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background-color: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; cursor: pointer; background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2381868C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .setting select:hover { background-color: var(--lap-hover); }
   .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
   .balance-btn:hover { background: var(--lap-hover); }
   .balance-btn:disabled { opacity: .6; cursor: progress; }
