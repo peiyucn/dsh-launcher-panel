@@ -143,7 +143,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .switch:disabled { cursor: default; opacity: .5; }
   .thumb { display: block; width: 16px; height: 16px; border-radius: 50%; corner-shape: round; background: #fff; transition: transform 120ms ease; }
   .switchOn .thumb { transform: translateX(16px); }
-  .debug-label { font-size: 10px; color: var(--lap-fg2); flex: none; }
+  .debug-label { font-size: 10px; color: var(--lap-fg2); flex: none; margin-left: auto; }
   .console-header .mini-btn { flex: none; }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
   .icon-btn:hover { color: var(--lap-accent); }
@@ -245,9 +245,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   </div>
   <div class="console-header">
     <span class="console-title">Console</span>
+    <button class="mini-btn" id="clearConsoleBtn" title="Clear console log">Clear</button>
     <span class="debug-label">debug</span>
     <button class="switch" id="debugToggle" role="switch" aria-checked="false" title="Toggle NODE_DEBUG=module in source mode"><span class="thumb"></span></button>
-    <button class="mini-btn" id="clearConsoleBtn" title="Clear console log">Clear</button>
   </div>
   <pre class="console" id="log"></pre>
   <div class="log-files">
