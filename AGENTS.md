@@ -142,7 +142,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
-| `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 七过程 job **全串行链**：`typecheck`（tsc --noEmit）→ `test`（node:test + JUnit 报告 artifact）→ `build`（tsc → out/ + 产物检查）→ `package`（vsce + VSIX 检查）；`publish`/`deploy`/`sync` 空跑占位 |
+| `.github/workflows/ci.yml` | push / PR 到 `master`、`dev` | 真实过程 `typecheck`（tsc --noEmit）→ `test`（node:test + JUnit 报告 artifact）→ `build`（tsc → out/ + 产物检查）→ `package`（vsce + VSIX 检查） |
 | `.github/workflows/publish.yml` | 推送 `v*.*.*` tag | 打包 + 发布市场 + GitHub Release |
 
 * 发布需要仓库配置 `VSCE_PAT` Secret（VS Code Marketplace 发布令牌）
