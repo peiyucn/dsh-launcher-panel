@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-> 中文版本见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。
+English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.2]
 

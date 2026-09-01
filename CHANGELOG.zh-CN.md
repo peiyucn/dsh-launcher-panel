@@ -2,7 +2,7 @@
 
 本项目的所有重要变更都将记录在此文件中。
 
-> English version: [CHANGELOG.md](CHANGELOG.md)。
+简体中文 | [English](CHANGELOG.md)
 
 ## [0.2.2]
 
