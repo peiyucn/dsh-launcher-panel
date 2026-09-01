@@ -77,9 +77,9 @@
     },
     "colors": {
       "dsh.statusBar.runningBackground": {
-        "dark": "#4D6BFE",
-        "light": "#4D6BFE",
-        "highContrast": "#4D6BFE"
+        "dark": "#4176E6",
+        "light": "#4176E6",
+        "highContrast": "#4176E6"
       },
       "dsh.statusBar.runningForeground": {
         "dark": "#FFFFFF",
