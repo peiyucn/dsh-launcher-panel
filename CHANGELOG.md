@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.3]
+
+- Added the `dsh.autoOpenBrowser` setting (Settings UI, default on): when off, Start no longer opens a browser tab automatically — keep your existing tab (the official page shows a reconnect prompt after a restart). The Start button's "New Tab" click still opens one per `dsh.browser`.
+
 ## [0.2.2]
 
 - The launcher follows dsh 0.1.2-alpha.1's one-time-token web URL without breaking older versions: it extracts the token from the server output and probes both URLs, preferring the plain URL when the running dsh serves it and falling back to the token URL when the plain one answers 401 (a valid token answers with a 303 cookie-minting redirect, which the probe stops at and the browser completes) — previously the panel stayed on Starting forever and the browser never opened; the token is only used to open the browser and never shown in the status bar or panel URL.

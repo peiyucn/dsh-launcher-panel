@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.3]
+
+- 新增 `dsh.autoOpenBrowser` 设置项（Settings UI，默认开）：关掉后 Start 不再自动打开浏览器标签页——保留现有标签页（官方页面重启后会显示重连提示）。Start 按钮的「New Tab」点击仍按 `dsh.browser` 打开。
+
 ## [0.2.2]
 
 - 适配 dsh 0.1.2-alpha.1 的一次性 token 网页地址，同时兼容旧版：从服务端输出提取 token 并探测两种地址——运行中的 dsh 提供普通地址时优先使用，普通地址返回 401 时回退 token 地址（有效 token 以 303 签发 cookie 的重定向应答，探测到此即止、由浏览器完成）——此前面板会永远停在 Starting、浏览器打不开；token 只用于打开浏览器，绝不出现在状态栏或面板 URL。

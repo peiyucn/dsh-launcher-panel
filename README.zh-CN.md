@@ -37,6 +37,7 @@
 | dsh.mode        | pnpm      | `pnpm` 把 dsh 装进 launcher 自管的目录并运行 `pnpm exec dsh web`；`source` 通过 tsx 运行本地检出 |
 | dsh.channel     | latest    | pnpm 解析的 dist-tag：`latest`（稳定）或 `next`（预发布）                  |
 | dsh.browser     | built-in  | `built-in` 使用 VS Code 内置浏览器（不可用时回退到系统浏览器）；`external` 打开系统浏览器 |
+| dsh.autoOpenBrowser | true      | Start 后自动打开浏览器；关掉则保留当前标签页（Start 的「New Tab」点击仍按 `dsh.browser` 打开） |
 | dsh.hideConsole | true      | 在 Windows 上隐藏控制台                                            |
 | dsh.path        | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则扩展自动 clone 仓库         |
 | dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空则用扩展自管默认位置                    |

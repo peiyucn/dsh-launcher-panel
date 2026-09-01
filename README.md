@@ -37,6 +37,7 @@ Settings → search "dsh":
 | dsh.mode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx |
 | dsh.channel | latest | dist-tag pnpm resolves: `latest` (stable) or `next` (prereleases) |
 | dsh.browser | built-in | `built-in` uses VS Code's Simple Browser (falls back to the system browser if unavailable); `external` opens the system browser |
+| dsh.autoOpenBrowser | true | Automatically open the browser after Start; turn off to keep your current tab (the Start button's "New Tab" click still opens one per `dsh.browser`) |
 | dsh.hideConsole | true | Hide the server console window on Windows |
 | dsh.path | empty | Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically. |
 | dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. When empty, a managed default location is used. |
