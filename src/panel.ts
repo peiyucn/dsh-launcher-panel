@@ -73,6 +73,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-hover: rgba(15, 17, 21, 0.06);
     --lap-surface: #F6F7F9;
     --lap-menu: #FFFFFF;
+    --lap-menu-hover: rgba(38, 49, 72, 0.06);
     --lap-track: #F6F7F9;
     --lap-accent: #4176E6;
     --lap-accent-hover: #679EFE;
@@ -95,7 +96,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-border-soft: rgba(255, 255, 255, 0.16);
     --lap-hover: rgba(255, 255, 255, 0.08);
     --lap-surface: #151517;
-    --lap-menu: #232324;
+    --lap-menu: #353638;
+    --lap-menu-hover: rgba(255, 255, 255, 0.08);
     --lap-track: #232324;
     --lap-accent: #679EFE;
     --lap-accent-hover: #4176E6;
@@ -185,10 +187,11 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .lap-select-trigger:hover { background: var(--lap-hover); }
   .lap-select-trigger:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
   .lap-select-chevron { color: var(--lap-fg2); flex: none; }
-  .lap-select-menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 128px; padding: 4px; display: flex; flex-direction: column; border: 0.5px solid var(--lap-border); border-radius: 12px; background: var(--lap-menu); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24); }
-  .lap-select-option { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: none; border-radius: 8px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
-  .lap-select-option:hover { background: var(--lap-hover); }
-  .lap-select-check { width: 14px; flex: none; color: var(--lap-accent); visibility: hidden; }
+  .lap-select-menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 218px; padding: 4px; display: flex; flex-direction: column; border: 0.5px solid var(--lap-border); border-radius: 20px; background: var(--lap-menu); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24); }
+  .lap-select-menu[hidden] { display: none; }
+  .lap-select-option { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 10px; border: none; border-radius: 10px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 14px; line-height: 22px; text-align: left; cursor: pointer; }
+  .lap-select-option:hover { background: var(--lap-menu-hover); }
+  .lap-select-check { margin-left: auto; width: 16px; height: 16px; flex: none; color: var(--lap-accent); visibility: hidden; }
   .lap-select-option[aria-selected='true'] .lap-select-check { visibility: visible; }
   .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
   .balance-btn:hover { background: var(--lap-hover); }
@@ -280,8 +283,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
           <svg class="lap-select-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="lap-select-menu" id="browserSelectMenu" role="listbox" hidden>
-          <button type="button" class="lap-select-option" data-value="built-in" role="option" aria-selected="true"><span class="lap-select-check">✓</span>Built-in</button>
-          <button type="button" class="lap-select-option" data-value="external" role="option" aria-selected="false"><span class="lap-select-check">✓</span>External</button>
+          <button type="button" class="lap-select-option" data-value="built-in" role="option" aria-selected="true">Built-in<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="lap-select-option" data-value="external" role="option" aria-selected="false">External<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
       </div>
     </div>
