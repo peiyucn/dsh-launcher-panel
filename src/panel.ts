@@ -49,10 +49,12 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   html, body { height: 100%; }
+  /* 滚动条等原生渲染跟随主题的关键声明。 */
   body {
+    color-scheme: light;
     font-family: var(--vscode-font-family);
     font-size: 12px;
     padding: 10px;
@@ -70,6 +72,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-border-soft: rgba(15, 17, 21, 0.12);
     --lap-hover: rgba(15, 17, 21, 0.06);
     --lap-surface: #F6F7F9;
+    --lap-menu: #FFFFFF;
     --lap-track: #F6F7F9;
     --lap-accent: #4176E6;
     --lap-accent-hover: #679EFE;
@@ -84,6 +87,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     color: var(--lap-fg);
   }
   body.vscode-dark {
+    color-scheme: dark;
     --lap-bg: #1B1B1C;
     --lap-fg: #F5F6F7;
     --lap-fg2: #81868C;
@@ -91,6 +95,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-border-soft: rgba(255, 255, 255, 0.16);
     --lap-hover: rgba(255, 255, 255, 0.08);
     --lap-surface: #151517;
+    --lap-menu: #232324;
     --lap-track: #232324;
     --lap-accent: #679EFE;
     --lap-accent-hover: #4176E6;
@@ -174,14 +179,23 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-value { color: var(--lap-fg); }
   .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
   .setting { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-  .setting select { appearance: none; -webkit-appearance: none; height: 28px; padding: 0 26px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background-color: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; cursor: pointer; background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2381868C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
-  .setting select:hover { background-color: var(--lap-hover); }
+  /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
+  .lap-select { position: relative; flex: none; }
+  .lap-select-trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+  .lap-select-trigger:hover { background: var(--lap-hover); }
+  .lap-select-trigger:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
+  .lap-select-chevron { color: var(--lap-fg2); flex: none; }
+  .lap-select-menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 128px; padding: 4px; display: flex; flex-direction: column; border: 0.5px solid var(--lap-border); border-radius: 12px; background: var(--lap-menu); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24); }
+  .lap-select-option { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: none; border-radius: 8px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
+  .lap-select-option:hover { background: var(--lap-hover); }
+  .lap-select-check { width: 14px; flex: none; color: var(--lap-accent); visibility: hidden; }
+  .lap-select-option[aria-selected='true'] .lap-select-check { visibility: visible; }
   .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
   .balance-btn:hover { background: var(--lap-hover); }
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   /* 官方全局规则的同款曲率：非圆角形状一律走 superellipse(1.5)（不支持的引擎退普通圆角）。 */
   @supports (corner-shape: superellipse(1.5)) {
-    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .setting select, .card, .console, .mode-toggle { corner-shape: superellipse(1.5); }
+    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .card, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
   }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
@@ -260,10 +274,16 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     <button class="icon-btn" id="settingsBtn" title="Open extension settings">⚙ Settings</button>
     <div class="setting">
       <span>Browser</span>
-      <select id="browserSelect">
-        <option value="built-in">Built-in</option>
-        <option value="external">External</option>
-      </select>
+      <div class="lap-select">
+        <button type="button" class="lap-select-trigger" id="browserSelectBtn" aria-haspopup="listbox" aria-expanded="false" title="Browser">
+          <span class="lap-select-label" id="browserSelectLabel">Built-in</span>
+          <svg class="lap-select-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="lap-select-menu" id="browserSelectMenu" role="listbox" hidden>
+          <button type="button" class="lap-select-option" data-value="built-in" role="option" aria-selected="true"><span class="lap-select-check">✓</span>Built-in</button>
+          <button type="button" class="lap-select-option" data-value="external" role="option" aria-selected="false"><span class="lap-select-check">✓</span>External</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="version-row">
@@ -468,8 +488,43 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))
     document.getElementById('debugToggle').addEventListener('click', () => vscode.postMessage({ command: 'toggleDebug' }))
-    document.getElementById('browserSelect').addEventListener('change', (e) => {
-      vscode.postMessage({ command: 'setBrowser', value: e.target.value })
+    const browserSelectBtn = document.getElementById('browserSelectBtn')
+    const browserSelectMenu = document.getElementById('browserSelectMenu')
+    const browserSelectLabel = document.getElementById('browserSelectLabel')
+    function setBrowserUI(value) {
+      const v = value === 'external' ? 'external' : 'built-in'
+      browserSelectLabel.textContent = v === 'external' ? 'External' : 'Built-in'
+      browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
+        o.setAttribute('aria-selected', String(o.dataset.value === v))
+      })
+    }
+    function closeBrowserMenu() {
+      browserSelectMenu.hidden = true
+      browserSelectBtn.setAttribute('aria-expanded', 'false')
+    }
+    browserSelectBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      if (browserSelectMenu.hidden) {
+        browserSelectMenu.hidden = false
+        browserSelectBtn.setAttribute('aria-expanded', 'true')
+      } else {
+        closeBrowserMenu()
+      }
+    })
+    browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
+      o.addEventListener('click', () => {
+        setBrowserUI(o.dataset.value)
+        closeBrowserMenu()
+        vscode.postMessage({ command: 'setBrowser', value: o.dataset.value })
+      })
+    })
+    document.addEventListener('click', (e) => {
+      if (browserSelectMenu.hidden) return
+      if (e.target.closest('.lap-select')) return
+      closeBrowserMenu()
+    })
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeBrowserMenu()
     })
     document.querySelectorAll('.mode-option').forEach((b) => {
       b.addEventListener('click', () => {
@@ -544,7 +599,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         refreshingBalance = false
         document.getElementById('balanceBtn').disabled = false
       }
-      document.getElementById('browserSelect').value = m.browser || 'built-in'
+      setBrowserUI(m.browser || 'built-in')
       const log = document.getElementById('log')
       const entries = Array.isArray(m.activity) ? m.activity : []
       const newline = String.fromCharCode(10)
