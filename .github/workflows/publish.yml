@@ -43,11 +43,20 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          awk -v ver="^## \[${VERSION}\]" '
-            $0 ~ ver { found=1; next }
-            found && /^## \[/ { exit }
-            found
-          ' CHANGELOG.md > release-body.md
+          # 从两份 CHANGELOG 抽取本版本条目，英文在上、中文在下拼成发布说明
+          extract() {
+            awk -v ver="^## \[${VERSION}\]" '
+              $0 ~ ver { found=1; next }
+              found && /^## \[/ { exit }
+              found
+            ' "$1"
+          }
+          extract CHANGELOG.md > release-body-en.md
+          extract CHANGELOG.zh-CN.md > release-body-zh.md
+          {
+            if [[ -s release-body-en.md ]]; then printf '### English\n\n'; cat release-body-en.md; fi
+            if [[ -s release-body-zh.md ]]; then printf '\n### 中文\n\n'; cat release-body-zh.md; fi
+          } > release-body.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
