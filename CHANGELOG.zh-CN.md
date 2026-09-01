@@ -4,6 +4,13 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.4]
+
+- Dashboard 视觉全面对齐官方 dsh 设计体系：明暗双主题静态色板、0.5px hairline 描边、16px 分区卡、14px 超椭圆按钮；pkg/src 模式切换改为官方「外方内圆」（超椭圆外框 + 圆形选中格），状态栏与面板强调色改用官方 DeepSeek 蓝 #4176E6。
+- Browser 下拉菜单改为官方控件风格（14px 胶囊 + 自定义箭头）。
+- Console 行布局调整：Clear 紧贴 Console 标题，debug 状态药丸置最右（开启时绿色点亮）。
+- Start 按钮 hover 颜色按官方 info-fill 对（浅色主题更浅、深色主题更深）。
+
 ## [0.2.3]
 
 - 新增 `dsh.autoOpenBrowser` 设置项（Settings UI，默认开）：关掉后 Start 不再自动打开浏览器标签页——保留现有标签页（官方页面重启后会显示重连提示）。Start 按钮的「New Tab」点击仍按 `dsh.browser` 打开。
