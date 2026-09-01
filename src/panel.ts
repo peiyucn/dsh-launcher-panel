@@ -788,11 +788,14 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         sourceDebug: false,
       }
       try {
+        // Carry the REAL browser setting even on failure: a hardcoded 'built-in'
+        // here made the trigger flip between failed and successful refreshes.
+        const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? 'built-in'
         await this.view.webview.postMessage({
           type: 'update',
           status: fallback,
           activity: [{ text: `✗ Status refresh failed: ${msg}`, busy: false }],
-          browser: 'built-in',
+          browser,
           balance: undefined,
         })
       } catch {
