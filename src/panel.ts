@@ -180,9 +180,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .balance-value { color: var(--lap-fg); }
   .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
-  .setting { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
-  .lap-select { position: relative; flex: none; }
+  .lap-select { position: relative; flex: none; margin-left: auto; }
   .lap-select-trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
   .lap-select-trigger:hover { background: var(--lap-hover); }
   .lap-select-trigger:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
@@ -275,17 +275,15 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   </div>
   <div class="footer">
     <button class="icon-btn" id="settingsBtn" title="Open extension settings">⚙ Settings</button>
-    <div class="setting">
-      <span>Browser</span>
-      <div class="lap-select">
-        <button type="button" class="lap-select-trigger" id="browserSelectBtn" aria-haspopup="listbox" aria-expanded="false" title="Browser">
-          <span class="lap-select-label" id="browserSelectLabel">Built-in</span>
-          <svg class="lap-select-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="lap-select-menu" id="browserSelectMenu" role="listbox" hidden>
-          <button type="button" class="lap-select-option" data-value="built-in" role="option" aria-selected="true">Built-in<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <button type="button" class="lap-select-option" data-value="external" role="option" aria-selected="false">External<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
+    <div class="lap-select">
+      <button type="button" class="lap-select-trigger" id="browserSelectBtn" aria-haspopup="listbox" aria-expanded="false" title="Browser">
+        <span class="lap-select-label" id="browserSelectLabel">Built-in</span>
+        <svg class="lap-select-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="lap-select-menu" id="browserSelectMenu" role="listbox" hidden>
+        <div class="lap-select-title" role="presentation">Browser</div>
+        <button type="button" class="lap-select-option" data-value="built-in" role="option" aria-selected="true">Built-in<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="lap-select-option" data-value="external" role="option" aria-selected="false">External<svg class="lap-select-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
     </div>
   </div>
