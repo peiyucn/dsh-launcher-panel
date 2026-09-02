@@ -1536,7 +1536,10 @@ export async function currentStatus(): Promise<ServerStatus> {
     dshState = dshDet.state
     dshPath = dshDet.path
     detectionCache = { dsh: dshDet, at: now }
-    detectDshVersion(cfg)
+    // Installing/starting is mid-flight: the package tree may not be ready yet,
+    // and a re-detect here clobbers dshVersion (the panel version row flashes
+    // a placeholder during first-run installs).
+    if (serverPhase !== 'starting' && serverPhase !== 'installing') detectDshVersion(cfg)
   }
 
   if (running) {
