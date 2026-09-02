@@ -60,4 +60,4 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 | `ci.yml` | push / PR 到 master、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package` |
 | `publish.yml` | push `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
 
-* 发布需要仓库 `VSCE_PAT` Secret（市场管理页 → Personal Access Tokens → `Marketplace: Manage` 权限）
+* 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret（市场管理页 → Personal Access Tokens → `Marketplace: Manage` 权限），仓库级不保留
