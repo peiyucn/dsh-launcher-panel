@@ -655,7 +655,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         await runDshUpdate()
         break
       case 'refreshRequirements':
-        addActivity('↻ Checking for updates…', true)
+        const checkBusyId = addActivity('↻ Checking for updates…', true)
         setCheckingUpdates(true)
         await this.refresh()
         await clearRequirementsCaches()
@@ -667,7 +667,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
               : describeDshUpdate(st.update),
           )
         }
-        finishBusy()
+        finishBusy(checkBusyId)
         break
       case 'setMode':
         if (message.value === 'pnpm' || message.value === 'source') {
@@ -706,14 +706,14 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         }
         break
       case 'balance':
-        addActivity('↻ Querying DeepSeek balance…', true)
+        const balanceBusyId = addActivity('↻ Querying DeepSeek balance…', true)
         await fetchDshBalance()
         {
           const b = getDshBalance()
           if (b?.balance) addActivity(`✓ Balance: ${b.balance.total} ${b.balance.currency}`)
           else addActivity(`⚠ Balance: ${b?.error ?? 'no balance data'}`)
         }
-        finishBusy()
+        finishBusy(balanceBusyId)
         break
       case 'setBrowser':
         if (message.value) await actionSetBrowser(message.value)

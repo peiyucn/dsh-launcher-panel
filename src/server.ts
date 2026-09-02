@@ -123,11 +123,14 @@ let consolePath = ''
 let busy: Promise<boolean> | undefined
 /** One line in the panel activity feed; `busy` marks an in-progress operation. */
 interface ActivityEntry {
+  id: number
   text: string
   busy: boolean
 }
 
 const activity: ActivityEntry[] = []
+let activitySeq = 0
+let startBusyId: number | undefined
 let nodeState: ConditionState = 'unknown'
 let dshState: ConditionState = 'unknown'
 /** The server lifecycle phase; `starting` for the panel derives from it. */
@@ -286,16 +289,19 @@ export function dbg(line: string): void {
   appendLog(`[${new Date().toLocaleTimeString()}] [dbg] ${line}`)
 }
 
-function pushActivity(entry: string, isBusy = false): void {
-  activity.push({ text: entry, busy: isBusy })
+function pushActivity(entry: string, isBusy = false): number {
+  const id = ++activitySeq
+  activity.push({ id, text: entry, busy: isBusy })
   if (activity.length > ACTIVITY_MAX_LINES) activity.splice(0, activity.length - ACTIVITY_MAX_LINES)
+  return id
 }
 
 /** Append one line to the panel activity feed + the log file. */
-export function addActivity(line: string, isBusy = false): void {
+export function addActivity(line: string, isBusy = false): number {
   const entry = `[${new Date().toLocaleTimeString()}] ${line}`
-  pushActivity(entry, isBusy)
+  const id = pushActivity(entry, isBusy)
   appendLog(entry)
+  return id
 }
 
 /** Append one server-output line to the activity feed only (already in the log file). */
@@ -330,8 +336,14 @@ export function getActivity(): ActivityEntry[] {
   return activity
 }
 
-/** Mark the most recent busy entry as finished (its operation completed). */
-export function finishBusy(): void {
+/** Finish one busy entry by its addActivity id (concurrent busy operations each
+ * clear only their own spinner); without an id, clear the most recent busy entry. */
+export function finishBusy(id?: number): void {
+  if (id !== undefined) {
+    const entry = activity.find((e) => e.id === id)
+    if (entry !== undefined) entry.busy = false
+    return
+  }
   for (let i = activity.length - 1; i >= 0; i--) {
     if (activity[i].busy) {
       activity[i].busy = false
@@ -557,9 +569,9 @@ async function latestDshVersion(channel: DshChannel, pnpmCmd = 'pnpm'): Promise<
 async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: boolean): Promise<string | undefined> {
   // The registry query can take a few seconds; show it so a slow network
   // does not look like a frozen Start.
-  addActivity('ℹ Resolving the dsh channel version…', true)
+  const resolvingId = addActivity('ℹ Resolving the dsh channel version…', true)
   let version = await latestDshVersion(cfg.channel, pnpmCmd)
-  finishBusy()
+  finishBusy(resolvingId)
   if (!version) version = pkgInstalledVersion(cfg)
   if (!version) {
     dshState = 'missing'
@@ -1054,7 +1066,7 @@ function spawnSource(repoPath: string, cfg: DshConfig, version: string): void {
   addActivity('✓ dsh detected (source run)')
   addActivity('ℹ Source mode compiles TypeScript on the fly with tsx — the first start is slower, please wait')
   const webArgs = buildWebArgs(cfg, version)
-  addActivity(`▶ Start: ${node} --import tsx/esm apps/cli/src/bin.ts ${webArgs.join(' ')}`, true)
+  startBusyId = addActivity(`▶ Start: ${node} --import tsx/esm apps/cli/src/bin.ts ${webArgs.join(' ')}`, true)
   const env = cfg.sourceDebug ? { NODE_DEBUG: 'module' } : undefined
   spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, false, env)
 }
@@ -1064,7 +1076,7 @@ function spawnPkg(cfg: DshConfig, pnpmCmd: string, version: string): void {
   dshState = 'ok'
   addActivity('✓ dsh detected (pkg run)')
   const webArgs = buildWebArgs(cfg, version)
-  addActivity(`▶ Start: pnpm exec dsh ${webArgs.join(' ')}`, true)
+  startBusyId = addActivity(`▶ Start: pnpm exec dsh ${webArgs.join(' ')}`, true)
   const dir = pkgInstallDir(cfg)
   if (process.platform === 'win32') {
     // pnpm is a .cmd shim: drive it through cmd with the arguments array, so
@@ -1091,7 +1103,7 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
     // running server nobody wants). Any phase other than 'starting' means the
     // start was interrupted.
     if (serverPhase !== 'starting') {
-      finishBusy()
+      finishBusy(startBusyId)
       return false
     }
     // The port binds before the web app finishes booting; wait for an HTTP
@@ -1103,21 +1115,21 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
       // server back to 'running'.
       if (serverPhase !== 'starting') {
-        finishBusy()
+        finishBusy(startBusyId)
         return false
       }
       setServerPhase('running')
       const secs = Math.round((Date.now() - startedAt) / 1000)
       const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
       addActivity(`✓ Server started ${displayUrl(cfg)} in ${dur}`)
-      finishBusy()
+      finishBusy(startBusyId)
       return true
     }
     // Fail fast when the spawned process already exited (e.g. port already in use).
     if (trackedPid !== undefined && !isProcessAlive(trackedPid)) {
       setServerPhase('stopped')
       addActivity('✗ Server exited before opening the port (see the log above)')
-      finishBusy()
+      finishBusy(startBusyId)
       return false
     }
   }
