@@ -532,7 +532,25 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       closeBrowserMenu()
     })
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeBrowserMenu()
+      if (e.key === 'Escape') {
+        closeBrowserMenu()
+        return
+      }
+      // Roving-focus keyboard navigation while the menu is open; Enter/Space
+      // pick the focused option via the button's native click.
+      if (browserSelectMenu.hidden) return
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+      const opts = Array.from(browserSelectMenu.querySelectorAll('.lap-select-option'))
+      if (opts.length === 0) return
+      let idx = opts.findIndex((o) => o === document.activeElement)
+      if (idx === -1) idx = opts.findIndex((o) => o.getAttribute('aria-selected') === 'true')
+      if (idx === -1) idx = 0
+      e.preventDefault()
+      const next = e.key === 'ArrowDown' ? (idx + 1) % opts.length
+        : e.key === 'ArrowUp' ? (idx - 1 + opts.length) % opts.length
+        : e.key === 'Home' ? 0
+        : opts.length - 1
+      opts[next].focus()
     })
     document.querySelectorAll('.mode-option').forEach((b) => {
       b.addEventListener('click', () => {
