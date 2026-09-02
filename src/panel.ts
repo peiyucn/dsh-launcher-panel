@@ -1,4 +1,5 @@
 import * as vscode from 'vscode'
+import { webcrypto } from 'node:crypto'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
 import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
@@ -6,7 +7,7 @@ import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentS
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const bytes = new Uint8Array(NONCE_LENGTH)
-  crypto.getRandomValues(bytes)
+  webcrypto.getRandomValues(bytes)
   let out = ''
   for (let i = 0; i < NONCE_LENGTH; i++) out += chars.charAt(bytes[i] % chars.length)
   return out
