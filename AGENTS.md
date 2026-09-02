@@ -11,18 +11,18 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 ## 工程管线（本仓库自含）
 
-* **开发**：日常改动在 `dev` 分支；`master` 只接受发布合并
+* **开发**：日常改动在 `dev` 分支；`main` 只接受发布合并
 * **验证**：本地一键 `npm run verify`（= typecheck + test + build + package 串联）；push 前必须通过
 * **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；禁止多任务混一个 commit；不确定的事直接说"不确定"，禁止编造事实性信息
 * **推送**：日常目标 `dev`；`git push/fetch` 需要代理 127.0.0.1:7897
-* **合并**：dev → master（fast-forward）
+* **合并**：dev → main（fast-forward）
 
 **发布（tag 触发）**
 
 1. **发布前审计**：按下方《代码审计》条目全面检查
 2. **定版编辑**：CHANGELOG 双份（`CHANGELOG.md` 英文 + `CHANGELOG.zh-CN.md` 中文，顶部互链）新版本条目放最顶、覆盖本版全部用户可感知改动 → `package.json` 版本号 → README 如有功能变更同步
 3. **再验证**：`npm run verify` 全绿 + `git diff --check` 干净
-4. **合并**：dev → master 并 push
+4. **合并**：dev → main 并 push
 5. **打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"`（一律 annotated）并 push tag → 自动：打包 VSIX → 发布市场 → 建 GitHub Release（说明由 publish.yml 拼两份 CHANGELOG 当前版本条目，附 VSIX）
 6. **收尾**：切回 `dev`
 
@@ -45,7 +45,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 ## 安全基线（本仓库自含要点）
 
 * 已开启：Dependabot alerts（仅报警）、CodeQL default setup、secret scanning + push protection、Private vulnerability reporting、根 `SECURITY.md`；检查命令 `gh api repos/peiyucn/dsh-launcher-panel --jq .security_and_analysis`
-* 分支保护：master 禁强推/删/重建、Squash-only、owner 保留 fast-forward 直推；dev rulesets 轻保护（禁强推+禁删+禁重建）；**CI 会跑但不设硬门禁**——合并外部 PR 前 owner 自己确认 CI 绿
+* 分支保护：main 禁强推/删/重建、Squash-only、owner 保留 fast-forward 直推；dev rulesets 轻保护（禁强推+禁删+禁重建）；**CI 会跑但不设硬门禁**——合并外部 PR 前 owner 自己确认 CI 绿
 * 外部 PR / Issue 一律开放、不设交互限制，owner 审核合并（Squash-only），不想收的直接关闭
 
 ## GitHub 与网络
@@ -57,7 +57,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
-| `ci.yml` | push / PR 到 master、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package` |
+| `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package` |
 | `publish.yml` | push `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
 
 * 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret（市场管理页 → Personal Access Tokens → `Marketplace: Manage` 权限），仓库级不保留
