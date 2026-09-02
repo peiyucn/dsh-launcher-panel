@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, STATUS_REFRESH_INTERVAL_MS } from './common'
+import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
@@ -778,7 +778,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       // Read browser AFTER the slow awaits: a refresh that started before a
       // setBrowser click would otherwise deliver a stale value and flip the
       // trigger back for one cycle.
-      const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? DEFAULT_BROWSER
+      const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
       await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -812,7 +812,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       try {
         // Carry the REAL browser setting even on failure: a hardcoded 'built-in'
         // here made the trigger flip between failed and successful refreshes.
-        const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? DEFAULT_BROWSER
+        const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
         await this.view.webview.postMessage({
           type: 'update',
           status: fallback,

@@ -1,10 +1,10 @@
 import * as vscode from 'vscode'
-import { DEFAULT_BROWSER, shouldOpenBrowser } from './common'
+import { normalizeBrowser, shouldOpenBrowser } from './common'
 import { currentStatus, ensureRunning, readConfig, stopServer, uiUrl } from './server'
 
 /** Open a URL per dsh.browser: built-in Simple Browser (with fallback) or external. */
 export async function openUrl(url: string): Promise<void> {
-  const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? DEFAULT_BROWSER
+  const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
   if (browser === 'external') {
     await vscode.env.openExternal(vscode.Uri.parse(url))
     return

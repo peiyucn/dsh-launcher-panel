@@ -130,7 +130,7 @@ interface ActivityEntry {
 
 const activity: ActivityEntry[] = []
 let activitySeq = 0
-let startBusyId: number | undefined
+let startBusyId = 0
 let nodeState: ConditionState = 'unknown'
 let dshState: ConditionState = 'unknown'
 /** The server lifecycle phase; `starting` for the panel derives from it. */
@@ -337,19 +337,10 @@ export function getActivity(): ActivityEntry[] {
 }
 
 /** Finish one busy entry by its addActivity id (concurrent busy operations each
- * clear only their own spinner); without an id, clear the most recent busy entry. */
-export function finishBusy(id?: number): void {
-  if (id !== undefined) {
-    const entry = activity.find((e) => e.id === id)
-    if (entry !== undefined) entry.busy = false
-    return
-  }
-  for (let i = activity.length - 1; i >= 0; i--) {
-    if (activity[i].busy) {
-      activity[i].busy = false
-      return
-    }
-  }
+ * clear only their own spinner). */
+export function finishBusy(id: number): void {
+  const entry = activity.find((e) => e.id === id)
+  if (entry !== undefined) entry.busy = false
 }
 
 /** Size of a file in bytes, 0 when absent or unreadable. */
