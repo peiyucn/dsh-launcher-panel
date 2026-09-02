@@ -67,6 +67,9 @@ export const LOG_TAIL_POLL_MS = 500
 /** The port the web UI listens on when `dsh.port` is unset (mirrors package.json). */
 export const DEFAULT_PORT = 3080
 
+/** CSP nonce length in characters (random, not crypto-critical, but unpredictable). */
+export const NONCE_LENGTH = 32
+
 /** Highest valid TCP port; `dsh.port` values above this are clamped back to the default. */
 export const MAX_PORT = 65535
 

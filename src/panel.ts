@@ -1,12 +1,14 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { describeDshUpdate } from './common'
+import { describeDshUpdate, NONCE_LENGTH } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(NONCE_LENGTH)
+  crypto.getRandomValues(bytes)
   let out = ''
-  for (let i = 0; i < 32; i++) out += chars.charAt(Math.floor(Math.random() * chars.length))
+  for (let i = 0; i < NONCE_LENGTH; i++) out += chars.charAt(bytes[i] % chars.length)
   return out
 }
 
@@ -82,7 +84,6 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-success: #22C55E;
     --lap-success-bg: rgba(34, 197, 94, 0.12);
     --lap-warning: #F59E0B;
-    --lap-warning-bg: rgba(245, 158, 11, 0.12);
     --lap-info: #316DCA;
     background: var(--lap-bg);
     color: var(--lap-fg);
@@ -106,7 +107,6 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-success: #22C55E;
     --lap-success-bg: rgba(34, 197, 94, 0.16);
     --lap-warning: #F59E0B;
-    --lap-warning-bg: rgba(245, 158, 11, 0.16);
     --lap-info: #4D8BFE;
   }
   /* 卡片：官方 rowCard 同款（0.5px hairline l4 + r16）。 */
@@ -545,10 +545,6 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     })
     document.querySelectorAll('.runtime-path, .runtime-data').forEach((el) => {
       el.addEventListener('click', () => {
-        if (el.dataset.openSettings) {
-          vscode.postMessage({ command: 'openSettings' })
-          return
-        }
         const full = el.getAttribute('title')
         if (!full) return
         if (el.dataset.log) vscode.postMessage({ command: 'openLog', value: full })
