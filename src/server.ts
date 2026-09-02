@@ -1350,10 +1350,17 @@ function killPid(pid: number): void {
     })
     return
   }
+  // POSIX: the spawned process is a group leader (detached spawn), so kill the
+  // whole group first — pnpm → node children would otherwise survive and keep
+  // holding the port. Fall back to the single pid when the group is gone.
   try {
-    process.kill(pid)
+    process.kill(-pid)
   } catch {
-    // Process already exited.
+    try {
+      process.kill(pid)
+    } catch {
+      // Process already exited.
+    }
   }
 }
 
