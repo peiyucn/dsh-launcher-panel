@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { describeDshUpdate, NONCE_LENGTH, STATUS_REFRESH_INTERVAL_MS } from './common'
+import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
@@ -500,7 +500,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     const browserSelectMenu = document.getElementById('browserSelectMenu')
     const browserSelectLabel = document.getElementById('browserSelectLabel')
     function setBrowserUI(value) {
-      const v = value === 'external' ? 'external' : 'built-in'
+      const v = value === 'external' ? 'external' : '${DEFAULT_BROWSER}'
       browserSelectLabel.textContent = v === 'external' ? 'External' : 'Built-in'
       browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
         o.setAttribute('aria-selected', String(o.dataset.value === v))
@@ -603,7 +603,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         refreshingBalance = false
         document.getElementById('balanceBtn').disabled = false
       }
-      setBrowserUI(m.browser || 'built-in')
+      setBrowserUI(m.browser || '${DEFAULT_BROWSER}')
       const log = document.getElementById('log')
       const entries = Array.isArray(m.activity) ? m.activity : []
       const newline = String.fromCharCode(10)
@@ -760,7 +760,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       // Read browser AFTER the slow awaits: a refresh that started before a
       // setBrowser click would otherwise deliver a stale value and flip the
       // trigger back for one cycle.
-      const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? 'built-in'
+      const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? DEFAULT_BROWSER
       await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -774,7 +774,6 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         stopping: false,
         checking: isCheckingUpdates(),
         url: '',
-        node: 'unknown',
         dsh: 'unknown',
         dshVersion: '',
         dshPath: '',
@@ -795,7 +794,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       try {
         // Carry the REAL browser setting even on failure: a hardcoded 'built-in'
         // here made the trigger flip between failed and successful refreshes.
-        const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? 'built-in'
+        const browser = vscode.workspace.getConfiguration('dsh').get<string>('browser') ?? DEFAULT_BROWSER
         await this.view.webview.postMessage({
           type: 'update',
           status: fallback,

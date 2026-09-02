@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, normalizeBrowser, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
+
+test('normalizeBrowser collapses config values to known choices', () => {
+  assert.equal(normalizeBrowser('external'), 'external')
+  assert.equal(normalizeBrowser('built-in'), 'built-in')
+  assert.equal(normalizeBrowser(undefined), DEFAULT_BROWSER)
+  assert.equal(normalizeBrowser('garbage'), DEFAULT_BROWSER)
+  assert.equal(normalizeBrowser(''), DEFAULT_BROWSER)
+})
 
 test('shouldOpenBrowser honours auto-open and explicit re-opens', () => {
   assert.equal(shouldOpenBrowser(undefined, false), true)

@@ -52,12 +52,12 @@ import {
 // module stays focused on server lifecycle).
 export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds'
 
-export type DshMode = 'pnpm' | 'source'
+type DshMode = 'pnpm' | 'source'
 
 /** dsh binds loopback only; the launcher probes and opens this fixed host. */
 const LOOPBACK_HOST = '127.0.0.1'
 
-export type DshChannel = 'latest' | 'next'
+type DshChannel = 'latest' | 'next'
 
 /** Resolved extension settings (dsh.*). */
 export interface DshConfig {
@@ -75,7 +75,7 @@ export interface DshConfig {
   autoOpenBrowser: boolean
 }
 
-export type ConditionState = 'unknown' | 'ok' | 'missing'
+type ConditionState = 'unknown' | 'ok' | 'missing'
 
 export interface ServerStatus {
   running: boolean
@@ -87,7 +87,6 @@ export interface ServerStatus {
   /** Whether an update check is in progress (drives the Check updates button). */
   checking: boolean
   url: string
-  node: ConditionState
   dsh: ConditionState
   dshVersion: string
   dshPath: string
@@ -226,7 +225,7 @@ export function uiUrl(cfg: DshConfig = readConfig()): string {
 }
 
 /** The URL shown in the panel/status line — never carries the auth token (uiUrl is for opening the browser). */
-export function displayUrl(cfg: DshConfig = readConfig()): string {
+function displayUrl(cfg: DshConfig = readConfig()): string {
   return `http://${LOOPBACK_HOST}:${cfg.port}`
 }
 
@@ -616,7 +615,7 @@ async function ensureDshInstalled(version: string, pnpmCmd: string, allowBuild: 
   // pinned manifest there would destroy the user's package.json.
   if (!isDshInstallDirUsable(dir)) {
     addActivity(`✗ ${maskPath(dir)} is not empty — install into an empty or dedicated folder instead`)
-    void vscode.window.showErrorMessage(`DeepSeek Harness: ${dir} is not empty. Choose an empty or dedicated folder for the dsh install.`)
+    void vscode.window.showErrorMessage(`DeepSeek Harness: ${maskPath(dir)} is not empty. Choose an empty or dedicated folder for the dsh install.`)
     return false
   }
   try {
@@ -723,7 +722,7 @@ async function ensureSourceCheckout(cfg: DshConfig): Promise<SourceCheckout | un
   }
   try {
     if (fs.readdirSync(chosen).length > 0) {
-      addActivity(`✗ ${chosen} is not empty and is not a deepseek-harness checkout — pick an empty folder`)
+      addActivity(`✗ ${maskPath(chosen)} is not empty and is not a deepseek-harness checkout — pick an empty folder`)
       void vscode.window.showErrorMessage('DeepSeek Harness: that folder already contains files. Pick an empty folder or an existing deepseek-harness checkout.')
       return undefined
     }
@@ -1576,7 +1575,6 @@ export async function currentStatus(): Promise<ServerStatus> {
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
     url: displayUrl(cfg),
-    node: nodeState,
     dsh: dshState,
     dshVersion,
     dshPath,

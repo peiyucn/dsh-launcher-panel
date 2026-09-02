@@ -69,6 +69,14 @@ export const LOG_TAIL_POLL_MS = 500
 /** The port the web UI listens on when `dsh.port` is unset (mirrors package.json). */
 export const DEFAULT_PORT = 3080
 
+/** Default browser mode; normalizeBrowser collapses any other value onto it. */
+export const DEFAULT_BROWSER = 'built-in'
+
+/** Normalize an arbitrary `dsh.browser` config value to a known choice. */
+export function normalizeBrowser(value: unknown): 'built-in' | 'external' {
+  return value === 'external' ? 'external' : DEFAULT_BROWSER
+}
+
 /** CSP nonce length in characters (random, not crypto-critical, but unpredictable). */
 export const NONCE_LENGTH = 32
 
