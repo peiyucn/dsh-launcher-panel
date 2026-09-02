@@ -4,23 +4,19 @@ import { resolveDshHome, toEnglish } from './common'
 
 /** One DeepSeek API service component on the official status page. */
 export interface DsComponentStatus {
-  id: string
   name: string
   status: 'operational' | 'degraded' | 'partial_outage' | 'full_outage' | 'maintenance'
 }
 
 export interface DsIncident {
-  id: string
   title: string
   status: string
 }
 
 export interface DsStatus {
   state: 'ok' | 'degraded' | 'down' | 'maintenance' | 'unknown'
-  text: string
   components: DsComponentStatus[]
   incidents: DsIncident[]
-  updatedAt: number | null
 }
 
 export interface DshBalance {
@@ -45,14 +41,6 @@ const DS_SEVERITY: Record<string, number> = {
   degraded: 2,
   partial_outage: 3,
   full_outage: 4,
-}
-
-const DS_OVERALL_LABEL: Record<string, string> = {
-  operational: 'DeepSeek API operational',
-  maintenance: 'DeepSeek API under maintenance',
-  degraded: 'DeepSeek API degraded',
-  partial_outage: 'DeepSeek API partial outage',
-  full_outage: 'DeepSeek API outage',
 }
 
 const DS_STATUS_CACHE_TTL_MS = 60 * 1000
@@ -92,7 +80,7 @@ async function fetchDsStatus(): Promise<DsStatus> {
       // try the next host
     }
   }
-  return { state: 'unknown', text: 'DeepSeek API status unknown', components: [], incidents: [], updatedAt: null }
+  return { state: 'unknown', components: [], incidents: [] }
 }
 
 export function parseDsStatus(json: any): DsStatus {
@@ -118,7 +106,6 @@ export function parseDsStatus(json: any): DsStatus {
       const affectsApi = (ch?.affected_components ?? []).some((ac: any) => /api/i.test(toEnglish(String(ac?.name ?? ''))))
       if (!affectsApi) continue
       incidents.push({
-        id: String(ch?.change_id ?? ''),
         title: toEnglish(String(ch?.title ?? '')),
         status: String(ch?.status ?? '').trim(),
       })
@@ -130,7 +117,6 @@ export function parseDsStatus(json: any): DsStatus {
     }
 
     const components: DsComponentStatus[] = raw.map((c) => ({
-      id: c.id,
       name: c.name,
       status: (statusById.get(c.id) ?? 'operational') as DsComponentStatus['status'],
     }))
@@ -148,13 +134,11 @@ export function parseDsStatus(json: any): DsStatus {
 
     return {
       state,
-      text: DS_OVERALL_LABEL[worst] ?? 'DeepSeek API operational',
       components,
       incidents,
-      updatedAt: Date.now(),
     }
   } catch {
-    return { state: 'unknown', text: 'DeepSeek API status unknown', components: [], incidents: [], updatedAt: null }
+    return { state: 'unknown', components: [], incidents: [] }
   }
 }
 
