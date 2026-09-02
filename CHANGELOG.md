@@ -8,7 +8,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 - Release-audit fixes: Stop no longer force-kills whatever owns the port when a tracked server exists (avoids taking down unrelated apps); the dsh version row no longer flashes a placeholder during first-run installs; a failed status refresh no longer unlocks the Check-updates button early or mislabels Start as "Install & Start"; concurrent busy operations each clear only their own spinner.
 - The Browser dropdown now supports keyboard navigation (arrow keys / Home / End, Enter picks).
-- Error and progress messages mask user paths consistently.
+- Error messages mask user paths consistently (install/clone progress keeps full paths so you can see where things land).
 
 ## [0.2.4]
 

@@ -524,6 +524,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       o.addEventListener('click', () => {
         setBrowserUI(o.dataset.value)
         closeBrowserMenu()
+        browserSelectBtn.focus()
         vscode.postMessage({ command: 'setBrowser', value: o.dataset.value })
       })
     })
@@ -537,6 +538,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         closeBrowserMenu()
         return
       }
+      // Leaving the open menu with Tab closes it instead of stranding focus.
+      if (e.key === 'Tab' && !browserSelectMenu.hidden) closeBrowserMenu()
       // Roving-focus keyboard navigation while the menu is open; Enter/Space
       // pick the focused option via the button's native click.
       if (browserSelectMenu.hidden) return
