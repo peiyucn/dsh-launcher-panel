@@ -1,9 +1,5 @@
 # 项目指令 — dsh-launcher-panel
 
-## 语言
-
-* 始终用简体中文回复
-
 ## 项目概况
 
 VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并在 VS Code 内置浏览器中打开它的 Web UI。
