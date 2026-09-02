@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
 import { describeDshUpdate } from './common'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
+import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -778,7 +778,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         starting: false,
         installing: false,
         stopping: false,
-        checking: false,
+        checking: isCheckingUpdates(),
         url: '',
         node: 'unknown',
         dsh: 'unknown',

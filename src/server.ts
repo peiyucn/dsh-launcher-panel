@@ -134,6 +134,11 @@ let dshState: ConditionState = 'unknown'
 let serverPhase: ServerPhase = 'stopped'
 let checkingUpdates = false
 
+/** Current in-flight check state (panel fallback reads it instead of assuming false). */
+export function isCheckingUpdates(): boolean {
+  return checkingUpdates
+}
+
 /**
  * Transition the server lifecycle phase. Invalid transitions are logged (not
  * rejected) so a stray assignment cannot silently corrupt the lifecycle state.
