@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.5]
+
+- Release-audit fixes: Stop no longer force-kills whatever owns the port when a tracked server exists (avoids taking down unrelated apps); the dsh version row no longer flashes a placeholder during first-run installs; a failed status refresh no longer unlocks the Check-updates button early or mislabels Start as "Install & Start"; concurrent busy operations each clear only their own spinner.
+- The Browser dropdown now supports keyboard navigation (arrow keys / Home / End, Enter picks).
+- Error and progress messages mask user paths consistently.
+
 ## [0.2.4]
 
 - The Dashboard visual style now follows the official DSH design style.
