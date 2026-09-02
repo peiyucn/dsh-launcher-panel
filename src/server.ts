@@ -20,6 +20,7 @@ import {
   NODE_PROBE_TIMEOUT_MS,
   PNPM_PROBE_TIMEOUT_MS,
   PNPM_VIEW_TIMEOUT_MS,
+  TASKKILL_TIMEOUT_MS,
   PORT_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
@@ -1354,7 +1355,7 @@ function killPid(pid: number): void {
   if (process.platform === 'win32') {
     // Kill the process tree: trackedPid is cmd.exe, and the node child that
     // `cmd /c` blocks on would otherwise survive and finish starting.
-    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, timeout: 5_000 }, (error) => {
+    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, timeout: TASKKILL_TIMEOUT_MS }, (error) => {
       if (error) dbg(`taskkill ${pid} failed: ${error.message}`)
     })
     return

@@ -2,11 +2,10 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { actionStart, actionStop } from './actions'
 import { DshPanelProvider } from './panel'
-import { dshBaseDir } from './common'
+import { dshBaseDir, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { checkNodeOnce, currentStatus, dbg, registerConfigWatcher, setLogPath, stopLogTail } from './server'
 import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu'
 
-const STATUS_REFRESH_INTERVAL_MS = 4_000
 const STATUS_SPIN_INTERVAL_MS = 150
 // Running state paints its own background + foreground as theme colors
 // (contributed in package.json), so the item stays readable on any theme.

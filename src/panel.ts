@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { describeDshUpdate, NONCE_LENGTH } from './common'
+import { describeDshUpdate, NONCE_LENGTH, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
@@ -11,8 +11,6 @@ function getNonce(): string {
   for (let i = 0; i < NONCE_LENGTH; i++) out += chars.charAt(bytes[i] % chars.length)
   return out
 }
-
-const REFRESH_INTERVAL_MS = 4_000
 
 export class DshPanelProvider implements vscode.WebviewViewProvider {
   static readonly viewType = 'dsh.panel'
