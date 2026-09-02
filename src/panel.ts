@@ -347,7 +347,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         dot.className = 'dot' + (running ? ' running' : '')
         statusText.textContent = running ? 'Running' : 'Stopped'
         statusSub.textContent = running ? (status.url || '') : ''
-        startBtn.textContent = running ? '↗ New Tab' : (status.dshVersion ? '▶ Start' : 'Install & Start')
+        startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
       }
       const mode = status.mode === 'source' ? 'source' : 'pnpm'
       document.querySelectorAll('.mode-option').forEach((b) => {
@@ -736,7 +736,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 
   private startTimer(): void {
     this.stopTimer()
-    this.timer = setInterval(() => void this.refresh(), REFRESH_INTERVAL_MS)
+    this.timer = setInterval(() => void this.refresh(), STATUS_REFRESH_INTERVAL_MS)
   }
 
   private stopTimer(): void {

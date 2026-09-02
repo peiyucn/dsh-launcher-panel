@@ -1386,7 +1386,10 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   // promise until the command finishes on its own.
   void activeTerminalTask?.terminate()
   const owner = await findPortOwner(cfg.port)
-  if (owner && owner !== process.pid) {
+  // Only fall back to the port owner when no tracked process was recorded:
+  // with a tracked tree, taskkill /T already covers the descendants, and
+  // killing whatever owns the port could take down an unrelated app.
+  if (pids.length === 0 && owner !== undefined && owner !== process.pid) {
     pids.push(owner)
     killPid(owner)
   }
