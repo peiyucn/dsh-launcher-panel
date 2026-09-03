@@ -111,13 +111,13 @@ export function resolveDshHome(): string {
 
 // --- Pure helpers ---
 
-/** 归一化 dsh 通道配置（settings 值可能是任意字符串）。 */
-export function parseDshChannel(value: string | undefined): 'latest' | 'next' | 'alpha' {
+/** 归一化 npm 通道配置（settings 值可能是任意字符串）。 */
+export function parseNpmChannel(value: string | undefined): 'latest' | 'next' | 'alpha' {
   return value === 'next' || value === 'alpha' ? value : 'latest'
 }
 
-/** 通道 → npm 解析规格（latest 是默认 dist-tag 不带后缀；next/alpha 显式指定）。 */
-export function dshSpecForChannel(channel: 'latest' | 'next' | 'alpha'): string {
+/** npm 通道 → 解析规格（latest 是默认 dist-tag 不带后缀；next/alpha 显式指定）。 */
+export function npmSpecForChannel(channel: 'latest' | 'next' | 'alpha'): string {
   return channel === 'latest' ? '@deepseek-ai/dsh' : `@deepseek-ai/dsh@${channel}`
 }
 

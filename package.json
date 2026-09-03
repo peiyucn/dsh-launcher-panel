@@ -116,7 +116,7 @@
     "configuration": {
       "title": "DSH Launcher Panel",
       "properties": {
-        "dsh.mode": {
+        "dsh.runMode": {
           "type": "string",
           "enum": [
             "pnpm",
@@ -125,7 +125,7 @@
           "default": "pnpm",
           "description": "How to run DeepSeek Harness: 'pnpm' installs dsh into a launcher-managed location and runs 'pnpm exec dsh web'; 'source' runs a local checkout via tsx. Normally set with the mode pill in the panel."
         },
-        "dsh.channel": {
+        "dsh.npmChannel": {
           "type": "string",
           "enum": [
             "latest",
@@ -133,7 +133,7 @@
             "alpha"
           ],
           "default": "latest",
-          "description": "Which release channel pkg mode installs from: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas) — the npm dist-tag for @deepseek-ai/dsh. Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
+          "description": "Which npm dist-tag pkg mode installs @deepseek-ai/dsh from: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
         },
         "dsh.browser": {
           "type": "string",
@@ -154,7 +154,7 @@
           "default": true,
           "description": "Run the DSH server in a hidden console so neither it nor the tool subprocesses (bash/pwsh) flash a cmd window. Turn off to show it for debugging."
         },
-        "dsh.path": {
+        "dsh.srcPath": {
           "type": "string",
           "default": "",
           "description": "Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically."

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, compareDshVersions, describeDshUpdate, dshBaseDir, dshSpecForChannel, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, parseDshChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -243,18 +243,18 @@ test('isDshInstallDirUsable accepts absent, empty and launcher-owned dirs only',
   }
 })
 
-test('parseDshChannel normalizes channel settings', () => {
-  assert.equal(parseDshChannel('next'), 'next')
-  assert.equal(parseDshChannel('alpha'), 'alpha')
-  assert.equal(parseDshChannel('latest'), 'latest')
-  assert.equal(parseDshChannel(undefined), 'latest')
-  assert.equal(parseDshChannel('garbage'), 'latest')
+test('parseNpmChannel normalizes channel settings', () => {
+  assert.equal(parseNpmChannel('next'), 'next')
+  assert.equal(parseNpmChannel('alpha'), 'alpha')
+  assert.equal(parseNpmChannel('latest'), 'latest')
+  assert.equal(parseNpmChannel(undefined), 'latest')
+  assert.equal(parseNpmChannel('garbage'), 'latest')
 })
 
-test('dshSpecForChannel maps channels to npm specs', () => {
-  assert.equal(dshSpecForChannel('latest'), '@deepseek-ai/dsh')
-  assert.equal(dshSpecForChannel('next'), '@deepseek-ai/dsh@next')
-  assert.equal(dshSpecForChannel('alpha'), '@deepseek-ai/dsh@alpha')
+test('npmSpecForChannel maps channels to npm specs', () => {
+  assert.equal(npmSpecForChannel('latest'), '@deepseek-ai/dsh')
+  assert.equal(npmSpecForChannel('next'), '@deepseek-ai/dsh@next')
+  assert.equal(npmSpecForChannel('alpha'), '@deepseek-ai/dsh@alpha')
 })
 
 test('compareDshVersions orders versions by core, then prerelease', () => {

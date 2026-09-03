@@ -3,7 +3,7 @@ import * as vscode from 'vscode'
 import { actionStart, actionStop } from './actions'
 import { DshPanelProvider } from './panel'
 import { dshBaseDir, STATUS_REFRESH_INTERVAL_MS } from './common'
-import { checkNodeOnce, currentStatus, dbg, registerConfigWatcher, setLogPath, stopLogTail } from './server'
+import { checkNodeOnce, currentStatus, dbg, migrateLegacyDshConfig, registerConfigWatcher, setLogPath, stopLogTail } from './server'
 import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu'
 
 const STATUS_SPIN_INTERVAL_MS = 150
@@ -23,6 +23,9 @@ export function activate(context: vscode.ExtensionContext): void {
   dbg('activated')
   // Node is probed exactly once, here, at activation.
   void checkNodeOnce()
+  // Move pre-0.2.6 config values (dsh.mode / dsh.channel / dsh.path) onto the
+  // renamed keys once, then remove the legacy keys.
+  void migrateLegacyDshConfig()
 
   const panelProvider = new DshPanelProvider(context.extension.packageJSON.version ?? '0.0.0')
   context.subscriptions.push(

@@ -805,7 +805,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         dshPathShort: '',
         dshHomeShort: '',
         nodeVersion: '',
-        mode: cfg.mode,
+        mode: cfg.runMode,
         update: undefined,
         consoleLogPath: '',
         consoleLogPathShort: '',

@@ -31,7 +31,6 @@ import {
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   dshBaseDir,
-  dshSpecForChannel,
   dshVersionAtLeast,
   extractWebToken,
   findPnpm,
@@ -41,7 +40,8 @@ import {
   isProcessAlive,
   maskPath,
   newestDshVersion,
-  parseDshChannel,
+  npmSpecForChannel,
+  parseNpmChannel,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
   quoteCmdArg,
@@ -56,19 +56,19 @@ import {
 // module stays focused on server lifecycle).
 export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds'
 
-type DshMode = 'pnpm' | 'source'
+type RunMode = 'pnpm' | 'source'
 
 /** dsh binds loopback only; the launcher probes and opens this fixed host. */
 const LOOPBACK_HOST = '127.0.0.1'
 
-type DshChannel = 'latest' | 'next' | 'alpha'
+type NpmChannel = 'latest' | 'next' | 'alpha'
 
 /** Resolved extension settings (dsh.*). */
 export interface DshConfig {
-  mode: DshMode
-  /** Which npm dist-tag pnpm resolves: 'latest' (default) or 'next' (prereleases). */
-  channel: DshChannel
-  path: string
+  runMode: RunMode
+  /** Which npm dist-tag pkg mode resolves: 'latest' (stable), 'next' (rc), or 'alpha'. */
+  npmChannel: NpmChannel
+  srcPath: string
   /** Custom pkg install dir (defaults to the managed dir when empty). */
   pkgPath: string
   nodePath: string
@@ -183,21 +183,47 @@ let dshPath = ''
 let nodeVersion = ''
 
 export function readConfig(): DshConfig {
-  // Read the persisted settings every time: dsh.mode is the single source
+  // Read the persisted settings every time: dsh.runMode is the single source
   // of truth, so both the panel toggle and the Settings UI stay in sync.
   const c = vscode.workspace.getConfiguration('dsh')
   // Clamp the port to the valid TCP range; an out-of-range value from Settings
   // Sync or manual edits would otherwise make every probe throw.
   const port = c.get<number>('port') ?? DEFAULT_PORT
+  // 旧键名（dsh.mode / dsh.channel / dsh.path）兜底读取：migrateLegacyDshConfig
+  // 激活时会把旧值搬进新键并清掉旧键，这里保证迁移跑完前的短暂窗口也不丢值。
   return {
-    mode: c.get<string>('mode') === 'source' ? 'source' : 'pnpm',
-    channel: parseDshChannel(c.get<string>('channel') ?? undefined),
-    path: c.get<string>('path') ?? '',
+    runMode: (c.get<string>('runMode') ?? c.get<string>('mode')) === 'source' ? 'source' : 'pnpm',
+    npmChannel: parseNpmChannel(c.get<string>('npmChannel') ?? c.get<string>('channel') ?? undefined),
+    srcPath: c.get<string>('srcPath') ?? c.get<string>('path') ?? '',
     pkgPath: c.get<string>('pkgPath') ?? '',
     nodePath: c.get<string>('nodePath') ?? '',
     port: Number.isInteger(port) && port > 0 && port <= MAX_PORT ? port : DEFAULT_PORT,
     sourceDebug: c.get<boolean>('sourceDebug') ?? false,
     autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
+  }
+}
+
+/** 0.2.6 改名的配置键（新键 ← 旧键）。 */
+const LEGACY_CONFIG_KEYS: [newKey: string, oldKey: string][] = [
+  ['runMode', 'mode'],
+  ['npmChannel', 'channel'],
+  ['srcPath', 'path'],
+]
+
+/**
+ * One-time migration for the 0.2.6 key renames: when a legacy key still holds
+ * a value and the new key is unset, move the value to the new key and clear
+ * the old one, so settings.json does not keep dead keys. readConfig still
+ * falls back to the legacy keys as a safety net (e.g. before this runs).
+ */
+export async function migrateLegacyDshConfig(): Promise<void> {
+  const c = vscode.workspace.getConfiguration('dsh')
+  for (const [newKey, oldKey] of LEGACY_CONFIG_KEYS) {
+    if (c.get(newKey) !== undefined) continue
+    const legacy = c.get(oldKey)
+    if (legacy === undefined) continue
+    await c.update(newKey, legacy, vscode.ConfigurationTarget.Global)
+    await c.update(oldKey, undefined, vscode.ConfigurationTarget.Global)
   }
 }
 
@@ -207,7 +233,7 @@ export async function applyMode(mode: 'pnpm' | 'source'): Promise<void> {
   // and the update check (registry vs release tag).
   detectionCache = undefined
   updateCache = undefined
-  await vscode.workspace.getConfiguration('dsh').update('mode', mode, vscode.ConfigurationTarget.Global)
+  await vscode.workspace.getConfiguration('dsh').update('runMode', mode, vscode.ConfigurationTarget.Global)
 }
 
 /** Invalidate caches when dsh settings change outside the panel (Settings UI, sync, …). */
@@ -532,7 +558,7 @@ async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: string): Pro
 }
 
 /** Persist a dsh path setting (idempotent). */
-async function saveDshSetting(key: 'path' | 'pkgPath', value: string): Promise<void> {
+async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promise<void> {
   const c = vscode.workspace.getConfiguration('dsh')
   if ((c.get<string>(key) ?? '') !== value) {
     await c.update(key, value, vscode.ConfigurationTarget.Global)
@@ -540,8 +566,8 @@ async function saveDshSetting(key: 'path' | 'pkgPath', value: string): Promise<v
 }
 
 /** Resolve the published @deepseek-ai/dsh version for a channel (undefined on failure). */
-async function latestDshVersion(channel: DshChannel, pnpmCmd = 'pnpm'): Promise<string | undefined> {
-  const spec = dshSpecForChannel(channel)
+async function latestDshVersion(channel: NpmChannel, pnpmCmd = 'pnpm'): Promise<string | undefined> {
+  const spec = npmSpecForChannel(channel)
   const result = process.platform === 'win32'
     ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), 'view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
     : await runFile(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
@@ -565,7 +591,7 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   // The registry query can take a few seconds; show it so a slow network
   // does not look like a frozen Start.
   const resolvingId = addActivity('ℹ Resolving the dsh channel version…', true)
-  let version = await latestDshVersion(cfg.channel, pnpmCmd)
+  let version = await latestDshVersion(cfg.npmChannel, pnpmCmd)
   finishBusy(resolvingId)
   if (!version) version = pkgInstalledVersion(cfg)
   if (!version) {
@@ -682,11 +708,11 @@ async function ensurePnpmAvailable(): Promise<{ command: string; allowBuild: boo
 }
 
 /**
- * Locate the source checkout: the explicit `dsh.path` setting when it is a
+ * Locate the source checkout: the explicit `dsh.srcPath` setting when it is a
  * valid checkout, else the launcher's managed clone.
  */
 function findSourceCheckout(cfg: DshConfig): string | undefined {
-  if (isDshCheckout(cfg.path)) return cfg.path
+  if (isDshCheckout(cfg.srcPath)) return cfg.srcPath
   const managed = managedSourceCheckout()
   return isDshCheckout(managed) ? managed : undefined
 }
@@ -707,7 +733,7 @@ async function ensureSourceCheckout(cfg: DshConfig): Promise<SourceCheckout | un
   if (!chosen) return undefined
   // Persist the choice even when it is the managed default: the setting then
   // shows the actual clone path and pins it against future default changes.
-  await saveDshSetting('path', chosen)
+  await saveDshSetting('srcPath', chosen)
   // The picked folder may already be a checkout (e.g. the user pointed at
   // their own clone): reuse it instead of cloning into it, which git would
   // refuse for a non-empty folder anyway.
@@ -743,7 +769,7 @@ async function ensureSourceCheckout(cfg: DshConfig): Promise<SourceCheckout | un
 
 /** Detect the local dsh version: a source checkout (source mode), else the managed install. */
 async function detectDshVersion(cfg: DshConfig): Promise<void> {
-  if (cfg.mode === 'source') {
+  if (cfg.runMode === 'source') {
     const checkout = findSourceCheckout(cfg)
     if (!checkout) {
       // No checkout configured: dsh is 'missing', so drop any stale version.
@@ -776,12 +802,12 @@ interface DshDetection {
 
 /** Detect dsh: source mode uses a checkout; pkg uses the managed pnpm install. */
 async function detectDsh(cfg: DshConfig): Promise<DshDetection> {
-  if (cfg.mode === 'source') {
+  if (cfg.runMode === 'source') {
     const checkout = findSourceCheckout(cfg)
     if (checkout) return { state: 'ok', path: checkout }
     // Not cloned yet; show the chosen path only once the clone has started
     // (the dir appears as soon as the user picks a location).
-    const chosen = cfg.path && cfg.path.trim() !== '' ? cfg.path : managedSourceCheckout()
+    const chosen = cfg.srcPath && cfg.srcPath.trim() !== '' ? cfg.srcPath : managedSourceCheckout()
     return fs.existsSync(chosen)
       ? { state: 'unknown', path: chosen }
       : { state: 'unknown', path: '' }
@@ -1284,7 +1310,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     return false
   }
 
-  if (cfg.mode === 'source') {
+  if (cfg.runMode === 'source') {
     const checkout = await ensureSourceCheckout(cfg)
     if (!checkout) return false
     if (!(await ensureCheckoutReady(checkout.path, checkout.cloned))) {
@@ -1449,7 +1475,7 @@ export function stopServer(): Promise<boolean> {
 
 /**
  * The newest official release tag on origin (dsh-vX.Y.Z[-pre]), or undefined.
- * Source mode tracks this directly from git — the npm channel (dsh.channel)
+ * Source mode tracks this directly from git — the npm channel (dsh.npmChannel)
  * only governs pkg installs, so it plays no part here.
  */
 async function newestReleaseTag(checkout: string): Promise<string | undefined> {
@@ -1470,10 +1496,10 @@ async function newestReleaseTag(checkout: string): Promise<string | undefined> {
 
 /** Check for a newer dsh version: pkg compares the registry; source compares the newest official release tag. */
 async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
-  if (cfg.mode === 'pnpm') {
+  if (cfg.runMode === 'pnpm') {
     const installed = pkgInstalledVersion(cfg)
     if (!installed) return { hasUpdate: false, label: '' }
-    const latest = await latestDshVersion(cfg.channel)
+    const latest = await latestDshVersion(cfg.npmChannel)
     if (!latest) {
       addActivity('⚠ Update check failed — could not resolve the latest dsh version')
       return { hasUpdate: false, label: '', failed: true }
@@ -1543,10 +1569,10 @@ export async function runDshUpdate(): Promise<void> {
 
 async function runDshUpdateInner(): Promise<void> {
   const cfg = readConfig()
-  if (cfg.mode === 'pnpm') {
+  if (cfg.runMode === 'pnpm') {
     const pnpm = await ensurePnpmAvailable()
     if (!pnpm) return
-    const latest = await latestDshVersion(cfg.channel, pnpm.command)
+    const latest = await latestDshVersion(cfg.npmChannel, pnpm.command)
     if (!latest) {
       addActivity('↑ Update check failed (network) — could not resolve the latest dsh version')
       return
@@ -1650,7 +1676,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     dshPathShort: maskPath(dshPath),
     dshHomeShort: maskPath(dshHome),
     nodeVersion,
-    mode: cfg.mode === 'source' ? 'source' : 'pnpm',
+    mode: cfg.runMode === 'source' ? 'source' : 'pnpm',
     update: updateCache?.update,
     consoleLogPath: consolePath,
     consoleLogPathShort: maskPath(consolePath),
