@@ -6,8 +6,8 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.7]
 
-- Fixed a significant pkg-mode bug: Start re-resolved the channel version and reinstalled whenever it differed from the installed dsh — switching channels (e.g. `next` → `latest`) made Start attempt a downgrade install, and an offline or flaky network could block starting entirely. Now the installed dsh is always what starts: the channel only decides what to install on first run and what the Update button targets; upgrades and downgrades happen only via Update.
-- pkg starts no longer trigger pnpm's hidden dependency check: `pnpm exec` runs with `verify-deps-before-run=false` (installing is the launcher's job — first install and Update only), and Start repairs a stale install manifest left behind by a previously failed install. Together these stop pnpm from silently reinstalling before launch — a reinstall that could fail on registry issues and block a perfectly usable installed dsh.
+- pkg mode starts the installed dsh as-is: the channel (`dsh.npmChannel`) only decides what to install on first run and what the Update button targets — switching channels no longer reinstalls or downgrades at Start, and starting works offline.
+- Start no longer stalls on a background reinstall that could fail on registry issues and block a working install.
 
 ## [0.2.6]
 
