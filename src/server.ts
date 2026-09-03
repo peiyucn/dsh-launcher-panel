@@ -594,9 +594,11 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
     // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
-    // 顺手修复历史残局：失败的安装尝试可能留下 manifest 与已装版本不一致的状态；
-    // 写失败不阻断启动（spawnPkg 已禁用 verify-deps-before-run，pnpm 不会自动重装）。
-    if (!writeInstallManifest(installed, dir)) {
+    // 顺手修复历史残局（失败的安装尝试可能留下 manifest 与已装版本不一致的状态）——
+    // 但只在 manifest 是 launcher 所写（或缺失）时才写回：pkgPath 若指向自带
+    // package.json 的用户项目，绝不能覆盖人家的 manifest。写失败不阻断启动
+    // （spawnPkg 已禁用 verify-deps-before-run，pnpm 不会自动重装）。
+    if (installManifestRepairable(dir) && !writeInstallManifest(installed, dir)) {
       dbg('could not repair the install manifest; continuing with the installed dsh')
     }
     dshVersion = installed
@@ -631,6 +633,21 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   dshVersion = version
   if (!(await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir))) return undefined
   return version
+}
+
+/**
+ * Whether the install dir's manifest may be written by the launcher: only when
+ * it is absent/unreadable or carries the launcher's own manifest name — a
+ * foreign package.json (pkgPath pointing at a user project) is never touched.
+ */
+function installManifestRepairable(dir: string): boolean {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { name?: string }
+    return pkg?.name === DSH_INSTALL_MANIFEST_NAME
+  } catch {
+    // 不存在或读不了：从未被用户写过，launcher 写回属于修复。
+    return true
+  }
 }
 
 /** Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version. */
