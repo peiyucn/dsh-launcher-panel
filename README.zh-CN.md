@@ -19,9 +19,9 @@
 ## 功能
 
 * **启动 / 停止** — 把 dsh 装进 launcher 自管的目录（首次运行），之后通过 `pnpm exec dsh web` 运行并在就绪后打开 Web UI。
-* **源码运行** — 自动把 deepseek-harness clone 到自管目录并运行（`dsh.path` 可覆盖 clone 位置）；该路径下已有的检出会直接复用。首次启动还会自动执行 `pnpm install` + 构建；构建前会先跑 `pnpm run clean`（若检出提供该脚本）清理旧版本残留产物，构建使用 dsh 官方 profile，Web UI 左上角品牌与 pkg 模式一致。
+* **源码运行** — 自动把 deepseek-harness clone 到自管目录并运行（`dsh.srcPath` 可覆盖 clone 位置）；该路径下已有的检出会直接复用。依赖缺失/过期、或检出切过了上次构建（用 dsh 自带构建记录里的 commit 与 HEAD 对比检测）时，启动前会执行 `pnpm install` + 构建；构建前会先跑 `pnpm run clean`（若检出提供该脚本）清理旧版本残留产物，构建使用 dsh 官方 profile，Web UI 左上角品牌与 pkg 模式一致。
 * **仪表盘面板** — 服务状态、实时控制台（含可点击的日志文件）、带峰谷时段标志的 DeepSeek 官方 API 状态（周末全天按低谷计费）以及你的账户余额。
-* **DSH 更新** — 点击刷新按钮（⟳）检查；有新版本时，dsh 版本号旁会出现 Update 按钮（pkg 重装最新版，source 拉取仓库）。
+* **DSH 更新** — 点击刷新按钮（⟳）检查；有新版本时，dsh 版本号旁会出现 Update 按钮（pkg 重装通道最新版；source 检出最新的官方 `dsh-v…` release tag，不拉 upstream master）。
 * **浏览器选择** — 内置浏览器或系统浏览器。
 
 ## 使用方法
@@ -36,20 +36,20 @@
 | --------------- | --------- | ----------------------------------------------------------- |
 | dsh.runMode     | pnpm      | `pnpm` 把 dsh 装进 launcher 自管的目录并运行 `pnpm exec dsh web`；`source` 通过 tsx 运行本地检出 |
 | dsh.npmChannel  | latest    | pkg 安装所用的 npm dist-tag：`latest`（稳定）、`next`（rc 预发布）或 `alpha`（alpha）。source 模式忽略此项，始终跟踪最新的官方 `dsh-v<版本号>` git tag。          |
-| dsh.browser     | built-in  | `built-in` 使用 VS Code 内置浏览器（不可用时回退到系统浏览器）；`external` 打开系统浏览器 |
-| dsh.autoOpenBrowser | true      | Start 后自动打开浏览器；关掉则保留当前标签页（Start 的「New Tab」点击仍按 `dsh.browser` 打开） |
-| dsh.hideConsole | true      | 在 Windows 上隐藏控制台                                            |
-| dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则扩展自动 clone 仓库         |
 | dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空则用扩展自管默认位置                    |
+| dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则扩展自动 clone 仓库         |
 | dsh.nodePath    | 空         | node.exe 路径；留空则使用 PATH 上的 node                              |
 | dsh.port        | 3080      | Web UI 端口                                                   |
-| dsh.sourceDebug | false     | source 模式打印模块加载进度（NODE_DEBUG=module，输出很多；console 显示周期性计数，完整明细在服务端日志） |
+| dsh.autoOpenBrowser | true      | Start 后自动打开浏览器；关掉则保留当前标签页（Start 的「New Tab」点击仍按 `dsh.browser` 打开） |
+| dsh.browser     | built-in  | `built-in` 使用 VS Code 内置浏览器（不可用时回退到系统浏览器）；`external` 打开系统浏览器 |
+| dsh.hideConsole | true      | 在 Windows 上隐藏控制台                                            |
 | dsh.clearServerLogOnStart | true  | 每次启动前清空服务端日志文件，使其只包含本次运行内容 |
+| dsh.sourceDebug | false     | source 模式打印模块加载进度（NODE_DEBUG=module，输出很多；console 显示周期性计数，完整明细在服务端日志） |
 
 ## 说明
 
-* 默认的 pnpm 模式用 pnpm（dsh 仓库自己用的工具）把 dsh 装进自管目录后直接运行；npm 的 peer 解析器在 dsh 的依赖图上可能无限挂起，所以不提供 `npx`。首次安装时选择的位置（默认或自定义）会写入 `dsh.pkgPath` / `dsh.path`，在设置里可见并保持固定。
-* 面板上的模式切换 pill 用简写：`pkg` 即 pnpm 模式，`src` 即 source 模式。当 `dsh.path` 指向的不是已有检出时，启动器会询问 clone 位置。
+* 默认的 pnpm 模式用 pnpm（dsh 仓库自己用的工具）把 dsh 装进自管目录后直接运行；npm 的 peer 解析器在 dsh 的依赖图上可能无限挂起，所以不提供 `npx`。首次安装时选择的位置（默认或自定义）会写入 `dsh.pkgPath` / `dsh.srcPath`，在设置里可见并保持固定。
+* 面板上的模式切换 pill 用简写：`pkg` 即 pnpm 模式，`src` 即 source 模式。当 `dsh.srcPath` 指向的不是已有检出时，启动器会询问 clone 位置。
 * 面板显示 dsh 本体位置（pkg 模式为 `package`，source 模式为 `source`）和 `data`（`~/.dsh`）两处路径；dsh 行带 Update 和 Check updates 按钮。
 * 启动/停止是幂等的：会先探测端口，不会重复启动。
 * 关闭 VS Code 不会停止服务；请从面板或命令面板停止。

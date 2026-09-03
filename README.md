@@ -19,9 +19,9 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 ## Features
 
 * **Start / Stop** — installs dsh into a launcher-managed location (first run), then runs `pnpm exec dsh web` and opens the web UI once it is ready.
-* **Source run** — clones deepseek-harness automatically into a managed location and runs it (a custom `dsh.path` overrides the clone location); an existing checkout at that path is reused as-is. On first start it also runs `pnpm install` + build; the build is preceded by `pnpm run clean` (when the checkout provides the script) to clear stale build residue, and uses dsh's official build profile so the web UI shows the same DeepSeek Harness brand as the packaged dsh.
+* **Source run** — clones deepseek-harness automatically into a managed location and runs it (a custom `dsh.srcPath` overrides the clone location); an existing checkout at that path is reused as-is. Before starting it runs `pnpm install` + build when deps are missing/stale or the checkout moved past its last build (detected via the commit hash in dsh's own build record); the build is preceded by `pnpm run clean` (when the checkout provides the script) to clear stale build residue, and uses dsh's official build profile so the web UI shows the same DeepSeek Harness brand as the packaged dsh.
 * **Dashboard panel** — server status, a live console (with clickable log files), the official DeepSeek API status with Peak / Off-peak pricing (weekends are billed at the off-peak rate), and your account balance.
-* **DSH Update** — click the refresh button (⟳) to check; when a new version is available, an Update button appears next to the dsh version (pkg reinstalls the latest, source pulls the checkout).
+* **DSH Update** — click the refresh button (⟳) to check; when a new version is available, an Update button appears next to the dsh version (pkg reinstalls the channel's latest; source checks out the newest official `dsh-v…` release tag, never upstream master).
 * **Browser choice** — built-in or system browser.
 
 ## Usage
@@ -36,20 +36,20 @@ Settings → search "dsh":
 |---|---|---|
 | dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx |
 | dsh.npmChannel | latest | npm dist-tag pkg mode installs @deepseek-ai/dsh from: `latest` (stable), `next` (release candidates), or `alpha` (alphas). Source mode ignores this and always tracks the newest official `dsh-v<version>` git tag. |
-| dsh.browser | built-in | `built-in` uses VS Code's Simple Browser (falls back to the system browser if unavailable); `external` opens the system browser |
-| dsh.autoOpenBrowser | true | Automatically open the browser after Start; turn off to keep your current tab (the Start button's "New Tab" click still opens one per `dsh.browser`) |
-| dsh.hideConsole | true | Hide the server console window on Windows |
-| dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically. |
 | dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. When empty, a managed default location is used. |
+| dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically. |
 | dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH |
 | dsh.port | 3080 | Web UI port |
-| dsh.sourceDebug | false | Print module-loading progress in source mode (NODE_DEBUG=module, very verbose; console shows a periodic count, full detail in the server log) |
+| dsh.autoOpenBrowser | true | Automatically open the browser after Start; turn off to keep your current tab (the Start button's "New Tab" click still opens one per `dsh.browser`) |
+| dsh.browser | built-in | `built-in` uses VS Code's Simple Browser (falls back to the system browser if unavailable); `external` opens the system browser |
+| dsh.hideConsole | true | Hide the server console window on Windows |
 | dsh.clearServerLogOnStart | true | Clear the server log file at the start of each launch so it only contains the current run |
+| dsh.sourceDebug | false | Print module-loading progress in source mode (NODE_DEBUG=module, very verbose; console shows a periodic count, full detail in the server log) |
 
 ## Notes
 
-* The default pnpm mode installs dsh with pnpm (the tool the dsh repo itself uses) into a managed location and runs it directly — npm's peer resolver can hang indefinitely on dsh's dependency graph, so `npx` is not offered. On the first install the chosen location (default or custom) is recorded in `dsh.pkgPath` / `dsh.path`, so it shows up in Settings and stays pinned.
-* The mode pill in the panel uses short labels: `pkg` = the pnpm mode, `src` = the source mode. When `dsh.path` does not point at an existing checkout, the launcher asks where to clone.
+* The default pnpm mode installs dsh with pnpm (the tool the dsh repo itself uses) into a managed location and runs it directly — npm's peer resolver can hang indefinitely on dsh's dependency graph, so `npx` is not offered. On the first install the chosen location (default or custom) is recorded in `dsh.pkgPath` / `dsh.srcPath`, so it shows up in Settings and stays pinned.
+* The mode pill in the panel uses short labels: `pkg` = the pnpm mode, `src` = the source mode. When `dsh.srcPath` does not point at an existing checkout, the launcher asks where to clone.
 * The panel shows where dsh lives (`package` in pkg mode, `source` in source mode) and the `data` (`~/.dsh`) locations; the dsh row has Update and Check updates buttons.
 * Start/stop is idempotent: it probes the port first and does not start twice.
 * Closing VS Code does not stop the server; stop it from the panel or command palette.

@@ -2,7 +2,7 @@
   "name": "dsh-launcher-panel",
   "displayName": "DSH Launcher Panel",
   "description": "Start DeepSeek Harness (dsh) and open its web UI in VS Code's built-in browser.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "icon": "resources/icon.png",
   "publisher": "peiyucn",
   "license": "MIT",
@@ -117,6 +117,7 @@
       "title": "DSH Launcher Panel",
       "properties": {
         "dsh.runMode": {
+          "order": 1,
           "type": "string",
           "enum": [
             "pnpm",
@@ -126,6 +127,7 @@
           "description": "How to run DeepSeek Harness: 'pnpm' installs dsh into a launcher-managed location and runs 'pnpm exec dsh web'; 'source' runs a local checkout via tsx. Normally set with the mode pill in the panel."
         },
         "dsh.npmChannel": {
+          "order": 2,
           "type": "string",
           "enum": [
             "latest",
@@ -135,7 +137,38 @@
           "default": "latest",
           "description": "Which npm dist-tag pkg mode installs @deepseek-ai/dsh from: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
         },
+        "dsh.pkgPath": {
+          "order": 3,
+          "type": "string",
+          "default": "",
+          "description": "Optional: custom directory where pkg mode installs dsh. When empty, the extension uses a managed default location."
+        },
+        "dsh.srcPath": {
+          "order": 4,
+          "type": "string",
+          "default": "",
+          "description": "Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically."
+        },
+        "dsh.nodePath": {
+          "order": 5,
+          "type": "string",
+          "default": "",
+          "description": "Path to node.exe. Leave empty to use the node on PATH."
+        },
+        "dsh.port": {
+          "order": 6,
+          "type": "number",
+          "default": 3080,
+          "description": "Port the web UI listens on."
+        },
+        "dsh.autoOpenBrowser": {
+          "order": 7,
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the browser after dsh starts. Turn off to keep your current tab (the official page shows a reconnect prompt); the Start button's 'New Tab' click still opens one per dsh.browser."
+        },
         "dsh.browser": {
+          "order": 8,
           "type": "string",
           "enum": [
             "built-in",
@@ -144,45 +177,23 @@
           "default": "built-in",
           "description": "Which browser to open the UI in. 'built-in' uses VS Code's Simple Browser (falls back to external if disabled); 'external' opens the system browser."
         },
-        "dsh.autoOpenBrowser": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically open the browser after dsh starts. Turn off to keep your current tab (the official page shows a reconnect prompt); the Start button's 'New Tab' click still opens one per dsh.browser."
-        },
         "dsh.hideConsole": {
+          "order": 9,
           "type": "boolean",
           "default": true,
           "description": "Run the DSH server in a hidden console so neither it nor the tool subprocesses (bash/pwsh) flash a cmd window. Turn off to show it for debugging."
         },
-        "dsh.srcPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically."
-        },
-        "dsh.pkgPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional: custom directory where pkg mode installs dsh. When empty, the extension uses a managed default location."
-        },
-        "dsh.nodePath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to node.exe. Leave empty to use the node on PATH."
-        },
-        "dsh.port": {
-          "type": "number",
-          "default": 3080,
-          "description": "Port the web UI listens on."
-        },
-        "dsh.sourceDebug": {
-          "type": "boolean",
-          "default": false,
-          "description": "In source mode, enable NODE_DEBUG=module to print module-loading progress (very verbose; the console shows a periodic count, full detail is in the server log)."
-        },
         "dsh.clearServerLogOnStart": {
+          "order": 10,
           "type": "boolean",
           "default": true,
           "description": "Clear the server log file at the start of each launch so it only contains the current run."
+        },
+        "dsh.sourceDebug": {
+          "order": 11,
+          "type": "boolean",
+          "default": false,
+          "description": "In source mode, enable NODE_DEBUG=module to print module-loading progress (very verbose; the console shows a periodic count, full detail is in the server log)."
         }
       }
     }
