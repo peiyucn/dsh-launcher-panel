@@ -594,6 +594,11 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
     // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
+    // 顺手修复历史残局：失败的安装尝试可能留下 manifest 与已装版本不一致的状态；
+    // 写失败不阻断启动（spawnPkg 已禁用 verify-deps-before-run，pnpm 不会自动重装）。
+    if (!writeInstallManifest(installed, dir)) {
+      dbg('could not repair the install manifest; continuing with the installed dsh')
+    }
     dshVersion = installed
     return installed
   }
@@ -628,6 +633,21 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   return version
 }
 
+/** Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version. */
+function writeInstallManifest(version: string, dir: string): boolean {
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+      name: DSH_INSTALL_MANIFEST_NAME,
+      private: true,
+      dependencies: { '@deepseek-ai/dsh': version },
+    }, null, 2) + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Install @deepseek-ai/dsh@<version> into the managed dir: write the pinned
  * manifest and run `pnpm install`, approving build scripts non-interactively
@@ -642,14 +662,7 @@ async function ensureDshInstalled(version: string, pnpmCmd: string, allowBuild: 
     void vscode.window.showErrorMessage(`DeepSeek Harness: ${maskPath(dir)} is not empty. Choose an empty or dedicated folder for the dsh install.`)
     return false
   }
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
-      name: DSH_INSTALL_MANIFEST_NAME,
-      private: true,
-      dependencies: { '@deepseek-ai/dsh': version },
-    }, null, 2) + '\n')
-  } catch {
+  if (!writeInstallManifest(version, dir)) {
     addActivity('✗ could not write the dsh install manifest — check write permissions')
     return false
   }
@@ -1109,13 +1122,17 @@ function spawnPkg(cfg: DshConfig, pnpmCmd: string, version: string): void {
   const webArgs = buildWebArgs(cfg, version)
   startBusyId = addActivity(`▶ Start: pnpm exec dsh ${webArgs.join(' ')}`, true)
   const dir = pkgInstallDir(cfg)
+  // verify-deps-before-run=false：安装决定权只在 launcher（首次安装 / Update）。
+  // pnpm exec 默认会在依赖状态不一致时自动重跑 pnpm install——那次重装撞上
+  // 网络/元数据问题时，会把本可正常运行的已装 dsh 挡在启动之外。
+  const execArgs = ['--config.verify-deps-before-run=false', 'exec', 'dsh', ...webArgs]
   if (process.platform === 'win32') {
     // pnpm is a .cmd shim: drive it through cmd with the arguments array, so
     // Windows quoting keeps fallback shim paths (possibly containing spaces)
     // intact in both the hidden-console and the visible-console spawn paths.
-    spawnServer('cmd', ['/c', quoteCmdArg(pnpmCmd), 'exec', 'dsh', ...webArgs], dir, false)
+    spawnServer('cmd', ['/c', quoteCmdArg(pnpmCmd), ...execArgs], dir, false)
   } else {
-    spawnServer(pnpmCmd, ['exec', 'dsh', ...webArgs], dir, false)
+    spawnServer(pnpmCmd, execArgs, dir, false)
   }
 }
 
