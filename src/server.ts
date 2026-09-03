@@ -637,16 +637,22 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
 
 /**
  * Whether the install dir's manifest may be written by the launcher: only when
- * it is absent/unreadable or carries the launcher's own manifest name — a
- * foreign package.json (pkgPath pointing at a user project) is never touched.
+ * it is absent (nothing of the user's to destroy) or carries the launcher's own
+ * manifest name. A foreign package.json (pkgPath pointing at a user project) —
+ * or an unreadable one whose ownership cannot be confirmed — is never touched.
  */
 function installManifestRepairable(dir: string): boolean {
+  const manifestPath = path.join(dir, 'package.json')
+  if (!fs.existsSync(manifestPath)) {
+    // 没有 manifest 就没有用户文件可毁。
+    return true
+  }
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { name?: string }
+    const pkg = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { name?: string }
     return pkg?.name === DSH_INSTALL_MANIFEST_NAME
   } catch {
-    // 不存在或读不了：从未被用户写过，launcher 写回属于修复。
-    return true
+    // 存在但读不了/损坏：归属无法确认，宁可不动（可能是用户自己的损坏文件）。
+    return false
   }
 }
 
