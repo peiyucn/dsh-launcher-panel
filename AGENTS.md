@@ -9,6 +9,14 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，覆盖不依赖 vscode 的纯逻辑模块（common、ds）；依赖 vscode 的链路暂由集成测试覆盖（后续版本）
 * 模块：`extension.ts`（激活与状态栏）、`server.ts`（服务生命周期与检测）、`actions.ts`（启动/停止/浏览器）、`panel.ts`（Dashboard webview）、`ds.ts`（DeepSeek 状态与余额）、`common.ts`（常量与工具）
 
+## 文档规范
+
+> 三份文档各司其职、各有读者：AGENTS 给开发 agent、README 给用户、CHANGELOG 给用户——写错读者是文档事故。
+
+* `AGENTS.md`：中文一份，面向开发 agent（唯一 agent 指令文件，不保留 CLAUDE.md 等其它厂商指令文件）
+* `README`：中英双份（英文默认 + 简体中文，顶部互链），**面向用户**——写安装/使用/配置的用法与行为，不写实现细节与开发历史
+* `CHANGELOG`：中英双份（同 README 规），**面向用户**——每条 = 一条用户可感知的变化（一句话、行为级），不写实现细节/内部机制/修复过程（归 commit 信息）
+
 ## 工程管线（本仓库自含）
 
 * **开发**：日常改动在 `dev` 分支；`main` 只接受发布合并
