@@ -35,7 +35,7 @@
 | 键               | 默认值       | 说明                                                          |
 | --------------- | --------- | ----------------------------------------------------------- |
 | dsh.runMode     | pnpm      | `pnpm` 把 dsh 装进 launcher 自管的目录并运行 `pnpm exec dsh web`；`source` 通过 tsx 运行本地检出 |
-| dsh.npmChannel  | latest    | pkg 安装所用的 npm dist-tag：`latest`（稳定）、`next`（rc 预发布）或 `alpha`（alpha）。source 模式忽略此项，始终跟踪最新的官方 `dsh-v<版本号>` git tag。          |
+| dsh.npmChannel  | latest    | pkg 首次安装所用的 npm dist-tag、以及 Update 按钮的目标版本：`latest`（稳定）、`next`（rc 预发布）或 `alpha`（alpha）。已安装的 dsh 始终按原样启动——通道不会降级或自动升级它。source 模式忽略此项，始终跟踪最新的官方 `dsh-v<版本号>` git tag。          |
 | dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空则用扩展自管默认位置                    |
 | dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则扩展自动 clone 仓库         |
 | dsh.nodePath    | 空         | node.exe 路径；留空则使用 PATH 上的 node                              |

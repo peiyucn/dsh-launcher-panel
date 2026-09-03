@@ -135,7 +135,7 @@
             "alpha"
           ],
           "default": "latest",
-          "description": "Which npm dist-tag pkg mode installs @deepseek-ai/dsh from: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
+          "description": "Which npm dist-tag pkg mode installs @deepseek-ai/dsh from on first install, and which version the Update button targets: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). An installed dsh always starts as-is — the channel never downgrades or auto-upgrades it. Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
         },
         "dsh.pkgPath": {
           "order": 3,

@@ -583,46 +583,48 @@ async function latestDshVersion(channel: NpmChannel, pnpmCmd = 'pnpm'): Promise<
 }
 
 /**
- * Prepare the pkg start: resolve the dsh version for the channel, install it
- * into the managed dir when missing or outdated, and report progress. Offline,
- * the installed version is used instead. Returns the version to run, or
- * undefined to abort the start.
+ * Prepare the pkg start: the installed version IS the version that runs — the
+ * channel (dsh.npmChannel) only decides what to install on first run and what
+ * the Update button targets; Start never upgrades or downgrades an installed
+ * dsh. Only when nothing is installed does Start resolve the channel version,
+ * install it, and run it. Returns the version to run, or undefined to abort.
  */
 async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: boolean): Promise<string | undefined> {
-  // The registry query can take a few seconds; show it so a slow network
-  // does not look like a frozen Start.
+  const dir = pkgInstallDir(cfg)
+  const installed = installedDshVersion(dir)
+  if (installed !== undefined) {
+    // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
+    dshVersion = installed
+    return installed
+  }
+  // 首次安装：解析通道版本 → 选安装目录 → 安装。注册表查询可能耗时数秒，
+  // 展示进度避免慢网络下看起来像 Start 卡死。
   const resolvingId = addActivity('ℹ Resolving the dsh channel version…', true)
-  let version = await latestDshVersion(cfg.npmChannel, pnpmCmd)
+  const version = await latestDshVersion(cfg.npmChannel, pnpmCmd)
   finishBusy(resolvingId)
-  if (!version) version = pkgInstalledVersion(cfg)
-  if (!version) {
+  if (version === undefined) {
     dshState = 'missing'
     addActivity('✗ dsh is not installed and the registry is unreachable — check your network and try again')
     void vscode.window.showErrorMessage('DeepSeek Harness: unable to reach the registry to install dsh. Check your network connection.')
     return undefined
   }
-  // Resolve the install dir: a custom dsh.pkgPath wins; on a first install with
-  // no custom path, let the user choose the default or a custom folder.
-  let dir = pkgInstallDir(cfg)
-  if (installedDshVersion(dir) === undefined && !cfg.pkgPath) {
+  // A custom dsh.pkgPath wins; on a first install with no custom path, let the
+  // user choose the default or a custom folder.
+  let installDir = dir
+  if (!cfg.pkgPath) {
     const chosen = await chooseInstallDir('pkg', managedPackageDir())
     if (!chosen) return undefined
     // Persist the user's choice even when it is the managed default: the
     // setting then shows the actual install path and pins it against future
     // default-location changes.
     await saveDshSetting('pkgPath', chosen)
-    dir = chosen
+    installDir = chosen
   }
-  const installed = installedDshVersion(dir)
-  if (installed === undefined) {
-    addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
-  } else if (installed !== version) {
-    addActivity(`ℹ dsh v${version} will run (installed: v${installed}) — updating first`)
-  }
+  addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
   // The panel shows the version that is about to run (buildWebArgs also reads
   // this to decide --no-open).
   dshVersion = version
-  if (installed !== version && !(await ensureDshInstalled(version, pnpmCmd, allowBuild, dir))) return undefined
+  if (!(await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir))) return undefined
   return version
 }
 

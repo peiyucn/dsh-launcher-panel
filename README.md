@@ -35,7 +35,7 @@ Settings → search "dsh":
 | Key | Default | Description |
 |---|---|---|
 | dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx |
-| dsh.npmChannel | latest | npm dist-tag pkg mode installs @deepseek-ai/dsh from: `latest` (stable), `next` (release candidates), or `alpha` (alphas). Source mode ignores this and always tracks the newest official `dsh-v<version>` git tag. |
+| dsh.npmChannel | latest | npm dist-tag pkg mode installs @deepseek-ai/dsh from on first install, and the Update button targets it: `latest` (stable), `next` (release candidates), or `alpha` (alphas). An installed dsh always starts as-is — the channel never downgrades or auto-upgrades it. Source mode ignores this and always tracks the newest official `dsh-v<version>` git tag. |
 | dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. When empty, a managed default location is used. |
 | dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically. |
 | dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH |
