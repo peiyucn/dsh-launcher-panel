@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.8]
+
+- Start 不再覆盖外来的 package.json：`dsh.pkgPath` 指向自带 dsh 的你自己的项目时，launcher 不碰它的 manifest（只写自己创建的安装 manifest）。
+
 ## [0.2.7]
 
 - pkg 模式「已安装的版本即启动的版本」：通道（`dsh.npmChannel`）只决定首次安装与 Update 按钮的目标版本，切换通道不再导致 Start 重装/降级，离线也能启动。

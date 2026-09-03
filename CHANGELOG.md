@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.8]
+
+- Start no longer overwrites a foreign package.json: when `dsh.pkgPath` points at a folder of your own that has dsh installed, the launcher leaves its manifest alone (it only ever writes its own install manifest).
+
 ## [0.2.7]
 
 - pkg mode starts the installed dsh as-is: the channel (`dsh.npmChannel`) only decides what to install on first run and what the Update button targets — switching channels no longer reinstalls or downgrades at Start, and starting works offline.
