@@ -111,6 +111,27 @@ export function resolveDshHome(): string {
 
 // --- Pure helpers ---
 
+/** 归一化 dsh 通道配置（settings 值可能是任意字符串）。 */
+export function parseDshChannel(value: string | undefined): 'latest' | 'next' | 'alpha' {
+  return value === 'next' || value === 'alpha' ? value : 'latest'
+}
+
+/** 通道 → npm 解析规格（latest 是默认 dist-tag 不带后缀；next/alpha 显式指定）。 */
+export function dshSpecForChannel(channel: 'latest' | 'next' | 'alpha'): string {
+  return channel === 'latest' ? '@deepseek-ai/dsh' : `@deepseek-ai/dsh@${channel}`
+}
+
+/** 版本号 → 官方 git tag 名（官方命名 dsh-vX.Y.Z）。 */
+export function dshTagForVersion(version: string): string {
+  return `dsh-v${version}`
+}
+
+/** 从 git describe 输出提取基准版本（'dsh-v0.1.2-rc.1-99-g76fda72' → '0.1.2-rc.1'）。 */
+export function versionFromDescribe(describe: string): string | undefined {
+  const m = /^dsh-v(.+?)(?:-\d+-g[0-9a-f]+)?$/.exec(describe.trim())
+  return m?.[1]
+}
+
 /** Compare dsh versions like '0.1.0-rc.8' numerically (rc.10 > rc.9, rc.8 > rc.7). */
 export function dshVersionAtLeast(version: string, target: string): boolean {
   const parts = (v: string): (number | string)[] => v.split(/[-.]/).map((p) => (/^\d+$/.test(p) ? Number(p) : p))

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, normalizeBrowser, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshSpecForChannel, dshTagForVersion, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, normalizeBrowser, parseDshChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -241,4 +241,28 @@ test('isDshInstallDirUsable accepts absent, empty and launcher-owned dirs only',
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('parseDshChannel normalizes channel settings', () => {
+  assert.equal(parseDshChannel('next'), 'next')
+  assert.equal(parseDshChannel('alpha'), 'alpha')
+  assert.equal(parseDshChannel('latest'), 'latest')
+  assert.equal(parseDshChannel(undefined), 'latest')
+  assert.equal(parseDshChannel('garbage'), 'latest')
+})
+
+test('dshSpecForChannel maps channels to npm specs', () => {
+  assert.equal(dshSpecForChannel('latest'), '@deepseek-ai/dsh')
+  assert.equal(dshSpecForChannel('next'), '@deepseek-ai/dsh@next')
+  assert.equal(dshSpecForChannel('alpha'), '@deepseek-ai/dsh@alpha')
+})
+
+test('dshTagForVersion builds official tag names', () => {
+  assert.equal(dshTagForVersion('0.1.2-rc.1'), 'dsh-v0.1.2-rc.1')
+})
+
+test('versionFromDescribe extracts the base version', () => {
+  assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
+  assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
+  assert.equal(versionFromDescribe('not-a-describe'), undefined)
 })
