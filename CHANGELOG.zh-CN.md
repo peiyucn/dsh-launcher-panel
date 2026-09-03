@@ -4,6 +4,15 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.6]
+
+- source 模式显示诚实版本号：面板改为显示 `git describe` 输出（如 `dsh-v0.1.2-rc.1` 或 `dsh-v0.1.2-rc.1-99-g76fda72`），不再显示只在发版切割时才变化的 manifest 版本号。
+- source 模式更新改为钉住最新官方 `dsh-v…` release tag（直接从 git 解析、拉取单个 tag 后 detached 检出），不再 `git pull` master；更新检查按该 tag 与当前检出对比。
+- source 模式通过 dsh 自带构建记录里的 commit 与 HEAD 对比检测「检出切过了上次构建」并提示重建——此前只有依赖（锁文件）变化才触发重建，切 tag 后可能带着旧 web 客户端产物运行。
+- 配置项改名更明确：`dsh.mode` → `dsh.runMode`、`dsh.channel` → `dsh.npmChannel`、`dsh.path` → `dsh.srcPath`；旧键下已保存的值在扩展激活时自动迁移。
+- `dsh.npmChannel` 新增 `alpha` 通道（可选 latest / next / alpha）；它是纯 npm 设置——source 模式忽略它，始终跟踪最新官方 release tag。
+- 设置项在设置界面按相关性排序（显式 order 字段）。
+
 ## [0.2.5]
 
 - 发布审计修复：有已跟踪进程时 Stop 不再强杀端口占用者（避免误杀无关程序）；首次安装中版本行不再闪占位符；状态刷新失败不再提前解锁检查按钮、也不会误显示「Install & Start」；并发忙碌操作各自清理自己的转圈。

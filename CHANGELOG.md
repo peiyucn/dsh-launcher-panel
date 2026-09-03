@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.6]
+
+- Source mode shows an honest version: `git describe` output (e.g. `dsh-v0.1.2-rc.1` or `dsh-v0.1.2-rc.1-99-g76fda72`) instead of the checkout manifest's version, which only changes when a release is cut.
+- Source-mode updates pin the newest official `dsh-v…` release tag (resolved straight from git: fetch that one tag, then a detached checkout) instead of `git pull` on master; the update check compares the checkout against that tag.
+- Source mode detects when a checkout moved past its last build (the commit hash in dsh's own client build record vs. HEAD) and prompts to rebuild — previously only dependency changes triggered a rebuild, so a tag switch could serve stale web-client artifacts.
+- Settings renamed for clarity: `dsh.mode` → `dsh.runMode`, `dsh.channel` → `dsh.npmChannel`, `dsh.path` → `dsh.srcPath`; values stored under the old keys migrate automatically on activation.
+- `dsh.npmChannel` now accepts `alpha` (`latest` / `next` / `alpha`); it is an npm-only setting — source mode ignores it and always tracks the newest official release tag.
+- Settings are ordered by relevance in the Settings UI.
+
 ## [0.2.5]
 
 - Release-audit fixes: Stop no longer force-kills whatever owns the port when a tracked server exists (avoids taking down unrelated apps); the dsh version row no longer flashes a placeholder during first-run installs; a failed status refresh no longer unlocks the Check-updates button early or mislabels Start as "Install & Start"; concurrent busy operations each clear only their own spinner.
