@@ -330,6 +330,9 @@ export const DSH_BUILD_PROFILE_SELECTOR = 'DSH_BUILD_CLIENT_PROFILE'
 /** Public value dsh records in the client build record for official-profile builds. */
 export const DSH_CLIENT_BUILD_PROFILE_KEY = 'DSH_CLIENT_BUILD_PROFILE'
 
+/** Public key dsh records in the client build record for official-profile builds (built commit). */
+export const DSH_CLIENT_COMMIT_HASH = 'DSH_CLIENT_COMMIT_HASH'
+
 /** The profile value that produces the official DeepSeek Harness brand. */
 export const DSH_BUILD_PROFILE_OFFICIAL = 'official'
 
@@ -369,6 +372,20 @@ export function checkoutHasOfficialBrand(checkout: string): boolean {
     // no build record yet
   }
   return false
+}
+
+/** The commit hash dsh's client build record was built from (undefined when absent). */
+export function clientBuildCommit(checkout: string): string | undefined {
+  try {
+    const record = JSON.parse(fs.readFileSync(path.join(checkout, CLIENT_BUILD_RECORD_REL), 'utf8')) as {
+      environment?: Record<string, string | undefined>
+    }
+    const hash = record?.environment?.[DSH_CLIENT_COMMIT_HASH]?.trim()
+    return hash ? hash : undefined
+  } catch {
+    // no build record yet
+  }
+  return undefined
 }
 
 /** Candidate pnpm.cmd shim locations on Windows (npm global bin, pnpm standalone installer). */

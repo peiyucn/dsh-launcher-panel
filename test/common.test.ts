@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -214,6 +214,23 @@ test('checkoutHasOfficialBrand reads the build record profile', () => {
     assert.equal(checkoutHasOfficialBrand(root), true)
     writeFileSync(record, '{not json')
     assert.equal(checkoutHasOfficialBrand(root), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('clientBuildCommit reads the built commit from the build record', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-build-commit-'))
+  try {
+    assert.equal(clientBuildCommit(root), undefined)
+    const record = join(root, CLIENT_BUILD_RECORD_REL)
+    mkdirSync(dirname(record), { recursive: true })
+    writeFileSync(record, JSON.stringify({ environment: { DSH_CLIENT_COMMIT_HASH: 'db6bdc3' } }))
+    assert.equal(clientBuildCommit(root), 'db6bdc3')
+    writeFileSync(record, JSON.stringify({ environment: {} }))
+    assert.equal(clientBuildCommit(root), undefined)
+    writeFileSync(record, '{not json')
+    assert.equal(clientBuildCommit(root), undefined)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
