@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, describeDshUpdate, dshBaseDir, dshSpecForChannel, dshTagForVersion, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, normalizeBrowser, parseDshChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, compareDshVersions, describeDshUpdate, dshBaseDir, dshSpecForChannel, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, parseDshChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -257,8 +257,20 @@ test('dshSpecForChannel maps channels to npm specs', () => {
   assert.equal(dshSpecForChannel('alpha'), '@deepseek-ai/dsh@alpha')
 })
 
-test('dshTagForVersion builds official tag names', () => {
-  assert.equal(dshTagForVersion('0.1.2-rc.1'), 'dsh-v0.1.2-rc.1')
+test('compareDshVersions orders versions by core, then prerelease', () => {
+  assert.equal(compareDshVersions('0.1.2-rc.1', '0.1.2-rc.1'), 0)
+  assert.equal(compareDshVersions('0.1.2', '0.1.2-rc.1'), 1)
+  assert.equal(compareDshVersions('0.1.2-rc.1', '0.1.2'), -1)
+  assert.equal(compareDshVersions('0.1.2-rc.1', '0.1.2-alpha.5'), 1)
+  assert.equal(compareDshVersions('0.1.2-rc.2', '0.1.2-rc.10'), -1)
+  assert.equal(compareDshVersions('0.1.10', '0.1.2'), 1)
+  assert.equal(compareDshVersions('0.1.2-alpha.5', '0.1.1-rc.2'), 1)
+})
+
+test('newestDshVersion picks the newest of the list', () => {
+  assert.equal(newestDshVersion(['0.1.2-alpha.5', '0.1.2-rc.1', '0.1.1-rc.2']), '0.1.2-rc.1')
+  assert.equal(newestDshVersion(['0.1.2-rc.1', '0.1.2']), '0.1.2')
+  assert.equal(newestDshVersion([]), undefined)
 })
 
 test('versionFromDescribe extracts the base version', () => {

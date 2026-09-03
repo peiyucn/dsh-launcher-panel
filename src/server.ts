@@ -32,7 +32,6 @@ import {
   checkoutSupportsOfficialBuild,
   dshBaseDir,
   dshSpecForChannel,
-  dshTagForVersion,
   dshVersionAtLeast,
   extractWebToken,
   findPnpm,
@@ -41,6 +40,7 @@ import {
   isDshInstallDirUsable,
   isProcessAlive,
   maskPath,
+  newestDshVersion,
   parseDshChannel,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
@@ -1447,7 +1447,28 @@ export function stopServer(): Promise<boolean> {
   return stopInFlight
 }
 
-/** Check for a newer dsh version: pkg compares the registry; source compares the channel's release tag. */
+/**
+ * The newest official release tag on origin (dsh-vX.Y.Z[-pre]), or undefined.
+ * Source mode tracks this directly from git — the npm channel (dsh.channel)
+ * only governs pkg installs, so it plays no part here.
+ */
+async function newestReleaseTag(checkout: string): Promise<string | undefined> {
+  const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_OP_TIMEOUT_MS)
+  if (!r.ok) return undefined
+  const versions: string[] = []
+  for (const line of r.stdout.split(/\r?\n/)) {
+    // Annotated tags list twice (the second entry ends in ^{}); the $ anchor
+    // drops those peeled lines, and the Set dedupes the rest.
+    const m = /refs\/tags\/dsh-v([0-9][^\s^]*)$/.exec(line.trim())
+    if (!m) continue
+    const version = m[1]
+    if (/^\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?$/.test(version)) versions.push(version)
+  }
+  const newest = newestDshVersion([...new Set(versions)])
+  return newest === undefined ? undefined : `dsh-v${newest}`
+}
+
+/** Check for a newer dsh version: pkg compares the registry; source compares the newest official release tag. */
 async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   if (cfg.mode === 'pnpm') {
     const installed = pkgInstalledVersion(cfg)
@@ -1464,15 +1485,15 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   }
   const checkout = findSourceCheckout(cfg)
   if (!checkout) return { hasUpdate: false, label: '' }
-  // Source mode tracks the channel's release tag, not upstream master:
-  // resolve the channel version, fetch exactly that one tag, and compare it
-  // with what the checkout has checked out (git describe).
-  const version = await latestDshVersion(cfg.channel)
-  if (!version) {
-    addActivity('⚠ Update check failed — could not resolve the latest dsh version')
+  // Source mode tracks the newest official release tag, not upstream master
+  // and not the npm channel: list the tags on origin, fetch exactly that one,
+  // and compare it with what the checkout has checked out (git describe).
+  const tag = await newestReleaseTag(checkout)
+  if (tag === undefined) {
+    addActivity('⚠ Update check failed — could not list the official release tags')
     return { hasUpdate: false, label: '', failed: true }
   }
-  const tag = dshTagForVersion(version)
+  const version = tag.slice('dsh-v'.length)
   const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
   if (!fetchResult.ok) {
     // Report the failure instead of silently pretending there is no update —
@@ -1499,7 +1520,7 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
 
 let updateInFlight = false
 
-/** Update dsh: pkg reinstalls the latest published version; source checks out the channel's release tag. */
+/** Update dsh: pkg reinstalls the latest published version; source checks out the newest official release tag. */
 export async function runDshUpdate(): Promise<void> {
   // No phase state covers an update, so guard it directly: coalesce repeat
   // clicks onto one run, and refuse to update while the server is up (a git
@@ -1546,14 +1567,14 @@ async function runDshUpdateInner(): Promise<void> {
     addActivity('↑ No source checkout configured')
     return
   }
-  // Source updates pin the channel's release tag (never upstream master):
-  // resolve it, fetch exactly that tag, and detach the checkout onto it.
-  const version = await latestDshVersion(cfg.channel)
-  if (!version) {
-    addActivity('↑ Update check failed (network) — could not resolve the latest dsh version')
+  // Source updates pin the newest official release tag (never upstream master
+  // and never the npm channel — that only governs pkg installs).
+  const tag = await newestReleaseTag(checkout)
+  if (tag === undefined) {
+    addActivity('↑ Update check failed (network) — could not list the official release tags')
     return
   }
-  const tag = dshTagForVersion(version)
+  const version = tag.slice('dsh-v'.length)
   const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
   if (!described.ok) {
     addActivity('↑ Update failed — could not describe the checkout')

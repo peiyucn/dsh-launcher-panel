@@ -39,21 +39,35 @@
     "iconFonts": [
       {
         "id": "dsh-icon-font",
-        "src": [{ "path": "resources/dsh-icon.woff", "format": "woff" }]
+        "src": [
+          {
+            "path": "resources/dsh-icon.woff",
+            "format": "woff"
+          }
+        ]
       }
     ],
     "icons": {
       "dsh-whale": {
         "description": "DSH whale (spouting)",
-        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e900" }
+        "default": {
+          "fontPath": "resources/dsh-icon.woff",
+          "fontCharacter": "\\e900"
+        }
       },
       "dsh-whale-splash-small": {
         "description": "DSH whale, small splash (animation frame)",
-        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e901" }
+        "default": {
+          "fontPath": "resources/dsh-icon.woff",
+          "fontCharacter": "\\e901"
+        }
       },
       "dsh-whale-splash-large": {
         "description": "DSH whale, large splash (animation frame)",
-        "default": { "fontPath": "resources/dsh-icon.woff", "fontCharacter": "\\e902" }
+        "default": {
+          "fontPath": "resources/dsh-icon.woff",
+          "fontCharacter": "\\e902"
+        }
       }
     },
     "viewsContainers": {
@@ -119,7 +133,7 @@
             "alpha"
           ],
           "default": "latest",
-          "description": "Which release channel to track: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). In pnpm mode it is the npm dist-tag for @deepseek-ai/dsh; in source mode it selects the matching dsh-v<version> git tag."
+          "description": "Which release channel pkg mode installs from: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas) — the npm dist-tag for @deepseek-ai/dsh. Source mode ignores this and always tracks the newest official dsh-v<version> git tag."
         },
         "dsh.browser": {
           "type": "string",

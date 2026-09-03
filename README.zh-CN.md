@@ -35,7 +35,7 @@
 | 键               | 默认值       | 说明                                                          |
 | --------------- | --------- | ----------------------------------------------------------- |
 | dsh.mode        | pnpm      | `pnpm` 把 dsh 装进 launcher 自管的目录并运行 `pnpm exec dsh web`；`source` 通过 tsx 运行本地检出 |
-| dsh.channel     | latest    | 发布通道：`latest`（稳定）、`next`（rc 预发布）或 `alpha`（alpha）。pnpm 模式下是 @deepseek-ai/dsh 的 npm dist-tag；source 模式下对应选择 `dsh-v<版本号>` git tag。          |
+| dsh.channel     | latest    | pkg 安装的发布通道：`latest`（稳定）、`next`（rc 预发布）或 `alpha`（alpha）——@deepseek-ai/dsh 的 npm dist-tag。source 模式忽略此项，始终跟踪最新的官方 `dsh-v<版本号>` git tag。          |
 | dsh.browser     | built-in  | `built-in` 使用 VS Code 内置浏览器（不可用时回退到系统浏览器）；`external` 打开系统浏览器 |
 | dsh.autoOpenBrowser | true      | Start 后自动打开浏览器；关掉则保留当前标签页（Start 的「New Tab」点击仍按 `dsh.browser` 打开） |
 | dsh.hideConsole | true      | 在 Windows 上隐藏控制台                                            |

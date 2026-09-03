@@ -121,9 +121,40 @@ export function dshSpecForChannel(channel: 'latest' | 'next' | 'alpha'): string 
   return channel === 'latest' ? '@deepseek-ai/dsh' : `@deepseek-ai/dsh@${channel}`
 }
 
-/** 版本号 → 官方 git tag 名（官方命名 dsh-vX.Y.Z）。 */
-export function dshTagForVersion(version: string): string {
-  return `dsh-v${version}`
+/** Order two dsh versions: -1 (a older), 0 (equal), 1 (a newer). Prereleases: alpha < beta < rc < stable. */
+export function compareDshVersions(a: string, b: string): number {
+  const parse = (v: string): { core: number[]; pre: { kind: string; n: number } | null } | undefined => {
+    const m = /^(\d+(?:\.\d+)*)(?:-([a-z]+)(?:\.(\d+))?)?$/.exec(v)
+    if (!m) return undefined
+    return {
+      core: m[1].split('.').map(Number),
+      pre: m[2] === undefined ? null : { kind: m[2], n: m[3] === undefined ? 0 : Number(m[3]) },
+    }
+  }
+  const pa = parse(a)
+  const pb = parse(b)
+  if (pa === undefined || pb === undefined) return a === b ? 0 : (a > b ? 1 : -1)
+  const len = Math.max(pa.core.length, pb.core.length)
+  for (let i = 0; i < len; i++) {
+    const x = pa.core[i] ?? 0
+    const y = pb.core[i] ?? 0
+    if (x !== y) return x > y ? 1 : -1
+  }
+  // 0.1.2（正式）> 0.1.2-rc.1 > 0.1.2-alpha.5
+  if (pa.pre === null) return pb.pre === null ? 0 : 1
+  if (pb.pre === null) return -1
+  const rank = (k: string): number => (k === 'alpha' ? 0 : k === 'beta' ? 1 : k === 'rc' ? 2 : 3)
+  if (pa.pre.kind !== pb.pre.kind) return rank(pa.pre.kind) > rank(pb.pre.kind) ? 1 : -1
+  return pa.pre.n === pb.pre.n ? 0 : (pa.pre.n > pb.pre.n ? 1 : -1)
+}
+
+/** Pick the newest version from a list of dsh version strings. */
+export function newestDshVersion(versions: string[]): string | undefined {
+  let best: string | undefined
+  for (const v of versions) {
+    if (best === undefined || compareDshVersions(v, best) > 0) best = v
+  }
+  return best
 }
 
 /** 从 git describe 输出提取基准版本（'dsh-v0.1.2-rc.1-99-g76fda72' → '0.1.2-rc.1'）。 */
