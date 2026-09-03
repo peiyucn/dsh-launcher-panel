@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.7]
+
+- Fixed a significant pkg-mode bug: Start re-resolved the channel version and reinstalled whenever it differed from the installed dsh — switching channels (e.g. `next` → `latest`) made Start attempt a downgrade install, and an offline or flaky network could block starting entirely. Now the installed dsh is always what starts: the channel only decides what to install on first run and what the Update button targets; upgrades and downgrades happen only via Update.
+- pkg starts no longer trigger pnpm's hidden dependency check: `pnpm exec` runs with `verify-deps-before-run=false` (installing is the launcher's job — first install and Update only), and Start repairs a stale install manifest left behind by a previously failed install. Together these stop pnpm from silently reinstalling before launch — a reinstall that could fail on registry issues and block a perfectly usable installed dsh.
+
 ## [0.2.6]
 
 - Source mode shows an honest version: `git describe` output (e.g. `dsh-v0.1.2-rc.1` or `dsh-v0.1.2-rc.1-99-g76fda72`) instead of the checkout manifest's version, which only changes when a release is cut.

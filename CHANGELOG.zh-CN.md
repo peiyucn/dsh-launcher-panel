@@ -4,6 +4,11 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.7]
+
+- 修复 pkg 模式的重大缺陷：Start 会重新解析通道版本、与已安装版本不一致时就重装——切换通道（如 next → latest）会让 Start 尝试降级安装，离线或网络抖动时甚至完全无法启动。现在「已安装的版本即启动的版本」：通道只决定首次安装与 Update 按钮的目标版本，升级/降级只经 Update 显式执行。
+- pkg 启动不再触发 pnpm 的隐式依赖检查：`pnpm exec` 以 `verify-deps-before-run=false` 运行（安装是 launcher 的职责——仅首次安装与 Update），Start 还会修复之前失败安装遗留的过期 manifest。两者合起来阻止了 pnpm 在启动前静默重装——那次重装可能因注册表问题失败，把本可正常运行的已装 dsh 挡在门外。
+
 ## [0.2.6]
 
 - source 模式显示诚实版本号：面板改为显示 `git describe` 输出（如 `dsh-v0.1.2-rc.1` 或 `dsh-v0.1.2-rc.1-99-g76fda72`），不再显示只在发版切割时才变化的 manifest 版本号。
