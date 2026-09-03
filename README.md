@@ -35,7 +35,7 @@ Settings → search "dsh":
 | Key | Default | Description |
 |---|---|---|
 | dsh.mode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx |
-| dsh.channel | latest | dist-tag pnpm resolves: `latest` (stable) or `next` (prereleases) |
+| dsh.channel | latest | Release channel: `latest` (stable), `next` (release candidates), or `alpha` (alphas). In pnpm mode it is the npm dist-tag for @deepseek-ai/dsh; in source mode it selects the matching `dsh-v<version>` git tag. |
 | dsh.browser | built-in | `built-in` uses VS Code's Simple Browser (falls back to the system browser if unavailable); `external` opens the system browser |
 | dsh.autoOpenBrowser | true | Automatically open the browser after Start; turn off to keep your current tab (the Start button's "New Tab" click still opens one per `dsh.browser`) |
 | dsh.hideConsole | true | Hide the server console window on Windows |

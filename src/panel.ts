@@ -359,7 +359,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     function renderRuntime(status) {
       status = status || {}
       const dshMissingText = status.dsh === 'missing' ? (status.mode === 'pnpm' ? 'pnpm not found' : 'not found') : '—'
-      document.getElementById('dshVersion').textContent = status.dshVersion ? ('v' + status.dshVersion) : dshMissingText
+      document.getElementById('dshVersion').textContent = status.dshVersion
+        ? (status.dshVersion.startsWith('dsh-v') ? status.dshVersion : 'v' + status.dshVersion)
+        : dshMissingText
 
       const upd = status.update
       const updateBtn = document.getElementById('updateBtn')

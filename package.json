@@ -115,10 +115,11 @@
           "type": "string",
           "enum": [
             "latest",
-            "next"
+            "next",
+            "alpha"
           ],
           "default": "latest",
-          "description": "Which dist-tag pnpm resolves for @deepseek-ai/dsh: 'latest' (stable) or 'next' (prereleases)."
+          "description": "Which release channel to track: 'latest' (stable), 'next' (release candidates), or 'alpha' (alphas). In pnpm mode it is the npm dist-tag for @deepseek-ai/dsh; in source mode it selects the matching dsh-v<version> git tag."
         },
         "dsh.browser": {
           "type": "string",

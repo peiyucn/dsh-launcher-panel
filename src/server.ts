@@ -31,6 +31,8 @@ import {
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   dshBaseDir,
+  dshSpecForChannel,
+  dshTagForVersion,
   dshVersionAtLeast,
   extractWebToken,
   findPnpm,
@@ -39,6 +41,7 @@ import {
   isDshInstallDirUsable,
   isProcessAlive,
   maskPath,
+  parseDshChannel,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
   quoteCmdArg,
@@ -46,6 +49,7 @@ import {
   runFile,
   sleep,
   type ServerPhase,
+  versionFromDescribe,
 } from './common'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
@@ -57,7 +61,7 @@ type DshMode = 'pnpm' | 'source'
 /** dsh binds loopback only; the launcher probes and opens this fixed host. */
 const LOOPBACK_HOST = '127.0.0.1'
 
-type DshChannel = 'latest' | 'next'
+type DshChannel = 'latest' | 'next' | 'alpha'
 
 /** Resolved extension settings (dsh.*). */
 export interface DshConfig {
@@ -187,7 +191,7 @@ export function readConfig(): DshConfig {
   const port = c.get<number>('port') ?? DEFAULT_PORT
   return {
     mode: c.get<string>('mode') === 'source' ? 'source' : 'pnpm',
-    channel: c.get<string>('channel') === 'next' ? 'next' : 'latest',
+    channel: parseDshChannel(c.get<string>('channel') ?? undefined),
     path: c.get<string>('path') ?? '',
     pkgPath: c.get<string>('pkgPath') ?? '',
     nodePath: c.get<string>('nodePath') ?? '',
@@ -200,7 +204,7 @@ export function readConfig(): DshConfig {
 /** Persist the run mode chosen in the panel toggle and apply it immediately. */
 export async function applyMode(mode: 'pnpm' | 'source'): Promise<void> {
   // Both caches are mode-dependent: detection (pkg install vs source checkout)
-  // and the update check (registry vs git upstream).
+  // and the update check (registry vs release tag).
   detectionCache = undefined
   updateCache = undefined
   await vscode.workspace.getConfiguration('dsh').update('mode', mode, vscode.ConfigurationTarget.Global)
@@ -537,7 +541,7 @@ async function saveDshSetting(key: 'path' | 'pkgPath', value: string): Promise<v
 
 /** Resolve the published @deepseek-ai/dsh version for a channel (undefined on failure). */
 async function latestDshVersion(channel: DshChannel, pnpmCmd = 'pnpm'): Promise<string | undefined> {
-  const spec = channel === 'next' ? '@deepseek-ai/dsh@next' : '@deepseek-ai/dsh'
+  const spec = dshSpecForChannel(channel)
   const result = process.platform === 'win32'
     ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), 'view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
     : await runFile(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
@@ -738,12 +742,19 @@ async function ensureSourceCheckout(cfg: DshConfig): Promise<SourceCheckout | un
 }
 
 /** Detect the local dsh version: a source checkout (source mode), else the managed install. */
-function detectDshVersion(cfg: DshConfig): void {
+async function detectDshVersion(cfg: DshConfig): Promise<void> {
   if (cfg.mode === 'source') {
     const checkout = findSourceCheckout(cfg)
     if (!checkout) {
       // No checkout configured: dsh is 'missing', so drop any stale version.
       dshVersion = ''
+      return
+    }
+    // git describe 是唯一诚实的版本来源：在 tag 上显示 tag，不在 tag 上显示
+    // tag-N-gsha（官方 master 的 manifest 版本号只在切割时变，显示它会撒谎）。
+    const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
+    if (described.ok && described.stdout.trim() !== '') {
+      dshVersion = described.stdout.trim()
       return
     }
     try {
@@ -1243,7 +1254,7 @@ async function ensureCheckoutReady(checkout: string, freshClone = false): Promis
 
 /** Make sure the server is running (no re-entrancy guard). */
 async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
-  detectDshVersion(cfg)
+  await detectDshVersion(cfg)
   if (await isPortOpen(LOOPBACK_HOST, cfg.port)) {
     nodeState = 'ok'
     dshState = 'ok'
@@ -1283,7 +1294,9 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // Setup may have run while the user pressed Stop; honour that request
     // instead of starting a server nobody is waiting for.
     if (serverPhase !== 'starting') return false
-    spawnSource(checkout.path, cfg, dshVersion)
+    // dshVersion 在 source 模式是 git describe 输出（如 dsh-v0.1.2-rc.1-99-g76fda72），
+    // buildWebArgs 需要干净的语义化版本号来比较 --no-open。
+    spawnSource(checkout.path, cfg, versionFromDescribe(dshVersion) ?? dshVersion)
     return waitForPort(cfg)
   }
 
@@ -1434,7 +1447,7 @@ export function stopServer(): Promise<boolean> {
   return stopInFlight
 }
 
-/** Check for a newer dsh version: pkg compares the registry, source compares git upstream. */
+/** Check for a newer dsh version: pkg compares the registry; source compares the channel's release tag. */
 async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   if (cfg.mode === 'pnpm') {
     const installed = pkgInstalledVersion(cfg)
@@ -1451,42 +1464,46 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   }
   const checkout = findSourceCheckout(cfg)
   if (!checkout) return { hasUpdate: false, label: '' }
-  const fetchResult = await runFile('git', ['-C', checkout, 'fetch'], GIT_OP_TIMEOUT_MS)
+  // Source mode tracks the channel's release tag, not upstream master:
+  // resolve the channel version, fetch exactly that one tag, and compare it
+  // with what the checkout has checked out (git describe).
+  const version = await latestDshVersion(cfg.channel)
+  if (!version) {
+    addActivity('⚠ Update check failed — could not resolve the latest dsh version')
+    return { hasUpdate: false, label: '', failed: true }
+  }
+  const tag = dshTagForVersion(version)
+  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
   if (!fetchResult.ok) {
-    // Report the network failure instead of silently pretending there is no
-    // update — the user should know the check could not run.
-    const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || 'git fetch failed'
-    addActivity(`⚠ Update check failed (network) — ${last}`)
+    // Report the failure instead of silently pretending there is no update —
+    // the user should know the check could not run. (Also covers "no such
+    // remote tag": the channel version has no published tag yet.)
+    const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || `could not fetch ${tag}`
+    addActivity(`⚠ Update check failed — ${last}`)
     return { hasUpdate: false, label: '', failed: true }
   }
-  const r = await runFile('git', ['-C', checkout, 'rev-list', '--count', 'HEAD..@{upstream}'], GIT_OP_TIMEOUT_MS)
+  const r = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
   if (!r.ok) {
-    addActivity('⚠ Update check failed — could not compare the checkout with its upstream')
+    addActivity('⚠ Update check failed — could not describe the checkout')
     return { hasUpdate: false, label: '', failed: true }
   }
-  const count = Number(r.stdout.trim())
-  if (!Number.isFinite(count) || count <= 0) return { hasUpdate: false, label: '' }
-  // Prefer the upstream version number; fall back to the commit count.
-  let label = `${count} commit${count === 1 ? '' : 's'}`
-  const v = await runFile('git', ['-C', checkout, 'show', '@{upstream}:apps/cli/package.json'], GIT_OP_TIMEOUT_MS)
-  if (v.ok) {
-    try {
-      const pkg = JSON.parse(v.stdout)
-      if (pkg?.version) label = `v${pkg.version}`
-    } catch {
-      // keep the commit-count label
-    }
+  const described = r.stdout.trim()
+  // Up to date when the checkout sits on the tag itself, or is already past
+  // it (e.g. master after the tag — updating would move the checkout back).
+  const base = versionFromDescribe(described)
+  if (described === tag || (base !== undefined && dshVersionAtLeast(base, version))) {
+    return { hasUpdate: false, label: '' }
   }
-  return { hasUpdate: true, label }
+  return { hasUpdate: true, label: tag }
 }
 
 let updateInFlight = false
 
-/** Update dsh: pkg reinstalls the latest published version; source pulls the checkout. */
+/** Update dsh: pkg reinstalls the latest published version; source checks out the channel's release tag. */
 export async function runDshUpdate(): Promise<void> {
   // No phase state covers an update, so guard it directly: coalesce repeat
   // clicks onto one run, and refuse to update while the server is up (a git
-  // pull / pnpm install under a running dsh can break it).
+  // checkout / pnpm install under a running dsh can break it).
   if (updateInFlight) {
     addActivity('↑ Update already in progress')
     return
@@ -1529,10 +1546,42 @@ async function runDshUpdateInner(): Promise<void> {
     addActivity('↑ No source checkout configured')
     return
   }
-  addActivity('↑ Updating dsh (git pull)…')
-  const ok = await runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'pull'])
-  addActivity(ok ? '↑ dsh updated' : '↑ dsh update failed')
-  if (ok) updateCache = undefined
+  // Source updates pin the channel's release tag (never upstream master):
+  // resolve it, fetch exactly that tag, and detach the checkout onto it.
+  const version = await latestDshVersion(cfg.channel)
+  if (!version) {
+    addActivity('↑ Update check failed (network) — could not resolve the latest dsh version')
+    return
+  }
+  const tag = dshTagForVersion(version)
+  const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
+  if (!described.ok) {
+    addActivity('↑ Update failed — could not describe the checkout')
+    return
+  }
+  const current = described.stdout.trim()
+  const base = versionFromDescribe(current)
+  if (current === tag || (base !== undefined && dshVersionAtLeast(base, version))) {
+    addActivity('↑ dsh is already up to date')
+    return
+  }
+  addActivity(`↑ Updating dsh to ${tag}…`)
+  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
+  if (!fetchResult.ok) {
+    const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || `could not fetch ${tag}`
+    addActivity(`↑ Update failed — ${last}`)
+    return
+  }
+  const ok = await runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'checkout', '--detach', tag])
+  if (!ok) {
+    addActivity('↑ dsh update failed')
+    return
+  }
+  // A different tag usually carries a different lockfile: refresh the
+  // checkout's setup so the next start runs the released tree.
+  const ready = await ensureCheckoutReady(checkout)
+  addActivity(ready ? '↑ dsh updated' : '↑ dsh updated — the checkout setup still needs to finish before the next start')
+  updateCache = undefined
 }
 
 let detectionCache: { dsh: DshDetection; at: number } | undefined
@@ -1557,7 +1606,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     // Installing/starting is mid-flight: the package tree may not be ready yet,
     // and a re-detect here clobbers dshVersion (the panel version row flashes
     // a placeholder during first-run installs).
-    if (serverPhase !== 'starting' && serverPhase !== 'installing') detectDshVersion(cfg)
+    if (serverPhase !== 'starting' && serverPhase !== 'installing') await detectDshVersion(cfg)
   }
 
   if (running) {
