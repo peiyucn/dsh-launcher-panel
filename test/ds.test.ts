@@ -26,6 +26,34 @@ test('readCredentialFromFile reads flow style written by dsh', () => {
   assert.equal(v, 'sk-flow')
 })
 
+test('readCredentialFromFile reads the first key under a valueless parent (dsh refs block)', () => {
+  // The real ~/.dsh/.credentials.yaml structure: a nested refs block whose
+  // first entry is DEEPSEEK_API_KEY. The valueless `refs:` line must not
+  // swallow the next line's key as its value.
+  const content = [
+    'version: 1',
+    'refs:',
+    '  DEEPSEEK_API_KEY: sk-refs-first',
+    '  ZAI_API_KEY: zai-key',
+    'records:',
+    '  client-connection/browser-session:',
+    '    kind: grant',
+    '    payload:',
+    '      version: 1',
+    '      secret: some-secret',
+    '',
+  ].join('\n')
+  const first = withTempFile(content, (f) => readCredentialFromFile('DEEPSEEK_API_KEY', f))
+  assert.equal(first, 'sk-refs-first')
+  const sibling = withTempFile(content, (f) => readCredentialFromFile('ZAI_API_KEY', f))
+  assert.equal(sibling, 'zai-key')
+})
+
+test('readCredentialFromFile does not treat a valueless parent key as a mapping entry', () => {
+  const v = withTempFile('refs:\n  DEEPSEEK_API_KEY: sk-refs-first\n', (f) => readCredentialFromFile('refs', f))
+  assert.equal(v, undefined)
+})
+
 test('readCredentialFromFile reads quoted and equals-style values', () => {
   const quoted = withTempFile('KEY: "sk quoted value"', (f) => readCredentialFromFile('KEY', f))
   assert.equal(quoted, 'sk quoted value')

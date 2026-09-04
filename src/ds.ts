@@ -150,8 +150,11 @@ export function readCredentialFromFile(name: string, file: string): string | und
     const text = raw.split(/\r?\n/).filter((line) => !/^\s*#/.test(line)).join('\n')
     // Whole-file scan: matches KEY: value / KEY= value in both block style
     // (one per line) and flow style ({ KEY: value }, which dsh writes), with
-    // quoted or bare values.
-    const re = /(?:^|[{\s,])([A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s,}]+))/g
+    // quoted or bare values. Values must sit on the key's own line: whitespace
+    // around the separator is [ \t] only, so a valueless parent key (dsh's
+    // credentials.yaml writes `refs:` / `records:` blocks) can never swallow
+    // the next line's key as its value.
+    const re = /(?:^|[{\s,])([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*[:=][ \t]*(?:"([^"]*)"|'([^']*)'|([^\s,}]+))/g
     let m: RegExpExecArray | null
     while ((m = re.exec(text)) !== null) {
       if (m[1] !== name) continue
@@ -230,7 +233,11 @@ export async function fetchDshBalance(): Promise<void> {
       balanceCache = { balance: null, error: 'No balance data returned', at: Date.now() }
     }
   } catch (e) {
-    balanceCache = { balance: null, error: e instanceof Error ? e.message : String(e), at: Date.now() }
+    // undici 的 fetch 失败只给笼统的 "fetch failed"；真正原因（DNS 解析失败 /
+    // 连接被拒 / TLS 握手失败）藏在 e.cause 里，带出来否则余额报错无法定位。
+    const message = e instanceof Error ? e.message : String(e)
+    const cause = e instanceof Error && e.cause instanceof Error ? e.cause.message : undefined
+    balanceCache = { balance: null, error: cause ? `${message} (${cause})` : message, at: Date.now() }
   }
 }
 
