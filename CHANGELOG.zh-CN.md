@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.9]
+
+- dsh 重写凭据库后，DeepSeek API 状态卡片与余额查询不再失效：默认模型切走时 API key 也能被找到。
+
 ## [0.2.8]
 
 - Start 不再覆盖外来的 package.json：`dsh.pkgPath` 指向自带 dsh 的你自己的项目时，launcher 不碰它的 manifest（只写自己创建的安装 manifest）。

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.9]
+
+- The DeepSeek API status card and balance query no longer stop working after dsh rewrites its credential store: the API key is found again even when the default model is switched away from DeepSeek.
+
 ## [0.2.8]
 
 - Start no longer overwrites a foreign package.json: when `dsh.pkgPath` points at a folder of your own that has dsh installed, the launcher leaves its manifest alone (it only ever writes its own install manifest).
