@@ -57,12 +57,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * 分支保护：main 禁强推/删/重建、Squash-only、owner 保留 fast-forward 直推；dev rulesets 轻保护（禁强推+禁删+禁重建）；**CI 会跑但不设硬门禁**——合并外部 PR 前 owner 自己确认 CI 绿
 * 外部 PR / Issue 一律开放、不设交互限制，owner 审核合并（Squash-only），不想收的直接关闭
 
-## GitHub 与网络
-
-* 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）；常用：`gh api`、`gh pr create/view/merge --squash`、`gh release create`
-* `gh api` 直连 api.github.com；`git push/fetch` 需要代理 127.0.0.1:7897
-
-## CI 自动化
+## CI 与自动发布
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
@@ -70,3 +65,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 | `publish.yml` | push `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
 
 * 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret（市场管理页 → Personal Access Tokens → `Marketplace: Manage` 权限），仓库级不保留
+
+## GitHub 与网络
+
+* 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）；常用：`gh api`、`gh pr create/view/merge --squash`、`gh release create`
+* `gh api` 直连 api.github.com；`git push/fetch` 需要代理 127.0.0.1:7897
