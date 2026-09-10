@@ -31,6 +31,9 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 2. **定版编辑**：CHANGELOG 双份（`CHANGELOG.md` 英文 + `CHANGELOG.zh-CN.md` 中文，顶部互链）新版本条目放最顶、覆盖本版全部用户可感知改动 → `package.json` 版本号 → README 如有功能变更同步
 3. **再验证**：`npm run verify` 全绿 + `git diff --check` 干净
 4. **合并**：dev → main 并 push
+
+* **发布确认（硬门禁，owner 当次点头）**：`git tag` / `npm publish` / 市场发布 / 部署上线等**不可逆的对外发布动作**，执行前必须由 owner **当次明确确认**——「之前批准了整条发布流程」「评审时说按你建议走」「继续」一律**不构成**发布许可；agent 做完审计 / 定版 / verify / 合并后**停在发布动作之前**，一句话报出「要发什么、版本号、目标通道、影响范围」等 owner 回话，未回话即视为未批准（总规范《工程管线 · ⑦发布》第 5 步）
+
 5. **打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"`（一律 annotated）并 push tag → 自动：打包 VSIX → 发布市场 → 建 GitHub Release（说明由 publish.yml 拼两份 CHANGELOG 当前版本条目，附 VSIX）
 6. **收尾**：切回 `dev`
 
@@ -58,6 +61,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * 外部 PR / Issue 一律开放、不设交互限制，owner 审核合并（Squash-only），不想收的直接关闭
 
 ## CI 与自动发布
+
+> **发布确认（硬门禁，owner 当次点头）**：`publish.yml` 的发布动作（vsce 发布市场）**不可逆**，触发前必须由 owner **当次明确确认**——完整条款见上方《工程管线 · 发布（tag 触发）》。
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
