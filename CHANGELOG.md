@@ -6,7 +6,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.10]
 
-- The Dashboard's loading animation is now DeepSeek Harness's own dot-matrix style: the starting/installing status dot, the in-progress mark in the console, and the panel's opening loading state.
+- The Dashboard's loading animation is now DeepSeek Harness's own dot-matrix style: the status dot while starting, installing or stopping, the in-progress mark in the console, and the panel's opening loading state.
 - Check updates / Update now recognises a stable dsh release that follows the same version's release candidate (0.1.5 after 0.1.5-rc.1) instead of reporting dsh as up to date.
 - When the server exits before opening its port without printing anything, the console now explains that the configured Node cannot run dsh's CLI (Node 24.0/24.1 — dsh needs Node 22.18+ or 24.2+) and what to do.
 - Source mode on macOS/Linux needs a C toolchain (current dsh builds a native helper); the README's Environment section says so.
