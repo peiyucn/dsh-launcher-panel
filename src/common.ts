@@ -163,25 +163,53 @@ export function versionFromDescribe(describe: string): string | undefined {
   return m?.[1]
 }
 
-/** Compare dsh versions like '0.1.0-rc.8' numerically (rc.10 > rc.9, rc.8 > rc.7). */
+/**
+ * Whether `version` is at least `target`. Ordering is delegated to
+ * {@link compareDshVersions} so a stable release outranks its own prereleases
+ * ('0.1.5' > '0.1.5-rc.1') — comparing '0.1.5' with '0.1.5-rc.1' segment by
+ * segment treated the shorter (stable) version as missing a segment and thus
+ * as *older*, which silently hid every stable release after an rc.
+ */
 export function dshVersionAtLeast(version: string, target: string): boolean {
-  const parts = (v: string): (number | string)[] => v.split(/[-.]/).map((p) => (/^\d+$/.test(p) ? Number(p) : p))
-  const a = parts(version)
-  const b = parts(target)
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i]
-    const y = b[i]
-    if (x === undefined) return false
-    if (y === undefined) return true
-    if (typeof x === 'number' && typeof y === 'number') {
-      if (x !== y) return x > y
-    } else {
-      const sx = String(x)
-      const sy = String(y)
-      if (sx !== sy) return sx > sy
-    }
-  }
-  return true
+  return compareDshVersions(version, target) >= 0
+}
+
+/**
+ * dsh ≥ this version boots its CLI behind an `import.meta.main` guard (its
+ * entry point only runs when that binding is true). The binding exists in Node
+ * ≥ 22.18 / ≥ 24.2 only, while dsh's engines still advertise `^22.19 || >=24`
+ * — on Node 24.0/24.1 the guarded entry never runs and dsh exits silently with
+ * no output at all.
+ */
+export const DSH_CLI_ENTRY_GUARD_MIN_VERSION = '0.1.3-alpha.2'
+
+/** Whether the Node capability probe reported `import.meta.main` as present. */
+export function parseImportMetaMainProbe(stdout: string): boolean {
+  return stdout.trim() === 'true'
+}
+
+/**
+ * Explanation for a server that exited before opening its port without
+ * printing anything, when the configured Node cannot run dsh's guarded CLI
+ * entry. Returns undefined when there is nothing to explain, so an ordinary
+ * failure keeps its own (already reported) cause.
+ */
+export function silentExitHint(input: {
+  /** The dsh version about to run ('' when unknown). */
+  dshVersion: string
+  /** The configured Node version without the leading `v` ('' when unknown). */
+  nodeVersion: string
+  /** Whether the Node capability probe found `import.meta.main`. */
+  supportsImportMetaMain: boolean
+  /** Server output lines captured for the run that just exited. */
+  outputLines: number
+}): string | undefined {
+  // Output, or a capable Node, means this specific explanation does not apply.
+  if (input.outputLines > 0 || input.supportsImportMetaMain) return undefined
+  // An unknown or older dsh does not use the guard, so stay out of the way.
+  if (!dshVersionAtLeast(input.dshVersion, DSH_CLI_ENTRY_GUARD_MIN_VERSION)) return undefined
+  const node = input.nodeVersion ? `Node v${input.nodeVersion}` : 'The configured Node'
+  return `${node} lacks import.meta.main — dsh ≥ ${DSH_CLI_ENTRY_GUARD_MIN_VERSION} starts its CLI through it (needs Node 22.18+ or 24.2+), so the server exits silently. Upgrade Node, then start again`
 }
 
 /**

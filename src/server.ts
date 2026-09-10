@@ -42,12 +42,14 @@ import {
   maskPath,
   newestDshVersion,
   npmSpecForChannel,
+  parseImportMetaMainProbe,
   parseNpmChannel,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
   quoteCmdArg,
   resolveDshHome,
   runFile,
+  silentExitHint,
   sleep,
   type ServerPhase,
   versionFromDescribe,
@@ -179,6 +181,8 @@ let logTailTimer: ReturnType<typeof setInterval> | undefined
 let logTailOffset = 0
 let logTailBuffer = ''
 let moduleLoadCount = 0
+/** Server output lines captured for the current run (0 = the child died silently). */
+let serverOutputLines = 0
 let dshVersion = ''
 let dshPath = ''
 let nodeVersion = ''
@@ -339,6 +343,10 @@ export function addActivity(line: string, isBusy = false): number {
 function displayLine(line: string): void {
   const trimmed = line.trimEnd()
   if (!trimmed) return
+  // Both output paths funnel through here — the piped spawn and the
+  // hidden-console tail that reads the server log — so this counts every line
+  // the run produced (0 = the child died without printing anything).
+  serverOutputLines++
   // NODE_DEBUG=module is extremely verbose; keep individual lines out of the
   // console feed (they stay in the server log file), but surface a periodic
   // count so a slow source startup still shows progress.
@@ -512,6 +520,46 @@ export function checkNodeOnce(): Promise<void> {
     })()
   }
   return nodeChecked
+}
+
+/** Memoized `import.meta.main` capability probe for the configured Node. */
+let importMetaMainProbe: Promise<boolean> | undefined
+
+/**
+ * Probe whether the configured Node exposes `import.meta.main`: dsh ≥
+ * 0.1.3-alpha.2 runs its CLI behind that guard, but dsh's engines still admit
+ * Node 24.0/24.1, where the binding does not exist and dsh exits silently with
+ * no output. Only consulted after a start already failed without any output;
+ * a failed probe reports support, so a broken probe never claims a Node lacks
+ * something it actually has.
+ */
+function nodeSupportsImportMetaMain(cfg: DshConfig): Promise<boolean> {
+  if (!importMetaMainProbe) {
+    importMetaMainProbe = runFile(
+      cfg.nodePath || 'node',
+      ['--input-type=module', '-e', 'process.stdout.write(String(import.meta.main))'],
+      NODE_PROBE_TIMEOUT_MS,
+    ).then((r) => (r.ok ? parseImportMetaMainProbe(r.stdout) : true))
+  }
+  return importMetaMainProbe
+}
+
+/** Whether the silent-exit diagnosis was already raised as a toast this session. */
+let silentExitToastShown = false
+
+/** Explain a server that died before opening its port without printing anything. */
+async function reportSilentExit(cfg: DshConfig, version: string): Promise<void> {
+  const hint = silentExitHint({
+    dshVersion: version,
+    nodeVersion,
+    supportsImportMetaMain: await nodeSupportsImportMetaMain(cfg),
+    outputLines: serverOutputLines,
+  })
+  if (hint === undefined) return
+  addActivity(`✗ ${hint}`)
+  if (silentExitToastShown) return
+  silentExitToastShown = true
+  void vscode.window.showErrorMessage(`DeepSeek Harness: ${hint}.`)
 }
 
 /**
@@ -1045,6 +1093,7 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
 function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell = false, env?: Record<string, string>): void {
   trackedPid = undefined
   moduleLoadCount = 0
+  serverOutputLines = 0
   // Each run mints its own web token; drop the previous run's.
   webToken = undefined
   try {
@@ -1160,7 +1209,7 @@ function spawnPkg(cfg: DshConfig, pnpmCmd: string, version: string): void {
 }
 
 /** Poll the port until it opens, the spawned process dies, or the user stops. */
-async function waitForPort(cfg: DshConfig): Promise<boolean> {
+async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
   const startedAt = Date.now()
   // No hard timeout: the first start of a new dsh version installs many
   // packages and can take several minutes. The fail-fast below still reports
@@ -1201,6 +1250,8 @@ async function waitForPort(cfg: DshConfig): Promise<boolean> {
       setServerPhase('stopped')
       addActivity('✗ Server exited before opening the port (see the log above)')
       finishBusy(startBusyId)
+      // The diagnosis runs a Node capability probe; the spinner is already off.
+      await reportSilentExit(cfg, version)
       return false
     }
   }
@@ -1396,8 +1447,9 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     if (serverPhase !== 'starting') return false
     // dshVersion 在 source 模式是 git describe 输出（如 dsh-v0.1.2-rc.1-99-g76fda72），
     // buildWebArgs 需要干净的语义化版本号来比较 --no-open。
-    spawnSource(checkout.path, cfg, versionFromDescribe(dshVersion) ?? dshVersion)
-    return waitForPort(cfg)
+    const runVersion = versionFromDescribe(dshVersion) ?? dshVersion
+    spawnSource(checkout.path, cfg, runVersion)
+    return waitForPort(cfg, runVersion)
   }
 
   // pkg mode: install dsh into the managed pnpm project, then run it (source needs explicit opt-in)
@@ -1409,7 +1461,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   // instead of starting a server nobody is waiting for.
   if (serverPhase !== 'starting') return false
   spawnPkg(cfg, pnpmCmd.command, version)
-  return waitForPort(cfg)
+  return waitForPort(cfg, version)
 }
 
 /**

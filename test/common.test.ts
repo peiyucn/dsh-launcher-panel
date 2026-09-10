@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -46,6 +46,43 @@ test('dshVersionAtLeast compares prerelease versions numerically', () => {
   assert.equal(dshVersionAtLeast('0.1.0-rc.7', '0.1.0-rc.8'), false)
   assert.equal(dshVersionAtLeast('', '0.1.0-rc.8'), false)
   assert.equal(dshVersionAtLeast('0.2.0', '0.1.0-rc.8'), true)
+})
+
+test('dshVersionAtLeast ranks a stable release above its own prereleases', () => {
+  // The release-after-rc case: segment-by-segment comparison read the shorter
+  // stable version as *older*, which hid every stable dsh release after an rc.
+  assert.equal(dshVersionAtLeast('0.1.5', '0.1.5-rc.1'), true)
+  assert.equal(dshVersionAtLeast('0.1.5-rc.1', '0.1.5'), false)
+  assert.equal(dshVersionAtLeast('0.1.5', '0.1.5'), true)
+  assert.equal(dshVersionAtLeast('0.1.5-rc.2', '0.1.5-rc.1'), true)
+  assert.equal(dshVersionAtLeast(DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLI_ENTRY_GUARD_MIN_VERSION), true)
+  assert.equal(dshVersionAtLeast('0.1.3-alpha.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), false)
+  assert.equal(dshVersionAtLeast('0.1.5-rc.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), true)
+  assert.equal(dshVersionAtLeast('0.1.2-rc.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), false)
+})
+
+test('parseImportMetaMainProbe accepts only a true probe answer', () => {
+  assert.equal(parseImportMetaMainProbe('true'), true)
+  assert.equal(parseImportMetaMainProbe('true\r\n'), true)
+  // Node < 22.18 / < 24.2 stringifies the missing binding as undefined.
+  assert.equal(parseImportMetaMainProbe('undefined'), false)
+  assert.equal(parseImportMetaMainProbe(''), false)
+  assert.equal(parseImportMetaMainProbe('false'), false)
+  assert.equal(parseImportMetaMainProbe('v24.0.0'), false)
+})
+
+test('silentExitHint explains only the guarded-entry silent exit', () => {
+  const base = { dshVersion: '0.1.5-rc.1', nodeVersion: '24.0.0', supportsImportMetaMain: false, outputLines: 0 }
+  const hint = silentExitHint(base)
+  assert.ok(hint?.includes('import.meta.main'))
+  assert.ok(hint?.includes('Node v24.0.0'))
+  // A dsh older than the guard, captured output, or a capable Node: nothing to add.
+  assert.equal(silentExitHint({ ...base, dshVersion: '0.1.2-rc.1' }), undefined)
+  assert.equal(silentExitHint({ ...base, outputLines: 3 }), undefined)
+  assert.equal(silentExitHint({ ...base, supportsImportMetaMain: true }), undefined)
+  // An unknown version must not produce a claim about that version.
+  assert.equal(silentExitHint({ ...base, dshVersion: '' }), undefined)
+  assert.ok(silentExitHint({ ...base, nodeVersion: '' })?.includes('The configured Node'))
 })
 
 test('describeDshUpdate distinguishes update, failure, and up-to-date', () => {
