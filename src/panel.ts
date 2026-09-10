@@ -84,6 +84,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     --lap-success-bg: rgba(34, 197, 94, 0.12);
     --lap-warning: #F59E0B;
     --lap-info: #316DCA;
+    /* dsh 官方 ongoing 点阵色（design-platform.css 静态色板 deepseek-450；明暗主题同值）。 */
+    --lap-ongoing: #5686FE;
     background: var(--lap-bg);
     color: var(--lap-fg);
   }
@@ -113,8 +115,19 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status { display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
-  .dot.working { background: var(--lap-warning); animation: pulse 1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .3; } }
+  /* dsh 官方 ongoing 指示器（StateDot matrix）：3×3 外环 8 个 2px 方块，1s 平键帧
+     顺时针追逐（无过渡）。--matrix-size 决定渲染尺寸（默认同官方 10px）。 */
+  .dot.matrix { background: none; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; }
+  .dot-matrix { display: inline-block; width: var(--matrix-size, 10px); height: var(--matrix-size, 10px); color: var(--lap-ongoing); flex: none; vertical-align: -1.5px; }
+  .dot-matrix .cell { fill: currentColor; opacity: .15; animation: lap-dot-chase 1s infinite; }
+  @keyframes lap-dot-chase {
+    0%, 12.4% { opacity: 1; }
+    12.5%, 24.9% { opacity: .6; }
+    25%, 37.4% { opacity: .35; }
+    37.5%, 100% { opacity: .15; }
+  }
+  /* 减少动态偏好：点阵停在静态中间亮度，不再追逐。 */
+  @media (prefers-reduced-motion: reduce) { .dot-matrix .cell { animation: none; opacity: .7; } }
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
@@ -150,11 +163,10 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
   .icon-btn:hover { color: var(--lap-accent); }
   .icon-btn.spinning { animation: spin 1s linear infinite; }
-  .spin { display: inline-block; width: 1em; text-align: center; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--lap-bg); z-index: 10; transition: opacity .2s ease; }
   .loading-overlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-spinner { width: 28px; height: 28px; border: 3px solid var(--lap-border-soft); border-top-color: var(--lap-accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  .loading-matrix { --matrix-size: 28px; }
   .loading-text { color: var(--lap-fg2); font-size: 12px; }
   .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
   .mini-btn:hover { background: var(--lap-hover); }
@@ -206,7 +218,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="loading-overlay" id="loadingOverlay">
-    <div class="loading-spinner"></div>
+    <div class="loading-matrix" id="loadingMatrix"></div>
     <div class="loading-text">Loading…</div>
   </div>
   <div class="card">
@@ -296,8 +308,18 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     const vscode = acquireVsCodeApi()
     vscode.postMessage({ command: 'ready' })
     const LOADING_TIMEOUT_MS = 6000
-    const SPIN_INTERVAL_MS = 150
     const ELAPSED_INTERVAL_MS = 1000
+    // dsh 官方 ongoing 点阵（StateDot matrix）：外环 8 格，顺时针逐格变亮；
+    // 每格负延时 = (序号 - 格数) × 相位步长，挂载瞬间即处于追逐中。
+    const DOT_MATRIX_CELLS = [[0, 0], [4, 0], [8, 0], [8, 4], [8, 8], [4, 8], [0, 8], [0, 4]]
+    const DOT_MATRIX_PHASE_STEP_MS = 125
+    const DOT_MATRIX = '<svg class="dot-matrix" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true">'
+      + DOT_MATRIX_CELLS.map(function (c, i) {
+        return '<rect class="cell" x="' + c[0] + '" y="' + c[1] + '" width="2" height="2" style="animation-delay:'
+          + ((i - DOT_MATRIX_CELLS.length) * DOT_MATRIX_PHASE_STEP_MS) + 'ms"></rect>'
+      }).join('')
+      + '</svg>'
+    document.getElementById('loadingMatrix').innerHTML = DOT_MATRIX
     let gotUpdate = false
     setTimeout(() => {
       if (!gotUpdate) {
@@ -331,21 +353,20 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       // Stop must be reachable while starting/installing too, so a slow start
       // or first-run install can be interrupted.
       document.querySelectorAll('.when-running').forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
-      const dot = document.getElementById('dot')
       const statusText = document.getElementById('statusText')
       const statusSub = document.getElementById('statusSub')
       const startBtn = document.getElementById('startBtn')
       if (starting || installing || stopping) {
         const justStarted = startElapsed()
         if (justStarted) statusSub.textContent = 'Waited 0s'
-        dot.className = 'dot working'
+        setStatusDot('working')
         statusText.textContent = stopping ? 'Stopping…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness Web UI…')
         startBtn.textContent = stopping ? 'Stopping…' : (installing ? 'Installing…' : 'Starting…')
         startBtn.disabled = true
       } else {
         stopElapsed()
         startBtn.disabled = false
-        dot.className = 'dot' + (running ? ' running' : '')
+        setStatusDot(running ? 'running' : 'stopped')
         statusText.textContent = running ? 'Running' : 'Stopped'
         statusSub.textContent = running ? (status.url || '') : ''
         startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
@@ -595,18 +616,16 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     function stopElapsed() {
       if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = undefined }
     }
-    const SPIN_CHARS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    let spinIdx = 0
-    let spinTimer = undefined
-    function startSpin() {
-      if (spinTimer) return
-      spinTimer = setInterval(() => {
-        const c = SPIN_CHARS[spinIdx++ % SPIN_CHARS.length]
-        document.querySelectorAll('.spin').forEach((el) => { el.textContent = c })
-      }, SPIN_INTERVAL_MS)
-    }
-    function stopSpin() {
-      if (spinTimer) { clearInterval(spinTimer); spinTimer = undefined }
+    // 状态圆点三种形态：working = dsh 点阵（启动/安装/停止中），running = 绿色实心，
+    // 其余 = 红色实心。点阵只在切换时重建一次，不随每次状态刷新写 DOM。
+    const STATUS_DOT_CLASSES = { working: 'dot matrix', running: 'dot running', stopped: 'dot' }
+    function setStatusDot(state) {
+      const dot = document.getElementById('dot')
+      dot.className = STATUS_DOT_CLASSES[state] || STATUS_DOT_CLASSES.stopped
+      const on = state === 'working'
+      if (on === (dot.dataset.matrix === '1')) return
+      dot.dataset.matrix = on ? '1' : ''
+      dot.innerHTML = on ? DOT_MATRIX : ''
     }
     function startElapsed() {
       if (elapsedTimer) return false
@@ -637,13 +656,11 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       let logHtml = entries.map((e) => {
         const txt = esc(e.text)
         if (!e.busy) return txt
-        // Swap the leading icon (the char right after the timestamp) for a spinner.
+        // Swap the leading icon (the char right after the timestamp) for the dsh dot matrix.
         const close = txt.indexOf('] ')
         if (close === -1) return txt
-        return txt.slice(0, close + 2) + '<span class="spin">⠋</span>' + txt.slice(close + 3)
+        return txt.slice(0, close + 2) + DOT_MATRIX + txt.slice(close + 3)
       }).join(newline)
-      if (entries.some((e) => e.busy)) startSpin()
-      else stopSpin()
       log.innerHTML = logHtml || '(no activity yet)'
       if (hasNew) log.scrollTop = log.scrollHeight
       const dsCard = document.getElementById('dsCard')
