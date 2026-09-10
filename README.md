@@ -56,7 +56,6 @@ Settings → search "dsh":
 * The 🐳 whale artwork (activity bar icon + status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0) rendered as a monochrome silhouette with punched eye and belly-band details — see NOTICE.
 * The **API Status** card supports DeepSeek only for now — it only shows when a DeepSeek model is configured in dsh.
 * Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `server.log` (server output), alongside the managed package/source dirs; both are clickable in the panel. The managed dirs live directly under the user's home directory (`%USERPROFILE%` on Windows).
-* DSH cannot run "minimal mode" properly on Windows for now.
 
 ## Environment
 

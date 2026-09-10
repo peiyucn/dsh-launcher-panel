@@ -56,7 +56,6 @@
 * 🐳 鲸鱼图形（活动栏图标与状态栏图标字体）为 Twemoji 的喷水鲸鱼（Twitter, Inc.，CC-BY 4.0），以单色剪影呈现并挖孔保留眼睛与肚皮带细节，详见 NOTICE。
 * **API Status** 卡片目前仅支持 DeepSeek — 只有在 dsh 里配置了 DeepSeek 模型时才会显示。
 * 日志文件：`~/.dsh-launcher-panel/logs/client.log`（启动器活动）与 `server.log`（服务端输出），与自管的 package/source 同位于 `.dsh-launcher-panel` 下的姊妹目录（logs 子目录）中；面板中均可点击打开。自管目录直接放在用户主目录下（Windows 为 `%USERPROFILE%`）。
-* DSH 在 Windows 下暂无法正常运行“极简模式”。
 
 ## 环境
 
