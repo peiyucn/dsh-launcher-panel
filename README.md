@@ -64,6 +64,7 @@ Settings → search "dsh":
 * **pnpm** — required for the default pnpm mode; if missing, the extension installs it automatically (`npm install -g pnpm`) on first start
 * **VS Code** — 1.85+
 * **PowerShell 7** — optional; recommended on Windows (dsh's tool subprocesses use `pwsh`; the launcher itself works with any shell)
+* **C toolchain** — source mode on macOS/Linux only: dsh's build compiles a small native helper, so `cc` and Node's development headers (`include/node`, shipped by official Node installs) must be present. Windows builds skip the native step, and pkg mode never needs a compiler.
 
 ## License
 

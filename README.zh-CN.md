@@ -64,6 +64,7 @@
 * **pnpm** — 默认 pnpm 模式需要；未安装时，扩展会在首次启动时自动帮你安装（`npm install -g pnpm`）
 * **VS Code** — 1.85+
 * **PowerShell 7** — 可选；Windows 下推荐安装（dsh 的工具子进程会用到 `pwsh`；启动器本身不依赖它）
+* **C 工具链** — 仅源码模式（macOS/Linux）：dsh 的构建会编译一个原生辅助组件，需要 `cc` 与 Node 开发头文件（`include/node`，官方 Node 安装包自带）。Windows 构建会跳过该步骤，pkg 模式完全不需要编译器。
 
 ## License
 
