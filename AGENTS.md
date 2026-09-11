@@ -59,7 +59,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * 已开启（2026-09 逐项核验）：Dependabot alerts（仅报警）、CodeQL default setup（weekly，JS/TS + actions）、secret scanning + push protection、Private vulnerability reporting、根 `SECURITY.md`
 * 分支保护三层（2026-09 逐项核验）：① 经典保护 ✓（main：要求对话解决 + 不允许绕过）② ruleset 轻保护 ✓（默认分支 + dev 各一条）③ 合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推，**CI 会跑但不设硬门禁**
-* 外部 PR / Issue 一律开放，owner 审核合并（Squash-only），不想收的直接关闭；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑（**别只跑 `.security_and_analysis`**）
+* 外部 PR / Issue 一律开放，owner 审核合并（Squash-only），不想收的直接关闭；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑
 
 ## CI 与自动发布
 
