@@ -22,7 +22,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * **开发**：日常改动在 `dev` 分支；`main` 只接受发布合并
 * **验证**：本地一键 `npm run verify`（= typecheck + test + build + package 串联）；push 前必须通过
 * **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；禁止多任务混一个 commit；不确定的事直接说"不确定"，禁止编造事实性信息
-* **推送**：日常目标 `dev`；`git push/fetch` 需要代理 127.0.0.1:7897
+* **推送**：日常目标 `dev`
 * **合并**：dev → main（fast-forward）
 
 **发布（tag 触发）**
@@ -74,4 +74,3 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 ## GitHub 与网络
 
 * 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）；常用：`gh api`、`gh pr create/view/merge --squash`、`gh release create`
-* `gh api` 直连 api.github.com；`git push/fetch` 需要代理 127.0.0.1:7897
