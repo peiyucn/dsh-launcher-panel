@@ -32,7 +32,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 3. **再验证**：`npm run verify` 全绿 + `git diff --check` 干净
 4. **合并**：dev → main 并 push
 
-* **发布确认（硬门禁，owner 当次点头）**：`git tag` / `npm publish` / 市场发布 / 部署上线等**不可逆的对外发布动作**，执行前必须由 owner **当次明确确认**——「之前批准了整条发布流程」「评审时说按你建议走」「继续」一律**不构成**发布许可；agent 做完审计 / 定版 / verify / 合并后**停在发布动作之前**，一句话报出「要发什么、版本号、目标通道、影响范围」等 owner 回话，未回话即视为未批准（总规范《工程管线 · ⑦发布》第 5 步）
+* **发布确认（硬门禁，owner 当次点头）**：`git tag` / `npm publish` / 市场发布 / 部署上线等**不可逆的对外发布动作**，执行前必须由 owner **当次明确确认**——「之前批准了整条发布流程」「评审时说按你建议走」「继续」一律**不构成**发布许可；agent 做完审计 / 定版 / verify / 合并后**停在发布动作之前**，一句话报出「要发什么、版本号、目标通道、影响范围」等 owner 回话，未回话即视为未批准（总规范《发布（定版）》第 5 步）
 
 5. **打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"`（一律 annotated）并 push tag → 自动：打包 VSIX → 发布市场 → 建 GitHub Release（说明由 publish.yml 拼两份 CHANGELOG 当前版本条目，附 VSIX）
 6. **收尾**：切回 `dev`
@@ -58,7 +58,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 ## 安全基线（本仓库自含要点）
 
 * 已开启（2026-09 逐项核验）：Dependabot alerts（仅报警）、CodeQL default setup（weekly，JS/TS + actions）、secret scanning + push protection、Private vulnerability reporting、根 `SECURITY.md`
-* 分支保护三层（2026-09 逐项核验）：① 经典保护 ✓（main：要求对话解决 + 不允许绕过）② ruleset 轻保护 ✓（默认分支 + dev 各一条）③ 合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推，**CI 会跑但不设硬门禁**
+* 分支保护三层（2026-09 逐项核验）：经典保护 ✓（main：要求对话解决 + 不允许绕过）；ruleset 轻保护 ✓（默认分支 + dev 各一条）；合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推，**CI 会跑但不设硬门禁**
 * 外部 PR / Issue 一律开放，owner 审核合并（Squash-only），不想收的直接关闭；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑
 
 ## CI 与自动发布
