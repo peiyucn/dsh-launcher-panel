@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.11]
+
+- No user-visible changes: this release only updates build-time dependencies. The extension behaves exactly as 0.2.10.
+
 ## [0.2.10]
 
 - The Dashboard's loading animation is now DeepSeek Harness's own dot-matrix style: the status dot while starting, installing or stopping, the in-progress mark in the console, and the panel's opening loading state.
