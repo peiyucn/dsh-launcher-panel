@@ -5,84 +5,78 @@
 VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并在 VS Code 内置浏览器中打开它的 Web UI。
 
 * TypeScript 实现，源码 `src/`；`out/` 与 `*.vsix` 不入库
-* 本地验证 = `npm run verify`（编译 + 测试 + 打包，打包由 @vscode/vsce 完成）
-* 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，覆盖不依赖 vscode 的纯逻辑模块（common、ds）；依赖 vscode 的链路暂由集成测试覆盖（后续版本）
 * 模块：`extension.ts`（激活与状态栏）、`server.ts`（服务生命周期与检测）、`actions.ts`（启动/停止/浏览器）、`panel.ts`（Dashboard webview）、`ds.ts`（DeepSeek 状态与余额）、`common.ts`（常量与工具）
+* 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块（common、ds）
+* 本地验证 = `npm run verify`（typecheck + test + build + package）
 
 ## 文档规范
 
-> 三份文档各司其职、各有读者：AGENTS 给开发 agent、README 给用户、CHANGELOG 给用户——写错读者是文档事故。
+> AGENTS 给开发 agent、README 给用户、CHANGELOG 给用户——写错读者是文档事故。
 
-* `AGENTS.md`：中文一份，面向开发 agent（唯一 agent 指令文件，不保留 CLAUDE.md 等其它厂商指令文件）
-* `README`：中英双份（英文默认 + 简体中文，顶部互链），**面向用户**——写安装/使用/配置的用法与行为，不写实现细节与开发历史
-* `CHANGELOG`：中英双份（同 README 规），**面向用户**——每条 = 一条用户可感知的变化（一句话、行为级）——**纯依赖版本除外**，那种版本按《运维》如实写「无用户可感知的变化」；不写实现细节/内部机制/修复过程（归 commit 信息）
+* `AGENTS.md`：中文一份；唯一 agent 指令文件（不留 CLAUDE.md 等其它厂商指令文件）
+* `README`：中英双份（英文默认 + 简体中文，顶部互链）；**面向用户**——只写安装 / 使用 / 配置的用法与行为，不写实现细节与开发历史
+* `CHANGELOG`：中英双份；**面向用户**——每条 = 一条用户可感知的变化（一句话、行为级）——**纯依赖版本除外**，那种版本按《运维》如实写「无用户可感知的变化」；不写实现细节与修复过程（归 commit 信息）
 
 ## 工程管线（本仓库自含）
 
-* **开发**：日常改动在 `dev` 分支；`main` 只接受发布合并
-* **验证**：本地一键 `npm run verify`（= typecheck + test + build + package 串联）；push 前必须通过
-* **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；禁止多任务混一个 commit；不确定的事直接说"不确定"，禁止编造事实性信息
+* **开发**：日常改动在 `dev`；`main` 只接受发布合并
+* **验证**：`npm run verify` 全绿；push 前必须通过
+* **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；一个 commit 只做一件事
 * **推送**：日常目标 `dev`
 * **合并**：dev → main（fast-forward）
+* **运维**：依赖升级统一手动（security updates 与 dependabot.yml 关闭）；收到警报 → 手动升级 → **一律按发布流程走补丁版**；依赖不进产物时 CHANGELOG 如实写「无用户可感知的变化」
+* **收尾**：发布后切回 `dev`
 
-**发布（tag 触发）**
+### 发布（tag 触发）
 
-1. **发布前审计**：按下方《代码审计》条目全面检查
-2. **定版编辑**：CHANGELOG 双份（`CHANGELOG.md` 英文 + `CHANGELOG.zh-CN.md` 中文，顶部互链）新版本条目放最顶、覆盖本版全部用户可感知改动 → `package.json` 版本号 → README 如有功能变更同步
-3. **再验证**：`npm run verify` 全绿 + `git diff --check` 干净
-4. **合并**：dev → main 并 push
+* **step1 发布前审计**：按《代码审计》条目全面检查
+* **step2 定版编辑**：CHANGELOG 双份新版本条目放最顶 → `package.json` 版本号 → README 如有功能变更同步
+* **step3 再验证**：`npm run verify` 全绿 + `git diff --check` 干净
+* **step4 合并**：dev → main 并 push
+* **step5 发布确认（硬门禁，owner 当次点头）**：`git tag` / 市场发布等**不可逆的对外发布动作**，执行前必须由 owner **当次明确确认**——「之前批准了整条发布流程」「评审时说按你建议走」「继续」**不构成**发布许可；agent 停在发布动作之前，一句话报出「要发什么、版本号、目标通道、影响范围」，未回话即视为未批准（根规范《发布（定版）》step5）
+* **step6 打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"`（annotated）并 push → 打包 VSIX → 发布市场 → 建 GitHub Release（说明拼两份 CHANGELOG 当前版本条目）
+* publish job 挂 `environment: marketplace-publish`（Deployments 留记录）；**不设审批门禁**（tag 即发布）；**无 release-control**（通道变更一律发新版本号）
+* **发布红线**：已发布版本与 tag 不可覆盖、不可挪动；市场同版本重发被拒——错误只能发新版本修正
 
-* **发布确认（硬门禁，owner 当次点头）**：`git tag` / `npm publish` / 市场发布 / 部署上线等**不可逆的对外发布动作**，执行前必须由 owner **当次明确确认**——「之前批准了整条发布流程」「评审时说按你建议走」「继续」一律**不构成**发布许可；agent 做完审计 / 定版 / verify / 合并后**停在发布动作之前**，一句话报出「要发什么、版本号、目标通道、影响范围」等 owner 回话，未回话即视为未批准（总规范《发布（定版）》step5）
+## 代码审计（发布前 / 全面检查时）
 
-5. **打 tag 触发发布**：`git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"`（一律 annotated）并 push tag → 自动：打包 VSIX → 发布市场 → 建 GitHub Release（说明由 publish.yml 拼两份 CHANGELOG 当前版本条目，附 VSIX）
-6. **收尾**：切回 `dev`
-
-* publish job 挂 `environment: marketplace-publish`：Deployments 留发布记录；**不设审批门禁**（tag 即发布）；**无 release-control**（通道/标签变更一律发新版本号）
-* **发布红线**：已发布版本与 tag 不可覆盖、不可挪动；市场同版本重发会被拒，错误只能发新版本修正（重新走一遍本流程）
-
-* **运维**：依赖升级统一手动（security updates 与 dependabot.yml 关闭）；收到警报 → 手动升级 → **一律按发布流程走补丁版**——影响面只决定「何时」发（runtime/产物依赖可尽快单独发，纯 devDependencies 可与下个版本合并发），不再决定「是否」发；依赖不进产物时 CHANGELOG 如实写「无用户可感知的变化」
-
-## 代码审计（发布前 / 用户要求全面检查时）
-
-* **文档对齐**：README 中英 Settings 表与 `package.json` contributes.configuration 一一对应；文件路径、日志文件、行为描述与实现一致；CHANGELOG 双份当前版本条目覆盖本版全部用户可感知改动
-* **死代码**：grep 每个导出符号与常量确认调用方；删除未使用的 import/导出/变量/类型字段/CSS 类
-* **高危 BUG**：状态一致性（散落布尔标志互相覆盖是主要 bug 源；异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径与引号（Windows 参数转义含空格路径；临时/缓存目录与持久数据目录区分）；资源/内存泄漏（timer/watcher/AbortController/子进程在成功与失败路径都释放；缓存与累积状态有界——上限/淘汰/随生命周期释放；监听/订阅/Webview 消息引用不滞留）；部分失败（批量操作中途失败状态诚实并校验结果）；环境边界（首装/离线/断网/权限不足降级不挂死、有提示）
-* **安全热点**：子进程优先 execFile 参数数组，`shell: true` 仅在必要时，用户输入不直接拼命令；用户配置路径先校验再使用、展示用 `maskPath`、删除操作确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP 已设置、动态注入 `esc` 转义；fetch 带超时 + AbortController；打开的外部 URL 白名单内
-* **代码异味**：单一职责（生命周期/检测/UI/状态各归其位）；可变状态经函数封装；命名表达意图；同类代码结构对称；无超长函数/重复逻辑/魔术字符串
-* **魔法数字**：有语义数字（超时/轮询间隔/阈值/步长/缓存时长）命名常量（`*_MS`）；字面量只在无复用语义场合
+* **文档对齐**：README 中英 Settings 表与 `package.json` contributes.configuration 一一对应；文件路径 / 日志文件 / 行为描述与实现一致；CHANGELOG 双份覆盖本版全部用户可感知改动
+* **死代码**：grep 每个导出符号与常量确认调用方；清未使用的 import / 导出 / 变量 / 类型字段 / CSS 类
+* **高危 BUG**：状态一致性（异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径与引号（Windows 参数转义含空格路径；临时 / 缓存目录与持久数据目录区分）；资源 / 内存泄漏（timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界；Webview 消息引用不滞留）；部分失败（中途失败状态诚实并校验结果）；环境边界（首装 / 离线 / 断网 / 权限不足降级不挂死、有提示）
+* **安全热点**：子进程优先 execFile 参数数组，`shell: true` 仅在必要时；用户配置路径先校验再使用、展示用 `maskPath`、删除确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP + 动态注入 `esc` 转义；fetch 带超时 + AbortController；外部 URL 走白名单
+* **代码异味**：单一职责（生命周期 / 检测 / UI / 状态各归其位）；可变状态经函数封装；命名达意；同类对称；无超长函数 / 重复逻辑 / 魔术字符串
+* **魔法数字**：语义数字命名常量（`*_MS`）
 * **鲁棒性**：外部调用（dsh CLI / Node / 网络 / 子进程）有超时与容错；异常输入返回安全默认值；失败路径有用户可见反馈（面板状态栏 / 日志文件）
-* **性能**：轮询/检测重活不随次数放大（结果缓存、惰性重算）；状态栏/面板高频更新防抖节流；热路径无 O(n²)/重复计算；长输出与日志有界不阻塞交互
-* **并发与防御**：UI 入口连点防护（锁/debounce/disabled/幂等）；Start/Stop/切模式竞态可被打断且状态一致；杀进程 `taskkill /T`
+* **性能**：轮询 / 检测重活缓存化、惰性重算；状态栏 / 面板高频更新防抖节流；热路径无 O(n²) / 重复计算；长输出与日志有界
+* **并发与防御**：UI 入口连点防护（锁 / debounce / disabled / 幂等）；Start/Stop/切模式竞态可被打断且状态一致；杀进程 `taskkill /T`
 * **测试与验证**：纯逻辑改动补 `test/*.test.ts`；`npm run verify` 通过 + `git diff --check` 干净
 
 ## 安全基线（本仓库自含要点）
 
 * 已开启（2026-09 逐项核验）：Dependabot alerts（仅报警）、CodeQL default setup（weekly，JS/TS + actions）、secret scanning + push protection、Private vulnerability reporting、根 `SECURITY.md`
 * 分支保护三层（2026-09 逐项核验）：经典保护 ✓（main：要求对话解决 + 不允许绕过）；ruleset 轻保护 ✓（默认分支 + dev 各一条）；合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推，**CI 会跑但不设硬门禁**
-* 外部 PR / Issue 一律开放，owner 审核合并（Squash-only），不想收的直接关闭；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑
+* 外部 PR / Issue 一律开放，owner 审核合并（Squash-only）；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑
 
 ## CI 与自动发布
-
-> **发布确认（硬门禁，owner 当次点头）**：`publish.yml` 的发布动作（vsce 发布市场）**不可逆**，触发前必须由 owner **当次明确确认**——完整条款见上方《工程管线 · 发布（tag 触发）》。
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
 | `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package` |
 | `publish.yml` | push `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
 
-* 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret（市场管理页 → Personal Access Tokens → `Marketplace: Manage` 权限），仓库级不保留
+* 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret，仓库级不保留
 
 ## GitHub 与网络
 
-* 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）；常用：`gh api`、`gh pr create/view/merge --squash`、`gh release create`
+* 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）
 
 ## 项目专属章节
 
 ### 扩展与宿主兼容（硬约束）
 
-> 根规范《扩展与宿主兼容（fail-safe）》：用户可能只升级宿主、不升级扩展，扩展不得成为障碍。本仓库有两个外部契约：**VS Code**（宿主）与 **dsh**（被启动、独立升级的 CLI）。
+> 本仓库有两个外部契约：**VS Code**（宿主）与 **dsh**（被启动、独立升级的 CLI）。根规范《扩展与宿主兼容（fail-safe）》在此落地：
 
-* **VS Code 版本门走清单**：`package.json` 的 `engines.vscode`（当前 `^1.85.0`）是声明式门，VS Code 在激活前自行判定；用到新 API 时必须同步抬它。
-* **dsh 版本差异降级不崩**：只按公开契约读写 dsh 的 CLI 输出与配置目录（现有：`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断），不认的字段/输出走降级路径。
-* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常，不把异常抛进 VS Code 管线。**当前出入（2026-09 核）**：`src/panel.ts` 的消息入口 `onDidReceiveMessage` → `onMessage` 没有整体兜底（后者是 switch，仅个别分支有局部 try/catch），未覆盖分支抛错会成为未处理的 Promise 拒绝——待修。
-* **模块顶层不依赖易变导出**：不 import VS Code 内部模块。
+* **VS Code 版本门走清单**：`engines.vscode`（当前 `^1.85.0`）是声明式门，VS Code 在激活前自行判定；用到新 API 时必须同步抬它
+* **dsh 版本差异降级不崩**：只按公开契约读写 dsh 的 CLI 输出与配置目录（`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断）；不认的字段 / 输出走降级路径
+* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常。**当前出入**：`src/panel.ts` 的 `onDidReceiveMessage` → `onMessage` 无整体兜底（switch，仅个别分支有局部 try/catch）——待修
+* **模块顶层不依赖易变导出**：不 import VS Code 内部模块
