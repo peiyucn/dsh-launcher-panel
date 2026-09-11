@@ -50,6 +50,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * **安全热点**：子进程优先 execFile 参数数组，`shell: true` 仅在必要时，用户输入不直接拼命令；用户配置路径先校验再使用、展示用 `maskPath`、删除操作确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP 已设置、动态注入 `esc` 转义；fetch 带超时 + AbortController；打开的外部 URL 白名单内
 * **代码异味**：单一职责（生命周期/检测/UI/状态各归其位）；可变状态经函数封装；命名表达意图；同类代码结构对称；无超长函数/重复逻辑/魔术字符串
 * **魔法数字**：有语义数字（超时/轮询间隔/阈值/步长/缓存时长）命名常量（`*_MS`）；字面量只在无复用语义场合
+* **鲁棒性**：外部调用（dsh CLI / Node / 网络 / 子进程）有超时与容错；异常输入返回安全默认值；失败路径有用户可见反馈（面板状态栏 / 日志文件）
 * **性能**：轮询/检测重活不随次数放大（结果缓存、惰性重算）；状态栏/面板高频更新防抖节流；热路径无 O(n²)/重复计算；长输出与日志有界不阻塞交互
 * **并发与防御**：UI 入口连点防护（锁/debounce/disabled/幂等）；Start/Stop/切模式竞态可被打断且状态一致；杀进程 `taskkill /T`
 * **测试与验证**：纯逻辑改动补 `test/*.test.ts`；`npm run verify` 通过 + `git diff --check` 干净
@@ -57,9 +58,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 ## 安全基线（本仓库自含要点）
 
 * 已开启（2026-09 逐项核验）：Dependabot alerts（仅报警）、CodeQL default setup（weekly，JS/TS + actions）、secret scanning + push protection、Private vulnerability reporting、根 `SECURITY.md`
-* 分支保护三层（2026-09 逐项核验）：① 经典保护 ✓（main：要求对话解决 + 不允许绕过；不设 required checks）② ruleset 轻保护 ✓（默认分支 + dev 各一条：禁删/禁强推/禁建）③ 仓库合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推——**CI 会跑但不设硬门禁**，合并外部 PR 前 owner 自己确认 CI 绿
-* 外部 PR / Issue 一律开放、不设交互限制，owner 审核合并（Squash-only），不想收的直接关闭
-* **核验别只跑 `.security_and_analysis`**（它只含 secret scanning 项）——逐项命令见根规范《统一安全基线 · 逐项检查命令》
+* 分支保护三层（2026-09 逐项核验）：① 经典保护 ✓（main：要求对话解决 + 不允许绕过）② ruleset 轻保护 ✓（默认分支 + dev 各一条）③ 合并设置 **Squash-only** ✓；owner 保留 fast-forward 直推，**CI 会跑但不设硬门禁**
+* 外部 PR / Issue 一律开放，owner 审核合并（Squash-only），不想收的直接关闭；核验按根规范《统一安全基线 · 逐项检查命令》逐项跑（**别只跑 `.security_and_analysis`**）
 
 ## CI 与自动发布
 
@@ -75,3 +75,14 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 ## GitHub 与网络
 
 * 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）；常用：`gh api`、`gh pr create/view/merge --squash`、`gh release create`
+
+## 项目专属章节
+
+### 扩展与宿主兼容（硬约束）
+
+> 根规范《扩展与宿主兼容（fail-safe）》：用户可能只升级宿主、不升级扩展，扩展不得成为障碍。本仓库有两个外部契约：**VS Code**（宿主）与 **dsh**（被启动、独立升级的 CLI）。
+
+* **VS Code 版本门走清单**：`package.json` 的 `engines.vscode`（当前 `^1.85.0`）是声明式门，VS Code 在激活前自行判定；用到新 API 时必须同步抬它。
+* **dsh 版本差异降级不崩**：只按公开契约读写 dsh 的 CLI 输出与配置目录（现有：`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断），不认的字段/输出走降级路径。
+* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常，不把异常抛进 VS Code 管线。**当前出入（2026-09 核）**：`src/panel.ts` 的消息入口 `onDidReceiveMessage` → `onMessage` 没有整体兜底（后者是 switch，仅个别分支有局部 try/catch），未覆盖分支抛错会成为未处理的 Promise 拒绝——待修。
+* **模块顶层不依赖易变导出**：不 import VS Code 内部模块。
