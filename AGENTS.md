@@ -40,7 +40,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * publish job 挂 `environment: marketplace-publish`：Deployments 留发布记录；**不设审批门禁**（tag 即发布）；**无 release-control**（通道/标签变更一律发新版本号）
 * **发布红线**：已发布版本与 tag 不可覆盖、不可挪动；市场同版本重发会被拒，错误只能发新版本修正（重新走一遍本流程）
 
-* **运维**：依赖升级统一手动（security updates 与 dependabot.yml 关闭）；收到警报 → 判断影响面（运行时/产物依赖才影响用户）→ 手动升级 → 影响用户的按发布流程发版
+* **运维**：依赖升级统一手动（security updates 与 dependabot.yml 关闭）；收到警报 → 手动升级 → **一律按发布流程走补丁版**——影响面只决定「何时」发（runtime/产物依赖可尽快单独发，纯 devDependencies 可与下个版本合并发），不再决定「是否」发；依赖不进产物时 CHANGELOG 如实写「无用户可感知的变化」
 
 ## 代码审计（发布前 / 用户要求全面检查时）
 
