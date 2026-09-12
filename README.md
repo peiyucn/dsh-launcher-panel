@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md) | [GitHub](https://github.com/peiyucn/
 
 Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built-in browser.
 
-![DSH Launcher Panel](https://raw.githubusercontent.com/peiyucn/dsh-launcher-panel/main/resources/dsh-launcher-panel.png)
+![DSH Launcher Panel](https://raw.githubusercontent.com/peiyucn/dsh-launcher-panel/main/resources/dsh-launcher-panel.png "ratio:0.31")
 
 > This extension does **not** ship an LLM model, DeepSeek Harness itself, or a DeepSeek API key.
 
