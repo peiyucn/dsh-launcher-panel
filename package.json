@@ -203,7 +203,7 @@
     "typecheck": "tsc -p ./ --noEmit",
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
-    "package": "vsce package",
+    "package": "vsce package --out releases/",
     "test": "node --import tsx --test",
     "verify": "npm run typecheck && npm test && npm run compile && npm run package"
   },

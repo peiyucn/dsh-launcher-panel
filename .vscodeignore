@@ -8,5 +8,6 @@ package-lock.json
 scripts/**
 **/*.map
 *.vsix
+releases/**
 resources/dsh-launcher-panel.png
 test/**
