@@ -131,9 +131,12 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
-  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 3px; gap: 3px; flex: none; }
-  .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; corner-shape: round; width: 22px; height: 22px; padding: 0; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s; }
+  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 2px; gap: 2px; flex: none; }
+  /* 模式切换：普通药丸按钮（选中 = 主色实心，其余 = 描边药丸），不再做成圆形图标钮。 */
+  .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 8px; height: 22px; min-width: 38px; padding: 0 9px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
+  .mode-option:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
+  .mode-option:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
   .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .runtime-label { flex: none; width: 52px; color: var(--lap-fg2); font-size: 10px; opacity: .65; }
@@ -228,9 +231,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         <span class="status-main" id="statusText">Checking…</span>
         <span class="status-sub" id="statusSub"></span>
       </div>
-      <div class="mode-toggle" id="modeToggle">
-        <button class="mode-option" data-mode="pnpm" title="Install & run the published dsh via pnpm">pkg</button>
-        <button class="mode-option" data-mode="source" title="Clone & run the deepseek-harness source">src</button>
+      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode">
+        <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
+        <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
       </div>
     </div>
     <div class="runtime-section">
@@ -373,7 +376,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       }
       const mode = status.mode === 'source' ? 'source' : 'pnpm'
       document.querySelectorAll('.mode-option').forEach((b) => {
-        b.classList.toggle('active', b.dataset.mode === mode)
+        const active = b.dataset.mode === mode
+        b.classList.toggle('active', active)
+        b.setAttribute('aria-pressed', String(active))
       })
     }
 
