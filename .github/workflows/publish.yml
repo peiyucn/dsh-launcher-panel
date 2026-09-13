@@ -33,7 +33,9 @@ jobs:
       - name: Package extension
         run: |
           mkdir -p releases
-          npx --yes @vscode/vsce package --no-dependencies --out releases/
+          # 先建目录再打：vsce 只在 --out 指向**已存在目录**时把文件名接上去
+          # （目录不存在就把参数当文件名写，Linux 上直接 ENOTDIR）。尾斜杠同理去掉。
+          npx --yes @vscode/vsce package --no-dependencies --out releases
 
       - name: Publish to VS Code Marketplace
         run: npx --yes @vscode/vsce publish --no-dependencies --packagePath releases/*.vsix
