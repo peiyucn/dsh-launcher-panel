@@ -131,9 +131,10 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
-  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 12px; padding: 2px; gap: 2px; flex: none; }
-  /* 模式切换：普通药丸按钮（选中 = 主色实心，其余 = 描边药丸），不再做成圆形图标钮。 */
-  .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 8px; height: 22px; min-width: 38px; padding: 0 9px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
+  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 14px; padding: 2px; gap: 2px; flex: none; }
+  /* 模式切换：普通药丸按钮（选中 = 主色实心 + 白字）。药丸半径取高的一半（22/2 = 11），
+     与面板里 h28 + r14 的胶囊同一套比例；不再是圆形图标钮。 */
+  .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 11px; height: 22px; min-width: 38px; padding: 0 9px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
   .mode-option:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
   .mode-option:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
