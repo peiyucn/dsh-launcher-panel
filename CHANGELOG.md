@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.12]
+
+- The dsh version is written the same way everywhere in the panel, as `v<version>`: in source mode the version row no longer carries the `dsh-` prefix (it shows `v0.1.2-rc.1` or `v0.1.2-rc.1-99-g76fda72`, matching pkg mode), and the Update button and activity log read `v<version>` too.
+
 ## [0.2.11]
 
 - No user-visible changes: this release only updates build-time dependencies. The extension behaves exactly as 0.2.10.
