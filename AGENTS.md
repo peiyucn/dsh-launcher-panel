@@ -7,7 +7,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * TypeScript 实现，源码 `src/`；`out/` 与 `releases/`（本地打包的 `*.vsix`）不入库
 * 模块：`extension.ts`（激活与状态栏）、`server.ts`（服务生命周期与检测）、`actions.ts`（启动/停止/浏览器）、`panel.ts`（Dashboard webview）、`ds.ts`（DeepSeek 状态与余额）、`common.ts`（常量与工具）
 * 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块（common、ds）
-* 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 固定 `--out releases/`，与 epytor 同款）
+* 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 会先建目录再调 vsce）
 
 ## 文档规范
 
@@ -21,7 +21,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * **开发**：日常改动在 `dev`；`main` 只接受发布合并
 * **验证**：`npm run verify` 全绿；push 前必须通过
-* **本地制品**：本地打包产物统一落 `releases/`（`npm run package` 固定 `--out releases/`），该目录与 `*.vsix` 一起进 `.gitignore`、并入 `.vscodeignore`；制品不在仓库根散落，CI / publish 一律按 `releases/*.vsix` 取件（根规范《工程管线 · 本地制品》）
+* **本地制品**：本地打包产物统一落 `releases/`（`npm run package` 先建目录、再 `vsce package --out releases`；vsce 只在 `--out` 指向已存在目录时才接上文件名，目录不存在会写坏——见根规范），该目录与 `*.vsix` 一起进 `.gitignore`、并入 `.vscodeignore`；制品不在仓库根散落，CI / publish 一律按 `releases/*.vsix` 取件（根规范《工程管线 · 本地制品》）
 * **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；一个 commit 只做一件事
 * **推送**：日常目标 `dev`
 * **合并**：dev → main（fast-forward）
