@@ -21,6 +21,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * **开发**：日常改动在 `dev`；`main` 只接受发布合并
 * **验证**：`npm run verify` 全绿；push 前必须通过
+* **本地制品**：本地打包产物统一落 `releases/`（`npm run package` 固定 `--out releases/`），该目录与 `*.vsix` 一起进 `.gitignore`、并入 `.vscodeignore`；制品不在仓库根散落，CI / publish 一律按 `releases/*.vsix` 取件（根规范《工程管线 · 本地制品》）
 * **提交**：逐项提交，中文描述 + 英文类型前缀（feat:/fix:/refactor:/chore:/docs:）；一个 commit 只做一件事
 * **推送**：日常目标 `dev`
 * **合并**：dev → main（fast-forward）
