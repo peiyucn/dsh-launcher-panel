@@ -33,6 +33,7 @@ import {
   clientBuildCommit,
   dshBaseDir,
   dshVersionAtLeast,
+  dshVersionFromDescribe,
   extractWebToken,
   findPnpm,
   installedDshVersion,
@@ -865,9 +866,10 @@ async function detectDshVersion(cfg: DshConfig): Promise<void> {
     }
     // git describe 是唯一诚实的版本来源：在 tag 上显示 tag，不在 tag 上显示
     // tag-N-gsha（官方 master 的 manifest 版本号只在切割时变，显示它会撒谎）。
+    // 值按 pkg 模式的写法规整（去掉 tag 的 dsh- 前缀），面板与版本比较共用一种写法。
     const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
     if (described.ok && described.stdout.trim() !== '') {
-      dshVersion = described.stdout.trim()
+      dshVersion = dshVersionFromDescribe(described.stdout)
       return
     }
     try {
@@ -1445,7 +1447,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // Setup may have run while the user pressed Stop; honour that request
     // instead of starting a server nobody is waiting for.
     if (serverPhase !== 'starting') return false
-    // dshVersion 在 source 模式是 git describe 输出（如 dsh-v0.1.2-rc.1-99-g76fda72），
+    // dshVersion 在 source 模式是规整过的 git describe 输出（如 v0.1.2-rc.1-99-g76fda72），
     // buildWebArgs 需要干净的语义化版本号来比较 --no-open。
     const runVersion = versionFromDescribe(dshVersion) ?? dshVersion
     spawnSource(checkout.path, cfg, runVersion)
@@ -1667,7 +1669,7 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   if (described === tag || (base !== undefined && dshVersionAtLeast(base, version))) {
     return { hasUpdate: false, label: '' }
   }
-  return { hasUpdate: true, label: tag }
+  return { hasUpdate: true, label: `v${version}` }
 }
 
 let updateInFlight = false
@@ -1738,7 +1740,7 @@ async function runDshUpdateInner(): Promise<void> {
     addActivity('↑ dsh is already up to date')
     return
   }
-  addActivity(`↑ Updating dsh to ${tag}…`)
+  addActivity(`↑ Updating dsh to v${version}…`)
   const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
   if (!fetchResult.ok) {
     const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || `could not fetch ${tag}`

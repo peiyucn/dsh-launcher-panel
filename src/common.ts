@@ -157,10 +157,20 @@ export function newestDshVersion(versions: string[]): string | undefined {
   return best
 }
 
-/** 从 git describe 输出提取基准版本（'dsh-v0.1.2-rc.1-99-g76fda72' → '0.1.2-rc.1'）。 */
+/** 从 git describe 输出提取基准版本（'dsh-v0.1.2-rc.1-99-g76fda72' → '0.1.2-rc.1'），两种写法都认。 */
 export function versionFromDescribe(describe: string): string | undefined {
-  const m = /^dsh-v(.+?)(?:-\d+-g[0-9a-f]+)?$/.exec(describe.trim())
+  const m = /^(?:dsh-)?v(.+?)(?:-\d+-g[0-9a-f]+)?$/.exec(describe.trim())
   return m?.[1]
+}
+
+/**
+ * 把 source 模式的 `git describe` 输出规整成与 pkg 模式同一种版本写法：只去掉官方
+ * tag 的 `dsh-` 前缀（'dsh-v0.1.2-rc.1' → 'v0.1.2-rc.1'），不在 tag 上时的
+ * `-N-gsha` 后缀原样保留。git 命令参数用不到它（tag 名只在内部流转），
+ * 面板显示与 {versionFromDescribe} 都能直接消费规整后的值。
+ */
+export function dshVersionFromDescribe(describe: string): string {
+  return describe.trim().replace(/^dsh-/, '')
 }
 
 /**

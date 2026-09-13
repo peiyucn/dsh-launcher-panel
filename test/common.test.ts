@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -330,5 +330,16 @@ test('newestDshVersion picks the newest of the list', () => {
 test('versionFromDescribe extracts the base version', () => {
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
+  // 规整后的写法（dshVersionFromDescribe 的产物）同样认得。
+  assert.equal(versionFromDescribe('v0.1.2-rc.1'), '0.1.2-rc.1')
+  assert.equal(versionFromDescribe('v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('not-a-describe'), undefined)
+})
+
+test('dshVersionFromDescribe normalises the tag prefix only', () => {
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1'), 'v0.1.2-rc.1')
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), 'v0.1.2-rc.1-99-g76fda72')
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1\n'), 'v0.1.2-rc.1')
+  // 没有前缀的值原样返回（幂等）。
+  assert.equal(dshVersionFromDescribe('v0.1.2-rc.1'), 'v0.1.2-rc.1')
 })
