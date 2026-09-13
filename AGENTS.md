@@ -4,10 +4,10 @@
 
 VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并在 VS Code 内置浏览器中打开它的 Web UI。
 
-* TypeScript 实现，源码 `src/`；`out/` 与 `*.vsix` 不入库
+* TypeScript 实现，源码 `src/`；`out/` 与 `releases/`（本地打包的 `*.vsix`）不入库
 * 模块：`extension.ts`（激活与状态栏）、`server.ts`（服务生命周期与检测）、`actions.ts`（启动/停止/浏览器）、`panel.ts`（Dashboard webview）、`ds.ts`（DeepSeek 状态与余额）、`common.ts`（常量与工具）
 * 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块（common、ds）
-* 本地验证 = `npm run verify`（typecheck + test + build + package）
+* 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 固定 `--out releases/`，与 epytor 同款）
 
 ## 文档规范
 
@@ -61,8 +61,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
-| `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package` |
-| `publish.yml` | push `v*.*.*` tag | 打包 + 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
+| `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package`（VSIX 出 `releases/`） |
+| `publish.yml` | push `v*.*.*` tag | 打包（VSIX 出 `releases/`）+ 发布市场 + GitHub Release（说明拼两份 CHANGELOG） |
 
 * 发布凭据 `VSCE_PAT` 配在 `marketplace-publish` **环境级** secret，仓库级不保留
 
