@@ -331,15 +331,25 @@ test('versionFromDescribe extracts the base version', () => {
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
   // 规整后的写法（dshVersionFromDescribe 的产物）同样认得。
+  assert.equal(versionFromDescribe('0.1.2-rc.1'), '0.1.2-rc.1')
+  assert.equal(versionFromDescribe('0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('v0.1.2-rc.1'), '0.1.2-rc.1')
-  assert.equal(versionFromDescribe('v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('not-a-describe'), undefined)
 })
 
-test('dshVersionFromDescribe normalises the tag prefix only', () => {
-  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1'), 'v0.1.2-rc.1')
-  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), 'v0.1.2-rc.1-99-g76fda72')
-  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1\n'), 'v0.1.2-rc.1')
+test('dshVersionFromDescribe normalises the describe into a bare version', () => {
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1-99-g76fda72')
+  assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1\n'), '0.1.2-rc.1')
   // 没有前缀的值原样返回（幂等）。
-  assert.equal(dshVersionFromDescribe('v0.1.2-rc.1'), 'v0.1.2-rc.1')
+  assert.equal(dshVersionFromDescribe('0.1.2-rc.1'), '0.1.2-rc.1')
+})
+
+test('source-mode version row never doubles the v prefix', () => {
+  // 面板渲染 = 'v' + 服务端值；服务端值里若还留着 v，面板就会显示 'vv0.1.5-rc.2'
+  // （2026-09-13 本地测试实测到）。这条守住「服务端只给裸版本号」这个契约。
+  assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.5-rc.2'), 'v0.1.5-rc.2')
+  assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), 'v0.1.2-rc.1-99-g76fda72')
+  // 与 pkg 模式（npm 版本号）拼出来的写法一致。
+  assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.5-rc.2'), 'v' + '0.1.5-rc.2')
 })

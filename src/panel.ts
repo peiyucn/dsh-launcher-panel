@@ -380,8 +380,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     function renderRuntime(status) {
       status = status || {}
       const dshMissingText = status.dsh === 'missing' ? (status.mode === 'pnpm' ? 'pnpm not found' : 'not found') : '—'
-      // 服务端已把两种模式的版本写法规整成同一种（pkg 的 npm 版本号 / source 的
-      // git tag 去 dsh- 前缀），这里只负责补个 v。
+      // 服务端两种模式都给**裸版本号**（pkg = npm 版本号，source = git tag 去掉 dsh-v
+      // 前缀，不在 tag 上时带 -N-gsha 后缀）；v 只在这里补一次，服务端别再补。
       document.getElementById('dshVersion').textContent = status.dshVersion
         ? 'v' + status.dshVersion
         : dshMissingText
