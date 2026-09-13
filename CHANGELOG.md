@@ -6,6 +6,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.12]
 
+- The Dashboard's run-mode switch (pkg / src) is now a pair of ordinary pill buttons instead of two round icon buttons: the selected mode is filled with the accent colour, matching the rest of the panel's buttons.
 - The dsh version is written the same way everywhere in the panel, as `v<version>`: in source mode the version row no longer carries the `dsh-` prefix (it shows `v0.1.2-rc.1` or `v0.1.2-rc.1-99-g76fda72`, matching pkg mode), and the Update button and activity log read `v<version>` too.
 
 ## [0.2.11]
