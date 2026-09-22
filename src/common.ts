@@ -60,7 +60,15 @@ export const NODE_PROBE_TIMEOUT_MS = 8_000
 export const PNPM_PROBE_TIMEOUT_MS = 8_000
 export const PNPM_VIEW_TIMEOUT_MS = 10_000
 export const TASKKILL_TIMEOUT_MS = 5_000
+/** Cheap git queries (ls-remote / describe / rev-parse): no bulk transfer, so a short bound is right. */
 export const GIT_OP_TIMEOUT_MS = 10_000
+/**
+ * A git operation that transfers history (`fetch`). The payload scales with the
+ * gap between the checkout and the target tag — 0.1.5-rc.2 → 0.1.7-alpha.1 is
+ * ~186 MB / ~95k objects — and the launcher cannot know how far behind a user
+ * is, so this must not track {@link GIT_OP_TIMEOUT_MS}.
+ */
+export const GIT_FETCH_TIMEOUT_MS = 15 * 60_000
 export const MODULE_PROGRESS_EVERY = 500
 export const LOG_TAIL_POLL_MS = 500
 
@@ -157,6 +165,46 @@ export function newestDshVersion(versions: string[]): string | undefined {
   return best
 }
 
+/** An official release tag on origin: its tag name and the commit it points at. */
+export interface RemoteReleaseTag {
+  /** Full tag name, e.g. `dsh-v0.1.7-alpha.1`. */
+  tag: string
+  /** Commit the tag resolves to (the peeled commit for an annotated tag). */
+  commit: string
+}
+
+/**
+ * Parse `git ls-remote --tags origin` output into the official release tags.
+ *
+ * Only `dsh-v<semver>` names are kept — other tags in the upstream repo are not
+ * dsh releases. An annotated tag lists twice (the plain ref points at the tag
+ * object, the `^{}` line at the commit); the peeled commit is the one worth
+ * comparing against a checkout, so it wins regardless of line order.
+ */
+export function parseRemoteReleaseTags(stdout: string): RemoteReleaseTag[] {
+  const commits = new Map<string, string>()
+  const peeled = new Set<string>()
+  for (const raw of stdout.split(/\r?\n/)) {
+    const m = /^([0-9a-f]{7,40})\s+refs\/tags\/dsh-v([0-9][^\s^]*?)(\^\{\})?$/.exec(raw.trim())
+    if (!m) continue
+    const [, sha, version, isPeeled] = m
+    if (!/^\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?$/.test(version)) continue
+    if (isPeeled === '^{}') {
+      commits.set(version, sha)
+      peeled.add(version)
+    } else if (!peeled.has(version)) {
+      commits.set(version, sha)
+    }
+  }
+  return [...commits].map(([version, commit]) => ({ tag: `dsh-v${version}`, commit }))
+}
+
+/** The newest official release among {@link parseRemoteReleaseTags} results. */
+export function newestReleaseTag(tags: RemoteReleaseTag[]): RemoteReleaseTag | undefined {
+  const newest = newestDshVersion(tags.map(entry => entry.tag.slice('dsh-v'.length)))
+  return newest === undefined ? undefined : tags.find(entry => entry.tag === `dsh-v${newest}`)
+}
+
 /** 从 git describe 输出提取基准版本（'dsh-v0.1.2-rc.1-99-g76fda72' → '0.1.2-rc.1'）；`dsh-v` / `v` / 裸版本号三种写法都认。 */
 export function versionFromDescribe(describe: string): string | undefined {
   const m = /^(?:dsh-)?v?(\d[^\s]*?)(?:-\d+-g[0-9a-f]+)?$/.exec(describe.trim())
@@ -235,10 +283,13 @@ export function shouldOpenBrowser(autoOpenBrowser: boolean | undefined, alreadyR
 
 /**
  * One-line summary of the last dsh update check for the panel console. A
- * failed check must never read as "up to date" — it is reported as failed.
+ * failed check must never read as "up to date" — it is reported as failed, with
+ * the underlying reason when one was captured (`failedReason`), because
+ * "Update check failed" alone left a network outage, a timeout, and a broken
+ * git install indistinguishable.
  */
-export function describeDshUpdate(update: { hasUpdate: boolean; label: string; failed?: boolean } | undefined): string {
-  if (update?.failed) return '⚠ Update check failed'
+export function describeDshUpdate(update: { hasUpdate: boolean; label: string; failed?: boolean; failedReason?: string } | undefined): string {
+  if (update?.failed) return update.failedReason ? `⚠ Update check failed — ${update.failedReason}` : '⚠ Update check failed'
   if (update?.hasUpdate) return `✓ Update available → ${update.label}`
   return '✓ dsh is up to date'
 }
@@ -284,11 +335,55 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Run a command without a shell (no cmd window flash on Windows); `timeoutMs` bounds a hung probe. */
-export function runFile(command: string, args: string[], timeoutMs = 0): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+/** The outcome of a {@link runFile} call. */
+export interface RunFileResult {
+  ok: boolean
+  stdout: string
+  stderr: string
+  /**
+   * Process exit code when the command ran and exited non-zero; undefined on
+   * success, on a spawn failure (`ENOENT` etc.), and on a timeout kill — those
+   * set {@link error} instead.
+   */
+  code?: number
+  /** The bound elapsed before the command finished (it was killed). */
+  timedOut?: boolean
+  /** A one-line reason suitable for an activity entry; undefined on success. */
+  error?: string
+}
+
+/**
+ * Run a command without a shell (no cmd window flash on Windows); `timeoutMs`
+ * bounds a hung probe. Failures keep enough shape to report *why* — a timeout
+ * ("took too long") and a non-zero exit ("fatal: …") are different problems for
+ * the user, and collapsing both into `ok: false` is what made update failures
+ * undiagnosable.
+ */
+export function runFile(command: string, args: string[], timeoutMs = 0): Promise<RunFileResult> {
   return new Promise((resolve) => {
     execFile(command, args, { windowsHide: true, timeout: timeoutMs > 0 ? timeoutMs : undefined }, (error, stdout, stderr) => {
-      resolve({ ok: !error, stdout: stdout ?? '', stderr: stderr ?? '' })
+      const out = stdout ?? ''
+      const err = stderr ?? ''
+      if (!error) {
+        resolve({ ok: true, stdout: out, stderr: err })
+        return
+      }
+      // execFile kills on timeout: error.killed + SIGTERM, with a null code.
+      const timedOut = (error as { killed?: boolean }).killed === true
+      const code = typeof error.code === 'number' ? error.code : undefined
+      const detail = err.trim().split(/\r?\n/).filter(line => line.trim() !== '').pop()?.trim()
+      resolve({
+        ok: false,
+        stdout: out,
+        stderr: err,
+        // Absent rather than false: these are "why it failed" fields, and a
+        // success-shaped `timedOut: false` only invites truthiness bugs.
+        ...(code === undefined ? {} : { code }),
+        ...(timedOut ? { timedOut } : {}),
+        error: timedOut
+          ? `timed out after ${Math.round(timeoutMs / 1000)}s`
+          : detail || error.message,
+      })
     })
   })
 }

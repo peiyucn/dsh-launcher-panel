@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -90,6 +90,53 @@ test('describeDshUpdate distinguishes update, failure, and up-to-date', () => {
   assert.equal(describeDshUpdate({ hasUpdate: false, label: '', failed: true }), '⚠ Update check failed')
   assert.equal(describeDshUpdate({ hasUpdate: false, label: '' }), '✓ dsh is up to date')
   assert.equal(describeDshUpdate(undefined), '✓ dsh is up to date')
+})
+
+test('describeDshUpdate reports the underlying failure reason when captured', () => {
+  assert.equal(
+    describeDshUpdate({ hasUpdate: false, label: '', failed: true, failedReason: 'timed out after 10s' }),
+    '⚠ Update check failed — timed out after 10s',
+  )
+  // An empty reason must not leave a dangling separator.
+  assert.equal(describeDshUpdate({ hasUpdate: false, label: '', failed: true, failedReason: '' }), '⚠ Update check failed')
+})
+
+test('parseRemoteReleaseTags keeps only dsh release tags and reads their commits', () => {
+  const stdout = [
+    'aaa1111\trefs/tags/dsh-v0.1.5-rc.2',
+    'bbb2222\trefs/tags/dsh-v0.1.7-alpha.1',
+    'ccc3333\trefs/tags/dsh-v0.1.7-alpha.1^{}',
+    'ddd4444\trefs/tags/some-other-tag',
+    'eee5555\trefs/tags/dsh-vnot-a-version',
+  ].join('\n')
+  assert.deepEqual(parseRemoteReleaseTags(stdout), [
+    { tag: 'dsh-v0.1.5-rc.2', commit: 'aaa1111' },
+    { tag: 'dsh-v0.1.7-alpha.1', commit: 'ccc3333' },
+  ])
+})
+
+test('parseRemoteReleaseTags prefers the peeled commit for annotated tags regardless of line order', () => {
+  // The peeled line can precede the tag-object line in some transports.
+  const peeledFirst = [
+    'ccc3333\trefs/tags/dsh-v0.1.7-alpha.1^{}',
+    'bbb2222\trefs/tags/dsh-v0.1.7-alpha.1',
+  ].join('\n')
+  assert.deepEqual(parseRemoteReleaseTags(peeledFirst), [{ tag: 'dsh-v0.1.7-alpha.1', commit: 'ccc3333' }])
+})
+
+test('parseRemoteReleaseTags tolerates empty and malformed output', () => {
+  assert.deepEqual(parseRemoteReleaseTags(''), [])
+  assert.deepEqual(parseRemoteReleaseTags('fatal: not a git repository\n'), [])
+})
+
+test('newestReleaseTag picks the newest tag and keeps its commit', () => {
+  const tags = [
+    { tag: 'dsh-v0.1.6-alpha.2', commit: 'aaa1111' },
+    { tag: 'dsh-v0.1.7-alpha.1', commit: 'bbb2222' },
+    { tag: 'dsh-v0.1.5-rc.2', commit: 'ccc3333' },
+  ]
+  assert.deepEqual(newestReleaseTag(tags), { tag: 'dsh-v0.1.7-alpha.1', commit: 'bbb2222' })
+  assert.equal(newestReleaseTag([]), undefined)
 })
 
 test('maskPath abbreviates long Windows paths to drive + last segment', () => {
@@ -352,4 +399,38 @@ test('source-mode version row never doubles the v prefix', () => {
   assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), 'v0.1.2-rc.1-99-g76fda72')
   // 与 pkg 模式（npm 版本号）拼出来的写法一致。
   assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.5-rc.2'), 'v' + '0.1.5-rc.2')
+})
+
+test('runFile reports success with stdout and no error', async () => {
+  const r = await runFile(process.execPath, ['-e', 'process.stdout.write("hello")'])
+  assert.equal(r.ok, true)
+  assert.equal(r.stdout.trim(), 'hello')
+  assert.equal(r.error, undefined)
+  assert.equal(r.timedOut, undefined)
+  assert.equal(r.code, undefined)
+})
+
+test('runFile keeps the exit code and last stderr line of a failed command', async () => {
+  const r = await runFile(process.execPath, ['-e', 'process.stderr.write("first\\nsecond\\n"); process.exit(3)'])
+  assert.equal(r.ok, false)
+  assert.equal(r.code, 3)
+  assert.equal(r.timedOut, undefined)
+  // The *last* line is the cause; earlier lines are usually context.
+  assert.equal(r.error, 'second')
+})
+
+test('runFile marks a timeout as such instead of a bare failure', async () => {
+  const r = await runFile(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], 600)
+  assert.equal(r.ok, false)
+  assert.equal(r.timedOut, true)
+  assert.equal(r.code, undefined)
+  assert.match(r.error ?? '', /^timed out after 1s$/)
+})
+
+test('runFile reports a spawn failure with its reason', async () => {
+  const r = await runFile('definitely-not-a-real-binary-xyz', [])
+  assert.equal(r.ok, false)
+  assert.equal(r.timedOut, undefined)
+  assert.equal(r.code, undefined)
+  assert.ok((r.error ?? '').length > 0)
 })

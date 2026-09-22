@@ -11,6 +11,7 @@ import {
   DSH_BUILD_PROFILE_OFFICIAL,
   DSH_BUILD_PROFILE_SELECTOR,
   DSH_NO_OPEN_MIN_VERSION,
+  GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   LOG_RELOAD_LINES,
@@ -41,10 +42,11 @@ import {
   isDshInstallDirUsable,
   isProcessAlive,
   maskPath,
-  newestDshVersion,
+  newestReleaseTag,
   npmSpecForChannel,
   parseImportMetaMainProbe,
   parseNpmChannel,
+  parseRemoteReleaseTags,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
   quoteCmdArg,
@@ -52,6 +54,7 @@ import {
   runFile,
   silentExitHint,
   sleep,
+  type RemoteReleaseTag,
   type ServerPhase,
   versionFromDescribe,
 } from './common'
@@ -120,6 +123,8 @@ export interface DshUpdate {
   label: string
   /** True when the check could not run (network etc.) — not "no update". */
   failed?: boolean
+  /** Why the check failed (one line), shown after "Update check failed —". */
+  failedReason?: string
 }
 
 let trackedChild: ChildProcess | undefined
@@ -615,8 +620,15 @@ async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promis
   }
 }
 
-/** Resolve the published @deepseek-ai/dsh version for a channel (undefined on failure). */
-async function latestDshVersion(channel: NpmChannel, pnpmCmd = 'pnpm'): Promise<string | undefined> {
+/**
+ * Resolve the published @deepseek-ai/dsh version for a channel. The failure
+ * carries its reason (`pnpm view` stderr / a timeout) so the panel can say why
+ * instead of a blanket "could not resolve the latest dsh version".
+ */
+async function latestDshVersion(
+  channel: NpmChannel,
+  pnpmCmd = 'pnpm',
+): Promise<{ version: string } | { error: string }> {
   const spec = npmSpecForChannel(channel)
   const result = process.platform === 'win32'
     ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), 'view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
@@ -624,11 +636,12 @@ async function latestDshVersion(channel: NpmChannel, pnpmCmd = 'pnpm'): Promise<
   if (!result.ok) {
     // Keep the failure visible for diagnosis: registry outages and cmd
     // quoting problems both surface here as "unreachable" to the user.
-    const last = result.stderr.trim().split(/\r?\n/).pop()?.trim()
-    if (last) dbg(`pnpm view failed: ${last}`)
-    return undefined
+    const error = result.error ?? `could not resolve ${spec}`
+    dbg(`pnpm view failed: ${error}`)
+    return { error }
   }
-  return result.stdout.trim().split(/\r?\n/).pop()?.trim() || undefined
+  const version = result.stdout.trim().split(/\r?\n/).pop()?.trim()
+  return version ? { version } : { error: `the registry returned no version for ${spec}` }
 }
 
 /**
@@ -656,14 +669,15 @@ async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: bool
   // 首次安装：解析通道版本 → 选安装目录 → 安装。注册表查询可能耗时数秒，
   // 展示进度避免慢网络下看起来像 Start 卡死。
   const resolvingId = addActivity('ℹ Resolving the dsh channel version…', true)
-  const version = await latestDshVersion(cfg.npmChannel, pnpmCmd)
+  const resolved = await latestDshVersion(cfg.npmChannel, pnpmCmd)
   finishBusy(resolvingId)
-  if (version === undefined) {
+  if ('error' in resolved) {
     dshState = 'missing'
-    addActivity('✗ dsh is not installed and the registry is unreachable — check your network and try again')
+    addActivity(`✗ dsh is not installed and the registry is unreachable (${resolved.error}) — check your network and try again`)
     void vscode.window.showErrorMessage('DeepSeek Harness: unable to reach the registry to install dsh. Check your network connection.')
     return undefined
   }
+  const version = resolved.version
   // A custom dsh.pkgPath wins; on a first install with no custom path, let the
   // user choose the default or a custom folder.
   let installDir = dir
@@ -1602,24 +1616,27 @@ export function stopServer(): Promise<boolean> {
 }
 
 /**
- * The newest official release tag on origin (dsh-vX.Y.Z[-pre]), or undefined.
- * Source mode tracks this directly from git — the npm channel (dsh.npmChannel)
- * only governs pkg installs, so it plays no part here.
+ * List the official release tags on origin (dsh-vX.Y.Z[-pre]) with the commits
+ * they point at. Source mode tracks these directly from git — the npm channel
+ * (dsh.npmChannel) only governs pkg installs, so it plays no part here.
+ *
+ * This is a ref listing only: it transfers no history, so it stays fast no
+ * matter how far behind the checkout is. Fetching the target tag is the Update
+ * button's job, not the check's.
  */
-async function newestReleaseTag(checkout: string): Promise<string | undefined> {
+async function listReleaseTags(checkout: string): Promise<{ tags: RemoteReleaseTag[] } | { error: string }> {
   const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_OP_TIMEOUT_MS)
-  if (!r.ok) return undefined
-  const versions: string[] = []
-  for (const line of r.stdout.split(/\r?\n/)) {
-    // Annotated tags list twice (the second entry ends in ^{}); the $ anchor
-    // drops those peeled lines, and the Set dedupes the rest.
-    const m = /refs\/tags\/dsh-v([0-9][^\s^]*)$/.exec(line.trim())
-    if (!m) continue
-    const version = m[1]
-    if (/^\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?$/.test(version)) versions.push(version)
-  }
-  const newest = newestDshVersion([...new Set(versions)])
-  return newest === undefined ? undefined : `dsh-v${newest}`
+  if (!r.ok) return { error: r.error ?? 'could not list the official release tags' }
+  return { tags: parseRemoteReleaseTags(r.stdout) }
+}
+
+/** Whether `commit` is already contained in the checkout's HEAD (on it, or past it). */
+async function commitIsContained(checkout: string, commit: string): Promise<boolean> {
+  // `--is-ancestor` exits 0 for an ancestor *or* the commit itself, and 1 for a
+  // commit HEAD does not contain. An unknown object exits 128 — treated as "not
+  // contained", which is the same answer the user needs: update available.
+  const r = await runFile('git', ['-C', checkout, 'merge-base', '--is-ancestor', commit, 'HEAD'], GIT_OP_TIMEOUT_MS)
+  return r.ok
 }
 
 /** Check for a newer dsh version: pkg compares the registry; source compares the newest official release tag. */
@@ -1628,47 +1645,29 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     const installed = pkgInstalledVersion(cfg)
     if (!installed) return { hasUpdate: false, label: '' }
     const latest = await latestDshVersion(cfg.npmChannel)
-    if (!latest) {
-      addActivity('⚠ Update check failed — could not resolve the latest dsh version')
-      return { hasUpdate: false, label: '', failed: true }
+    if ('error' in latest) {
+      return { hasUpdate: false, label: '', failed: true, failedReason: latest.error }
     }
-    if (latest !== installed && dshVersionAtLeast(latest, installed)) {
-      return { hasUpdate: true, label: `v${latest}` }
+    if (latest.version !== installed && dshVersionAtLeast(latest.version, installed)) {
+      return { hasUpdate: true, label: `v${latest.version}` }
     }
     return { hasUpdate: false, label: '' }
   }
   const checkout = findSourceCheckout(cfg)
   if (!checkout) return { hasUpdate: false, label: '' }
-  // Source mode tracks the newest official release tag, not upstream master
-  // and not the npm channel: list the tags on origin, fetch exactly that one,
-  // and compare it with what the checkout has checked out (git describe).
-  const tag = await newestReleaseTag(checkout)
-  if (tag === undefined) {
-    addActivity('⚠ Update check failed — could not list the official release tags')
-    return { hasUpdate: false, label: '', failed: true }
+  // Compare by *commit*, not by fetching: the listing already carries the sha
+  // the tag resolves to, so containment is a purely local question (is that
+  // commit in HEAD?) that needs no network beyond the one listing.
+  const listed = await listReleaseTags(checkout)
+  if ('error' in listed) {
+    return { hasUpdate: false, label: '', failed: true, failedReason: listed.error }
   }
-  const version = tag.slice('dsh-v'.length)
-  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
-  if (!fetchResult.ok) {
-    // Report the failure instead of silently pretending there is no update —
-    // the user should know the check could not run. (Also covers "no such
-    // remote tag": the channel version has no published tag yet.)
-    const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || `could not fetch ${tag}`
-    addActivity(`⚠ Update check failed — ${last}`)
-    return { hasUpdate: false, label: '', failed: true }
-  }
-  const r = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
-  if (!r.ok) {
-    addActivity('⚠ Update check failed — could not describe the checkout')
-    return { hasUpdate: false, label: '', failed: true }
-  }
-  const described = r.stdout.trim()
-  // Up to date when the checkout sits on the tag itself, or is already past
-  // it (e.g. master after the tag — updating would move the checkout back).
-  const base = versionFromDescribe(described)
-  if (described === tag || (base !== undefined && dshVersionAtLeast(base, version))) {
-    return { hasUpdate: false, label: '' }
-  }
+  const newest = newestReleaseTag(listed.tags)
+  if (newest === undefined) return { hasUpdate: false, label: '' }
+  const version = newest.tag.slice('dsh-v'.length)
+  // Contained means the checkout sits on that tag or is already past it (e.g.
+  // master after the tag) — updating would move the checkout backwards.
+  if (await commitIsContained(checkout, newest.commit)) return { hasUpdate: false, label: '' }
   return { hasUpdate: true, label: `v${version}` }
 }
 
@@ -1701,16 +1700,16 @@ async function runDshUpdateInner(): Promise<void> {
     const pnpm = await ensurePnpmAvailable()
     if (!pnpm) return
     const latest = await latestDshVersion(cfg.npmChannel, pnpm.command)
-    if (!latest) {
-      addActivity('↑ Update check failed (network) — could not resolve the latest dsh version')
+    if ('error' in latest) {
+      addActivity(`↑ Update check failed (network) — ${latest.error}`)
       return
     }
-    if (pkgInstalledVersion(cfg) === latest) {
+    if (pkgInstalledVersion(cfg) === latest.version) {
       addActivity('↑ dsh is already up to date')
       return
     }
-    addActivity(`↑ Updating dsh to v${latest}…`)
-    if (await ensureDshInstalled(latest, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg))) {
+    addActivity(`↑ Updating dsh to v${latest.version}…`)
+    if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg))) {
       addActivity('↑ dsh updated')
       updateCache = undefined
     }
@@ -1723,30 +1722,33 @@ async function runDshUpdateInner(): Promise<void> {
   }
   // Source updates pin the newest official release tag (never upstream master
   // and never the npm channel — that only governs pkg installs).
-  const tag = await newestReleaseTag(checkout)
-  if (tag === undefined) {
-    addActivity('↑ Update check failed (network) — could not list the official release tags')
+  const listed = await listReleaseTags(checkout)
+  if ('error' in listed) {
+    addActivity(`↑ Update check failed (network) — ${listed.error}`)
     return
   }
+  const newest = newestReleaseTag(listed.tags)
+  if (newest === undefined) {
+    addActivity('↑ Update check failed — origin lists no official dsh release tag')
+    return
+  }
+  const tag = newest.tag
   const version = tag.slice('dsh-v'.length)
-  const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
-  if (!described.ok) {
-    addActivity('↑ Update failed — could not describe the checkout')
-    return
-  }
-  const current = described.stdout.trim()
-  const base = versionFromDescribe(current)
-  if (current === tag || (base !== undefined && dshVersionAtLeast(base, version))) {
+  if (await commitIsContained(checkout, newest.commit)) {
     addActivity('↑ dsh is already up to date')
     return
   }
-  addActivity(`↑ Updating dsh to v${version}…`)
-  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_OP_TIMEOUT_MS)
+  // The transfer below is the one operation whose size the launcher cannot
+  // bound (it scales with how far behind the checkout is), so it gets the long
+  // fetch timeout and its own progress note.
+  const fetchingId = addActivity(`↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`, true)
+  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
+  finishBusy(fetchingId)
   if (!fetchResult.ok) {
-    const last = fetchResult.stderr.trim().split(/\r?\n/).pop()?.trim() || `could not fetch ${tag}`
-    addActivity(`↑ Update failed — ${last}`)
+    addActivity(`↑ Update failed — ${fetchResult.error ?? `could not fetch ${tag}`}`)
     return
   }
+  addActivity(`↑ Updating dsh to v${version}…`)
   const ok = await runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'checkout', '--detach', tag])
   if (!ok) {
     addActivity('↑ dsh update failed')
