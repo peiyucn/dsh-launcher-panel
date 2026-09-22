@@ -46,6 +46,7 @@ import {
   npmSpecForChannel,
   parseImportMetaMainProbe,
   parseNpmChannel,
+  parseLocalProxySettings,
   parseRemoteReleaseTags,
   pnpmSupportsDangerouslyAllowAllBuilds,
   psQuote,
@@ -1616,6 +1617,25 @@ export function stopServer(): Promise<boolean> {
 }
 
 /**
+ * A git command failed. When git is configured to use a local proxy whose port
+ * nothing is listening on (a VPN/proxy app that was switched off), every
+ * network operation fails with a generic error and the user is left guessing
+ * at "npm is down". Say which proxy is dead instead — that is the actual fault.
+ *
+ * Returns undefined when no stale proxy explains the failure.
+ */
+async function explainGitFailure(): Promise<string | undefined> {
+  const r = await runFile('git', ['config', '--get-regexp', 'proxy'], GIT_OP_TIMEOUT_MS)
+  // Exit 1 with no output simply means no proxy is configured.
+  if (r.stdout.trim() === '') return undefined
+  for (const setting of parseLocalProxySettings(r.stdout)) {
+    if (await isPortOpen(setting.host, setting.port, PORT_PROBE_TIMEOUT_MS)) continue
+    return `git is configured to use the proxy ${setting.host}:${setting.port} (${setting.key}), but nothing is listening there — start your proxy app or remove that git setting`
+  }
+  return undefined
+}
+
+/**
  * List the official release tags on origin (dsh-vX.Y.Z[-pre]) with the commits
  * they point at. Source mode tracks these directly from git — the npm channel
  * (dsh.npmChannel) only governs pkg installs, so it plays no part here.
@@ -1626,7 +1646,10 @@ export function stopServer(): Promise<boolean> {
  */
 async function listReleaseTags(checkout: string): Promise<{ tags: RemoteReleaseTag[] } | { error: string }> {
   const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_OP_TIMEOUT_MS)
-  if (!r.ok) return { error: r.error ?? 'could not list the official release tags' }
+  if (!r.ok) {
+    const cause = await explainGitFailure()
+    return { error: cause ?? r.error ?? 'could not list the official release tags' }
+  }
   return { tags: parseRemoteReleaseTags(r.stdout) }
 }
 
@@ -1745,7 +1768,8 @@ async function runDshUpdateInner(): Promise<void> {
   const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
   finishBusy(fetchingId)
   if (!fetchResult.ok) {
-    addActivity(`↑ Update failed — ${fetchResult.error ?? `could not fetch ${tag}`}`)
+    const cause = await explainGitFailure()
+    addActivity(`↑ Update failed — ${cause ?? fetchResult.error ?? `could not fetch ${tag}`}`)
     return
   }
   addActivity(`↑ Updating dsh to v${version}…`)

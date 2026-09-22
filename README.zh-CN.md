@@ -19,7 +19,7 @@
 * **启动 / 停止** — 把 dsh 装进 launcher 自管的目录（首次运行），之后通过 `pnpm exec dsh web` 运行并在就绪后打开 Web UI。
 * **源码运行** — 自动把 deepseek-harness clone 到自管目录并运行（`dsh.srcPath` 可覆盖 clone 位置）；该路径下已有的检出会直接复用。依赖缺失/过期、或检出切过了上次构建（用 dsh 自带构建记录里的 commit 与 HEAD 对比检测）时，启动前会执行 `pnpm install` + 构建；构建前会先跑 `pnpm run clean`（若检出提供该脚本）清理旧版本残留产物，构建使用 dsh 官方 profile，Web UI 左上角品牌与 pkg 模式一致。
 * **仪表盘面板** — 服务状态、实时控制台（含可点击的日志文件）、带峰谷时段标志的 DeepSeek 官方 API 状态（周末全天按低谷计费）以及你的账户余额。
-* **DSH 更新** — 点击刷新按钮（⟳）检查；有新版本时，dsh 版本号旁会出现 Update 按钮（pkg 重装通道最新版；source 检出最新的官方 `dsh-v…` release tag，不拉 upstream master）。
+* **DSH 更新** — 点击刷新按钮（⟳）检查；有新版本时，dsh 版本号旁会出现 Update 按钮（pkg 重装通道最新版；source 检出最新的官方 `dsh-v…` release tag，不拉 upstream master）。检查只列出发布 tag 并比对 commit，不下载任何东西；源码模式下真正点 Update 才会先拉取该 tag，检出落后较多时这一步可能耗时较长。
 * **浏览器选择** — 内置浏览器或系统浏览器。
 
 ## 使用方法

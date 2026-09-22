@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.13]
+
+- Checking for updates in source mode no longer downloads anything: the check lists the release tags and compares commits, so it stays fast however far behind the checkout is. It used to fetch the candidate tag as part of the check, which on a checkout that was far behind meant pulling a large amount of history just to press Check updates.
+- A failed update check now says why (for example `timed out after 10s`, or the git error) instead of a bare "Update check failed".
+- Updating in source mode says it is fetching the release tag before the transfer starts, because that step scales with how far behind the checkout is and can take minutes; the transfer itself is no longer cut off after 10 seconds.
+
 ## [0.2.12]
 
 - The Dashboard's run-mode switch (pkg / src) is now a pair of ordinary pill buttons instead of two round icon buttons: the selected mode is filled with the accent colour, matching the rest of the panel's buttons.

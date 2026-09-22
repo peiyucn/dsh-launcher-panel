@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, parseLocalProxySettings, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -137,6 +137,33 @@ test('newestReleaseTag picks the newest tag and keeps its commit', () => {
   ]
   assert.deepEqual(newestReleaseTag(tags), { tag: 'dsh-v0.1.7-alpha.1', commit: 'bbb2222' })
   assert.equal(newestReleaseTag([]), undefined)
+})
+
+test('parseLocalProxySettings reads the format git actually prints', () => {
+  // 格式取自本机 git 2.55 的实际输出（`git config --global --get-regexp proxy`）。
+  const real = 'http.proxy http://127.0.0.1:7897\nhttps.proxy http://127.0.0.1:7897'
+  assert.deepEqual(parseLocalProxySettings(real), [
+    { key: 'http.proxy', host: '127.0.0.1', port: 7897 },
+    { key: 'https.proxy', host: '127.0.0.1', port: 7897 },
+  ])
+})
+
+test('parseLocalProxySettings ignores non-loopback and malformed proxies', () => {
+  // 远端代理不可达可能只是当前网络位置问题，不该由我们断言。
+  assert.deepEqual(parseLocalProxySettings('http.proxy http://proxy.corp.example:8080'), [])
+  assert.deepEqual(parseLocalProxySettings('http.proxy http://127.0.0.1'), [])
+  assert.deepEqual(parseLocalProxySettings('http.proxy not-a-url'), [])
+  assert.deepEqual(parseLocalProxySettings('user.name someone'), [])
+  assert.deepEqual(parseLocalProxySettings(''), [])
+})
+
+test('parseLocalProxySettings accepts localhost and IPv6 loopback', () => {
+  assert.deepEqual(parseLocalProxySettings('http.proxy http://localhost:7890'), [
+    { key: 'http.proxy', host: 'localhost', port: 7890 },
+  ])
+  assert.deepEqual(parseLocalProxySettings('http.proxy http://[::1]:7890'), [
+    { key: 'http.proxy', host: '::1', port: 7890 },
+  ])
 })
 
 test('maskPath abbreviates long Windows paths to drive + last segment', () => {
