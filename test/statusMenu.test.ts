@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildStatusMenuItems } from '../src/statusMenu.ts'
 
-const base = { running: false, starting: false, installing: false, stopping: false }
+const base = { running: false, starting: false, installing: false, stopping: false, updating: false }
 const actions = (status: typeof base) => buildStatusMenuItems(status).map((item) => item.action)
 
 test('stopped status menu offers start first, then dashboard', () => {
@@ -20,6 +20,12 @@ test('starting or installing status menu offers dashboard and stop', () => {
 
 test('stopping status menu offers dashboard only', () => {
   assert.deepEqual(actions({ ...base, stopping: true }), ['dashboard', 'settings'])
+})
+
+test('updating status menu does not offer start', () => {
+  // An update rewrites the checkout / package tree; the server refuses a start
+  // while one runs, so the menu must not offer it either.
+  assert.deepEqual(actions({ ...base, updating: true }), ['dashboard', 'settings'])
 })
 
 test('every menu item carries a label and a codicon id', () => {

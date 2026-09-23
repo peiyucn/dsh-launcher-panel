@@ -17,7 +17,7 @@ const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Settings', icon: 'settings-
  * of starting the server directly.
  */
 export function buildStatusMenuItems(
-  status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping'>,
+  status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
 ): StatusMenuItem[] {
   let items: StatusMenuItem[]
   if (status.running) {
@@ -31,7 +31,9 @@ export function buildStatusMenuItems(
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
       { label: 'Stop DeepSeek Harness', icon: 'debug-stop', action: 'stop' },
     ]
-  } else if (status.stopping) {
+  } else if (status.stopping || status.updating) {
+    // An update rewrites the checkout / package tree; offering Start here would
+    // hit the server-side refusal anyway, so don't offer it.
     items = [{ label: 'Open Dashboard', icon: 'browser', action: 'dashboard' }]
   } else {
     items = [

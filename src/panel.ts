@@ -2,7 +2,7 @@ import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
 import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, STATUS_REFRESH_INTERVAL_MS } from './common'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
+import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -354,18 +354,25 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       const starting = !!(status.starting)
       const installing = !!(status.installing)
       const stopping = !!(status.stopping)
+      // An update rewrites the tree before any spawn; Start must stay greyed for
+      // the whole run, not just for the setup step a later Start would trigger.
+      const updating = !!(status.updating)
       // Stop must be reachable while starting/installing too, so a slow start
       // or first-run install can be interrupted.
       document.querySelectorAll('.when-running').forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
       const statusText = document.getElementById('statusText')
       const statusSub = document.getElementById('statusSub')
       const startBtn = document.getElementById('startBtn')
-      if (starting || installing || stopping) {
+      if (starting || installing || stopping || updating) {
         const justStarted = startElapsed()
         if (justStarted) statusSub.textContent = 'Waited 0s'
         setStatusDot('working')
-        statusText.textContent = stopping ? 'Stopping…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness Web UI…')
-        startBtn.textContent = stopping ? 'Stopping…' : (installing ? 'Installing…' : 'Starting…')
+        statusText.textContent = stopping
+          ? 'Stopping…'
+          : (updating ? 'Updating dsh…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness Web UI…'))
+        startBtn.textContent = stopping
+          ? 'Stopping…'
+          : (updating ? 'Updating…' : (installing ? 'Installing…' : 'Starting…'))
         startBtn.disabled = true
       } else {
         stopElapsed()
@@ -398,8 +405,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         updateBtn.style.display = ''
         updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
         // Mirror the server-side guard: updating under a running/starting/
-        // stopping server can break it.
-        updateBtn.disabled = !!(status.running || status.starting || status.installing || status.stopping)
+        // stopping server can break it, and an update already in flight must
+        // not be started twice.
+        updateBtn.disabled = !!(status.running || status.starting || status.installing || status.stopping || status.updating)
       } else {
         updateBtn.style.display = 'none'
       }
@@ -822,6 +830,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
         installing: false,
         stopping: false,
         checking: isCheckingUpdates(),
+        updating: isUpdating(),
         url: '',
         dsh: 'unknown',
         dshVersion: '',

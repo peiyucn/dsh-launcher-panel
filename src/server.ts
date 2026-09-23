@@ -32,6 +32,7 @@ import {
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
+  decideSourceUpdate,
   dshBaseDir,
   dshVersionAtLeast,
   dshVersionFromDescribe,
@@ -57,6 +58,7 @@ import {
   sleep,
   type RemoteReleaseTag,
   type ServerPhase,
+  type UpdateCheckOutcome,
   versionFromDescribe,
 } from './common'
 
@@ -98,6 +100,12 @@ export interface ServerStatus {
   stopping: boolean
   /** Whether an update check is in progress (drives the Check updates button). */
   checking: boolean
+  /**
+   * An update is rewriting the checkout / package tree. Start must stay greyed
+   * for the whole run: the entry guard alone cannot cover the minutes a
+   * far-behind `git fetch` takes.
+   */
+  updating: boolean
   url: string
   dsh: ConditionState
   dshVersion: string
@@ -119,14 +127,11 @@ export interface ServerStatus {
   sourceDebug: boolean
 }
 
-export interface DshUpdate {
-  hasUpdate: boolean
-  label: string
-  /** True when the check could not run (network etc.) — not "no update". */
-  failed?: boolean
-  /** Why the check failed (one line), shown after "Update check failed —". */
-  failedReason?: string
-}
+/**
+ * The panel-facing result of one update check. Shares the shape the pure
+ * decision helpers in common.ts return, so the two cannot drift apart.
+ */
+export type DshUpdate = UpdateCheckOutcome
 
 let trackedChild: ChildProcess | undefined
 let trackedPid: number | undefined
@@ -1442,6 +1447,16 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     return false
   }
 
+  // An update is rewriting the checkout / package tree underneath us. Starting
+  // now would run dsh from a tree that is about to be swapped — the collision
+  // the update's own entry guard cannot cover, because its `git fetch` can take
+  // minutes. The panel greys Start for the same reason; this guard also covers
+  // the command palette and the status-bar menu.
+  if (updateInFlight) {
+    addActivity('⚠ Update is in progress — wait for it to finish before starting')
+    return false
+  }
+
   // Enter the 'starting' phase from the very first await, so status refreshes
   // keep the Start button grey instead of un-greying it mid-setup.
   setServerPhase('starting')
@@ -1686,15 +1701,18 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
     return { hasUpdate: false, label: '', failed: true, failedReason: listed.error }
   }
   const newest = newestReleaseTag(listed.tags)
-  if (newest === undefined) return { hasUpdate: false, label: '' }
-  const version = newest.tag.slice('dsh-v'.length)
   // Contained means the checkout sits on that tag or is already past it (e.g.
   // master after the tag) — updating would move the checkout backwards.
-  if (await commitIsContained(checkout, newest.commit)) return { hasUpdate: false, label: '' }
-  return { hasUpdate: true, label: `v${version}` }
+  const contained = newest !== undefined && await commitIsContained(checkout, newest.commit)
+  return decideSourceUpdate(newest, contained)
 }
 
 let updateInFlight = false
+
+/** Current update state (the panel fallback reads it instead of assuming false). */
+export function isUpdating(): boolean {
+  return updateInFlight
+}
 
 /** Update dsh: pkg reinstalls the latest published version; source checks out the newest official release tag. */
 export async function runDshUpdate(): Promise<void> {
@@ -1717,6 +1735,20 @@ export async function runDshUpdate(): Promise<void> {
   }
 }
 
+/**
+ * Whether an update may still rewrite the tree. The entry guard runs before the
+ * slow steps (a registry lookup, a `git fetch` that scales with how far behind
+ * the checkout is), so every destructive boundary re-checks the phase instead
+ * of trusting a decision made minutes earlier. Start is refused while an update
+ * runs, but a Stop or any other path that brought a server up still has to be
+ * honoured here.
+ */
+function updateMayProceed(): boolean {
+  if (serverPhase === 'stopped') return true
+  addActivity('↑ Update abandoned — dsh is no longer stopped')
+  return false
+}
+
 async function runDshUpdateInner(): Promise<void> {
   const cfg = readConfig()
   if (cfg.runMode === 'pnpm') {
@@ -1732,6 +1764,7 @@ async function runDshUpdateInner(): Promise<void> {
       return
     }
     addActivity(`↑ Updating dsh to v${latest.version}…`)
+    if (!updateMayProceed()) return
     if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg))) {
       addActivity('↑ dsh updated')
       updateCache = undefined
@@ -1763,7 +1796,9 @@ async function runDshUpdateInner(): Promise<void> {
   }
   // The transfer below is the one operation whose size the launcher cannot
   // bound (it scales with how far behind the checkout is), so it gets the long
-  // fetch timeout and its own progress note.
+  // fetch timeout and its own progress note. Everything before it — the tag
+  // listing and the containment probe — can take seconds too, so re-check here.
+  if (!updateMayProceed()) return
   const fetchingId = addActivity(`↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`, true)
   const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
   finishBusy(fetchingId)
@@ -1772,6 +1807,9 @@ async function runDshUpdateInner(): Promise<void> {
     addActivity(`↑ Update failed — ${cause ?? fetchResult.error ?? `could not fetch ${tag}`}`)
     return
   }
+  // The fetch above can run for minutes: re-check before the checkout rewrites
+  // the tree the (possibly now running) server would be reading from.
+  if (!updateMayProceed()) return
   addActivity(`↑ Updating dsh to v${version}…`)
   const ok = await runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'checkout', '--detach', tag])
   if (!ok) {
@@ -1822,6 +1860,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     installing: serverPhase === 'installing',
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
+    updating: updateInFlight,
     url: displayUrl(cfg),
     dsh: dshState,
     dshVersion,

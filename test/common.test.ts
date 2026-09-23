@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, parseLocalProxySettings, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, decideSourceUpdate, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, parseLocalProxySettings, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -137,6 +137,26 @@ test('newestReleaseTag picks the newest tag and keeps its commit', () => {
   ]
   assert.deepEqual(newestReleaseTag(tags), { tag: 'dsh-v0.1.7-alpha.1', commit: 'bbb2222' })
   assert.equal(newestReleaseTag([]), undefined)
+})
+
+test('decideSourceUpdate reports an unrecognized listing as failed, never "up to date"', () => {
+  // `git ls-remote` can succeed while every tag it returned is a shape this
+  // build cannot parse (SHA-256 origin, unexpected prerelease spelling, an
+  // origin carrying no dsh-v* tag). Calling that "up to date" would pin the
+  // panel to a silent lie — and to no Update button — forever.
+  const failed = decideSourceUpdate(undefined, false)
+  assert.equal(failed.hasUpdate, false)
+  assert.equal(failed.failed, true)
+  assert.equal(describeDshUpdate(failed), '⚠ Update check failed — origin lists no official dsh release tag')
+})
+
+test('decideSourceUpdate offers the newest tag only when HEAD does not contain it', () => {
+  const newest = { tag: 'dsh-v0.1.7-rc.1', commit: 'abc1234' }
+  assert.deepEqual(decideSourceUpdate(newest, false), { hasUpdate: true, label: 'v0.1.7-rc.1' })
+  // HEAD sits on the tag or past it (e.g. master after the tag): updating would
+  // move the checkout backwards.
+  assert.deepEqual(decideSourceUpdate(newest, true), { hasUpdate: false, label: '' })
+  assert.equal(describeDshUpdate(decideSourceUpdate(newest, true)), '✓ dsh is up to date')
 })
 
 test('parseLocalProxySettings reads the format git actually prints', () => {

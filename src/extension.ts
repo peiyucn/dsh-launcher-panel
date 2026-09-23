@@ -58,12 +58,14 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
       statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
       statusBar.tooltip = `DeepSeek Harness running at ${status.url} — click for options`
-    } else if (status.starting || status.installing) {
+    } else if (status.starting || status.installing || status.updating) {
       stopSpinner()
       statusBar.text = STATUS_SPLASH_SMALL
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = status.installing ? 'DeepSeek Harness installing — click for options' : 'DeepSeek Harness starting — click for options'
+      statusBar.tooltip = status.updating
+        ? 'DeepSeek Harness updating — click for options'
+        : (status.installing ? 'DeepSeek Harness installing — click for options' : 'DeepSeek Harness starting — click for options')
       // Pulse the whale's spout between the small and large splash frames.
       spinnerTimer = setInterval(() => {
         statusBar.text = statusBar.text === STATUS_SPLASH_SMALL ? STATUS_SPLASH_LARGE : STATUS_SPLASH_SMALL

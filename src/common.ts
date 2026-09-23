@@ -205,6 +205,34 @@ export function newestReleaseTag(tags: RemoteReleaseTag[]): RemoteReleaseTag | u
   return newest === undefined ? undefined : tags.find(entry => entry.tag === `dsh-v${newest}`)
 }
 
+/** The panel-facing result of one update check. */
+export interface UpdateCheckOutcome {
+  hasUpdate: boolean
+  label: string
+  /** True when the check could not answer (network etc.) — not "no update". */
+  failed?: boolean
+  /** Why the check failed (one line), shown after "Update check failed —". */
+  failedReason?: string
+}
+
+/**
+ * Decide the source-mode verdict from the newest listed release tag and whether
+ * that tag's commit is already contained in the checkout.
+ *
+ * An empty listing is a *failed* check, never "up to date": `git ls-remote` can
+ * succeed while every tag it returned is a shape this build does not recognize
+ * (a SHA-256 origin, an unexpected prerelease spelling, an origin that carries
+ * no `dsh-v*` tag at all), and reporting that as "up to date" would pin the
+ * panel to a silent lie forever — the outcome {@link describeDshUpdate} forbids.
+ */
+export function decideSourceUpdate(newest: RemoteReleaseTag | undefined, contained: boolean): UpdateCheckOutcome {
+  if (newest === undefined) {
+    return { hasUpdate: false, label: '', failed: true, failedReason: 'origin lists no official dsh release tag' }
+  }
+  if (contained) return { hasUpdate: false, label: '' }
+  return { hasUpdate: true, label: `v${newest.tag.slice('dsh-v'.length)}` }
+}
+
 /** A local proxy a tool was told to use: the config key that named it and its host/port. */
 export interface ProxySetting {
   /** The git config key, e.g. `http.proxy`. */
