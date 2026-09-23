@@ -2,6 +2,7 @@
 .gitignore
 .github/**
 AGENTS.md
+docs/**
 src/**
 tsconfig.json
 package-lock.json

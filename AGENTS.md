@@ -8,6 +8,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * 模块：`extension.ts`（激活与状态栏）、`server.ts`（服务生命周期与检测）、`actions.ts`（启动/停止/浏览器）、`panel.ts`（Dashboard webview）、`ds.ts`（DeepSeek 状态与余额）、`common.ts`（常量与工具）
 * 测试：`npm test`（tsx 直跑 node:test），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块（common、ds）
 * 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 会先建目录再调 vsce）
+* **定位与退役判据**：见 `docs/positioning-and-retirement.md`——本文件不复述，避免指令文件膨胀；`docs/` 属开发文档，不进 VSIX
 
 ## 文档规范
 
