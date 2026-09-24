@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, decideSourceUpdate, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, parseLocalProxySettings, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
+import { BUILD_CLEAN_SCRIPT, BUILD_OFFICIAL_SCRIPT, CLIENT_BUILD_RECORD_REL, DEFAULT_BROWSER, DSH_BUILD_PROFILE_OFFICIAL, DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLIENT_BUILD_PROFILE_KEY, DSH_CLIENT_COMMIT_HASH, DSH_INSTALL_MANIFEST_NAME, canTransition, checkoutHasOfficialBrand, checkoutSupportsClean, checkoutSupportsOfficialBuild, clientBuildCommit, compareDshVersions, decideSourceUpdate, decodeChildOutput, describeDshUpdate, dshBaseDir, dshVersionAtLeast, dshVersionFromDescribe, extractWebToken, installedDshVersion, isDshCheckout, isDshInstallDirUsable, isProcessAlive, maskPath, newestDshVersion, newestReleaseTag, normalizeBrowser, npmSpecForChannel, parseImportMetaMainProbe, parseNpmChannel, parseRemoteReleaseTags, parseLocalProxySettings, pnpmSupportsDangerouslyAllowAllBuilds, psQuote, quoteCmdArg, resolveDshHome, runFile, shouldOpenBrowser, silentExitHint, toEnglish, versionFromDescribe, windowsPnpmCandidates } from '../src/common.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')
@@ -157,6 +157,21 @@ test('decideSourceUpdate offers the newest tag only when HEAD does not contain i
   // move the checkout backwards.
   assert.deepEqual(decideSourceUpdate(newest, true), { hasUpdate: false, label: '' })
   assert.equal(describeDshUpdate(decideSourceUpdate(newest, true)), '✓ dsh is up to date')
+})
+
+test('decodeChildOutput keeps UTF-8 intact and recovers a GBK console message', () => {
+  // Real UTF-8 must never be reinterpreted through the legacy code page.
+  assert.equal(decodeChildOutput(Buffer.from('错误: 中文路径', 'utf8')), '错误: 中文路径')
+  assert.equal(decodeChildOutput(Buffer.from('plain ascii', 'utf8')), 'plain ascii')
+  assert.equal(decodeChildOutput(Buffer.alloc(0)), '')
+
+  // taskkill on a Chinese Windows emits GBK; these are the bytes that machine
+  // actually produces. The expected text is written escaped so the assertion
+  // stays readable next to the raw byte list.
+  const gbk = Buffer.from([0xB4, 0xED, 0xCE, 0xF3, 0x3A, 0x20, 0xCE, 0xDE, 0xB7, 0xA8, 0xD6, 0xD5, 0xD6, 0xB9])
+  assert.equal(decodeChildOutput(gbk), '\u9519\u8BEF: \u65E0\u6CD5\u7EC8\u6B62')
+  // The lossy reading this replaces is what filled the activity log with U+FFFD.
+  assert.equal(gbk.toString('utf8').includes('\uFFFD'), true)
 })
 
 test('parseLocalProxySettings reads the format git actually prints', () => {

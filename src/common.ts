@@ -423,17 +423,45 @@ export interface RunFileResult {
 }
 
 /**
- * Run a command without a shell (no cmd window flash on Windows); `timeoutMs`
- * bounds a hung probe. Failures keep enough shape to report *why* — a timeout
- * ("took too long") and a non-zero exit ("fatal: …") are different problems for
- * the user, and collapsing both into `ok: false` is what made update failures
- * undiagnosable.
+ * Decode one child-process output buffer.
+ *
+ * Node decodes child stdout/stderr as UTF-8 unconditionally, but Windows console
+ * tools answer in the console code page: `taskkill` on a Chinese Windows emits
+ * GBK, so every one of its bytes becomes U+FFFD and the activity log fills with
+ * `????`. Decode strictly as UTF-8 first — a tool that does speak UTF-8 must
+ * never be reinterpreted — and fall back to the legacy code page only when the
+ * bytes are not valid UTF-8. A Node built with small-icu has no legacy decoder,
+ * in which case the lossy UTF-8 reading is all that is available.
+ * @param buf - raw stdout or stderr bytes from a child process.
+ * @returns the best available reading of those bytes.
+ */
+export function decodeChildOutput(buf: Buffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf)
+  } catch {
+    try {
+      return new TextDecoder('gbk').decode(buf)
+    } catch {
+      return buf.toString('utf8')
+    }
+  }
+}
+
+/**
+ * Run one external command without a shell (no cmd window flash on Windows);
+ * `timeoutMs` bounds a hung probe. Output is captured as bytes and decoded by
+ * {@link decodeChildOutput}, so a console tool answering in the system code page
+ * still reaches the activity log as readable text.
+ *
+ * Failures keep enough shape to report *why* — a timeout ("took too long") and a
+ * non-zero exit ("fatal: …") are different problems for the user, and collapsing
+ * both into `ok: false` is what made update failures undiagnosable.
  */
 export function runFile(command: string, args: string[], timeoutMs = 0): Promise<RunFileResult> {
   return new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true, timeout: timeoutMs > 0 ? timeoutMs : undefined }, (error, stdout, stderr) => {
-      const out = stdout ?? ''
-      const err = stderr ?? ''
+    execFile(command, args, { windowsHide: true, timeout: timeoutMs > 0 ? timeoutMs : undefined, encoding: 'buffer' }, (error, stdout, stderr) => {
+      const out = decodeChildOutput(stdout ?? Buffer.alloc(0))
+      const err = decodeChildOutput(stderr ?? Buffer.alloc(0))
       if (!error) {
         resolve({ ok: true, stdout: out, stderr: err })
         return

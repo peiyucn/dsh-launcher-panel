@@ -11,6 +11,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Updating in source mode says it is fetching the release tag before the transfer starts, because that step scales with how far behind the checkout is and can take minutes; the transfer itself is no longer cut off after 10 seconds.
 - When a git operation fails because git is still configured to use a local proxy (for example a VPN/proxy app you have since closed) whose port nothing is listening on, the panel now names that dead proxy instead of reporting a vague network error.
 - Keep Start greyed out, and drop it from the status menu, while an update runs (triggering it from the command palette explains why): a start used to remain possible mid-update, running dsh while its checkout or package tree was being replaced.
+- Keep the activity log readable when a stop finds a process that already exited: system messages in the console code page used to appear as question marks and boxes on a localized Windows.
 
 ## [0.2.12]
 

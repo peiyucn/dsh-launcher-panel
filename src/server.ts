@@ -33,6 +33,7 @@ import {
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
   decideSourceUpdate,
+  decodeChildOutput,
   dshBaseDir,
   dshVersionAtLeast,
   dshVersionFromDescribe,
@@ -1542,8 +1543,18 @@ function killPid(pid: number): void {
   if (process.platform === 'win32') {
     // Kill the process tree: trackedPid is cmd.exe, and the node child that
     // `cmd /c` blocks on would otherwise survive and finish starting.
-    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, timeout: TASKKILL_TIMEOUT_MS }, (error) => {
-      if (error) dbg(`taskkill ${pid} failed: ${error.message}`)
+    //
+    // `encoding: 'buffer'` plus an explicit decode, because taskkill answers in
+    // the system code page (GBK on a Chinese Windows): reading `error.message`
+    // instead yields the already-lossy UTF-8 reading, which is where the
+    // `????` in the activity log came from. Killing a pid that has already
+    // exited is a normal part of teardown, so the text has to stay legible.
+    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], {
+      windowsHide: true, timeout: TASKKILL_TIMEOUT_MS, encoding: 'buffer',
+    }, (error, _stdout, stderr) => {
+      if (!error) return
+      const detail = decodeChildOutput(stderr ?? Buffer.alloc(0)).trim().split(/\r?\n/).filter(line => line.trim() !== '').join(' ')
+      dbg(`taskkill ${pid} failed: ${detail || error.message}`)
     })
     return
   }
