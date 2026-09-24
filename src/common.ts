@@ -58,10 +58,31 @@ export const HTTP_PROBE_TIMEOUT_MS = 2_000
 export const STATUS_REFRESH_INTERVAL_MS = 4_000
 export const NODE_PROBE_TIMEOUT_MS = 8_000
 export const PNPM_PROBE_TIMEOUT_MS = 8_000
-export const PNPM_VIEW_TIMEOUT_MS = 10_000
+/** A registry lookup (`pnpm view`). Same reasoning as {@link GIT_REMOTE_TIMEOUT_MS}: the answer is tiny, the round trip is not. */
+export const PNPM_VIEW_TIMEOUT_MS = 60_000
 export const TASKKILL_TIMEOUT_MS = 5_000
-/** Cheap git queries (ls-remote / describe / rev-parse): no bulk transfer, so a short bound is right. */
+/**
+ * Purely local git queries (`describe`, `rev-parse`, `merge-base`, `config`):
+ * they read this machine's object store and config, so a short bound is right —
+ * but a bound is still needed, because a wedged git process would otherwise hang
+ * the refresh forever.
+ *
+ * Network operations must not use this: see {@link GIT_REMOTE_TIMEOUT_MS}.
+ */
 export const GIT_OP_TIMEOUT_MS = 10_000
+/**
+ * A git query that reaches the origin but transfers no history (`ls-remote`).
+ *
+ * This used to share {@link GIT_OP_TIMEOUT_MS} on the reasoning that a small
+ * *payload* means a fast call. Payload is not latency: the round trip still pays
+ * DNS, TCP, TLS, the proxy hop, and GitHub's own slowness. Measured against
+ * GitHub through a working proxy, the same `ls-remote` returned in ~1.05 s six
+ * times in a row and took 16.2 s once — a spread that straddles any short bound,
+ * so a 10 s limit turns one slow moment into a false "timed out" on a check that
+ * would have succeeded. A bounded-but-generous limit keeps the refresh honest
+ * without letting a dead connection spin forever.
+ */
+export const GIT_REMOTE_TIMEOUT_MS = 60_000
 /**
  * A git operation that transfers history (`fetch`). The payload scales with the
  * gap between the checkout and the target tag — 0.1.5-rc.2 → 0.1.7-alpha.1 is

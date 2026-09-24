@@ -13,6 +13,7 @@ import {
   DSH_NO_OPEN_MIN_VERSION,
   GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
+  GIT_REMOTE_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   LOG_RELOAD_LINES,
   LOG_TAIL_POLL_MS,
@@ -1677,7 +1678,7 @@ async function explainGitFailure(checkout: string): Promise<string | undefined> 
  * button's job, not the check's.
  */
 async function listReleaseTags(checkout: string): Promise<{ tags: RemoteReleaseTag[] } | { error: string }> {
-  const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_OP_TIMEOUT_MS)
+  const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_REMOTE_TIMEOUT_MS)
   if (!r.ok) {
     const cause = await explainGitFailure(checkout)
     return { error: cause ?? r.error ?? 'could not list the official release tags' }
