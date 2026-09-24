@@ -1637,10 +1637,16 @@ export function stopServer(): Promise<boolean> {
  * network operation fails with a generic error and the user is left guessing
  * at "npm is down". Say which proxy is dead instead — that is the actual fault.
  *
+ * The lookup is scoped to `checkout` with `-C`: `git config` otherwise resolves
+ * against the extension host's cwd, so it would read some unrelated repository's
+ * local config — naming a proxy that has nothing to do with the command that
+ * failed, while missing one configured in the checkout itself.
+ *
  * Returns undefined when no stale proxy explains the failure.
+ * @param checkout - the checkout the failed git command ran against.
  */
-async function explainGitFailure(): Promise<string | undefined> {
-  const r = await runFile('git', ['config', '--get-regexp', 'proxy'], GIT_OP_TIMEOUT_MS)
+async function explainGitFailure(checkout: string): Promise<string | undefined> {
+  const r = await runFile('git', ['-C', checkout, 'config', '--get-regexp', 'proxy'], GIT_OP_TIMEOUT_MS)
   // Exit 1 with no output simply means no proxy is configured.
   if (r.stdout.trim() === '') return undefined
   for (const setting of parseLocalProxySettings(r.stdout)) {
@@ -1662,7 +1668,7 @@ async function explainGitFailure(): Promise<string | undefined> {
 async function listReleaseTags(checkout: string): Promise<{ tags: RemoteReleaseTag[] } | { error: string }> {
   const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_OP_TIMEOUT_MS)
   if (!r.ok) {
-    const cause = await explainGitFailure()
+    const cause = await explainGitFailure(checkout)
     return { error: cause ?? r.error ?? 'could not list the official release tags' }
   }
   return { tags: parseRemoteReleaseTags(r.stdout) }
@@ -1803,7 +1809,7 @@ async function runDshUpdateInner(): Promise<void> {
   const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
   finishBusy(fetchingId)
   if (!fetchResult.ok) {
-    const cause = await explainGitFailure()
+    const cause = await explainGitFailure(checkout)
     addActivity(`↑ Update failed — ${cause ?? fetchResult.error ?? `could not fetch ${tag}`}`)
     return
   }
