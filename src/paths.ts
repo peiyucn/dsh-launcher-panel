@@ -133,6 +133,30 @@ export function clientBuildCommit(checkout: string): string | undefined {
   return hash ? hash : undefined
 }
 
+/** Whether a checkout has its dependencies installed (`tsx` is the source-launch hook). */
+export function checkoutReady(checkout: string): boolean {
+  return fs.existsSync(path.join(checkout, 'node_modules', 'tsx'))
+    || fs.existsSync(path.join(checkout, 'node_modules', '.bin', 'tsx'))
+}
+
+/**
+ * Whether the checkout's installed deps predate its lockfile (a stale install).
+ *
+ * Compares two mtimes that pnpm writes: the lockfile and its record of what was
+ * installed. An unreadable marker means "not stale" — a missing file is not
+ * evidence of an outdated install.
+ */
+export function checkoutDepsStale(checkout: string): boolean {
+  try {
+    const lock = fs.statSync(path.join(checkout, 'pnpm-lock.yaml')).mtimeMs
+    const installed = fs.statSync(path.join(checkout, 'node_modules', '.pnpm', 'lock.yaml')).mtimeMs
+    return lock > installed
+  } catch {
+    // Can't compare (missing marker): treat as not stale.
+    return false
+  }
+}
+
 /** Abbreviate a path for display: keep the drive and the last segment, mask the middle. */
 export function maskPath(p: string): string {
   if (!p) return ''

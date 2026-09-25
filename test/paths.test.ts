@@ -1,7 +1,7 @@
 /** Tests for `src/paths.ts`: where things live and what dsh wrote there. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -12,7 +12,9 @@ import {
   DSH_CLIENT_BUILD_PROFILE_KEY,
   DSH_CLIENT_COMMIT_HASH,
   DSH_INSTALL_MANIFEST_NAME,
+  checkoutDepsStale,
   checkoutHasOfficialBrand,
+  checkoutReady,
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
@@ -178,4 +180,50 @@ test('maskPath leaves short paths intact', () => {
 
 test('maskPath returns empty for empty input', () => {
   assert.equal(maskPath(''), '')
+})
+
+test('checkoutReady accepts either tsx install layout and nothing else', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-ready-'))
+  try {
+    assert.equal(checkoutReady(root), false)
+    // The hoisted layout (node_modules/tsx).
+    mkdirSync(join(root, 'node_modules', 'tsx'), { recursive: true })
+    assert.equal(checkoutReady(root), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+  const root2 = mkdtempSync(join(tmpdir(), 'dsh-ready2-'))
+  try {
+    // The .bin shim layout, which a differently-configured install produces.
+    mkdirSync(join(root2, 'node_modules', '.bin'), { recursive: true })
+    writeFileSync(join(root2, 'node_modules', '.bin', 'tsx'), '')
+    assert.equal(checkoutReady(root2), true)
+  } finally {
+    rmSync(root2, { recursive: true, force: true })
+  }
+})
+
+test('checkoutDepsStale compares the lockfile against the install record', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-stale-'))
+  try {
+    // No markers at all: not evidence of an outdated install.
+    assert.equal(checkoutDepsStale(root), false)
+
+    const record = join(root, 'node_modules', '.pnpm', 'lock.yaml')
+    mkdirSync(dirname(record), { recursive: true })
+    writeFileSync(record, 'installed')
+    // Only one side present: still not comparable.
+    assert.equal(checkoutDepsStale(root), false)
+
+    writeFileSync(join(root, 'pnpm-lock.yaml'), 'lock')
+    // The install record is newer, so deps are current.
+    assert.equal(checkoutDepsStale(root), false)
+
+    // Touch the lockfile past the record: deps are now stale.
+    const future = new Date(Date.now() + 60_000)
+    utimesSync(join(root, 'pnpm-lock.yaml'), future, future)
+    assert.equal(checkoutDepsStale(root), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

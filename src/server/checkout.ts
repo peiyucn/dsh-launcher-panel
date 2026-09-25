@@ -11,19 +11,24 @@
  * @module server/checkout
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import * as vscode from 'vscode'
 import {
   DSH_BUILD_PROFILE_OFFICIAL,
   DSH_BUILD_PROFILE_SELECTOR,
+  checkoutDepsStale,
   checkoutHasOfficialBrand,
+  checkoutReady,
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
 } from '../paths.ts'
 import { GIT_OP_TIMEOUT_MS } from '../timing.ts'
 import { runFile } from '../proc.ts'
+
+// The two filesystem predicates (checkoutReady / checkoutDepsStale) live in
+// paths.ts: they are pure stat checks with no VS Code dependency, so keeping
+// them here would make them untestable for no reason.
+export { checkoutDepsStale, checkoutReady } from '../paths.ts'
 
 /** What the checkout layer needs from the lifecycle it runs inside. */
 export interface CheckoutHost {
@@ -35,12 +40,6 @@ export interface CheckoutHost {
   runInstalling: <T>(task: () => Promise<T>) => Promise<T>
   /** Whether the start flow is still active (a Stop may have intervened). */
   isStarting: () => boolean
-}
-
-/** Whether a checkout has its dependencies installed (`tsx` is the source-launch hook). */
-export function checkoutReady(checkout: string): boolean {
-  return fs.existsSync(path.join(checkout, 'node_modules', 'tsx'))
-    || fs.existsSync(path.join(checkout, 'node_modules', '.bin', 'tsx'))
 }
 
 /**
@@ -57,18 +56,6 @@ export async function clientBuildStale(checkout: string): Promise<boolean> {
   const head = r.stdout.trim()
   // 记录里可能是短哈希（7 位），HEAD 是完整哈希：前缀比较。
   return head !== '' && !head.startsWith(built)
-}
-
-/** Whether the checkout's installed deps predate its lockfile (a stale install). */
-export function checkoutDepsStale(checkout: string): boolean {
-  try {
-    const lock = fs.statSync(path.join(checkout, 'pnpm-lock.yaml')).mtimeMs
-    const installed = fs.statSync(path.join(checkout, 'node_modules', '.pnpm', 'lock.yaml')).mtimeMs
-    return lock > installed
-  } catch {
-    // Can't compare (missing marker): treat as not stale.
-    return false
-  }
 }
 
 /**
