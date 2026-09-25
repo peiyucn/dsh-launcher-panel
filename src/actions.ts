@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { normalizeBrowser, shouldOpenBrowser } from './common'
+import { normalizeBrowser, shouldOpenBrowser } from './env'
 import { currentStatus, ensureRunning, readConfig, stopServer, uiUrl } from './server'
 
 /** Open a URL per dsh.browser: built-in Simple Browser (with fallback) or external. */

@@ -4,65 +4,64 @@ import * as path from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import {
-  ACTIVITY_MAX_LINES,
   DEFAULT_PORT,
+  MAX_PORT,
+  extractWebToken,
+  npmSpecForChannel,
+  parseImportMetaMainProbe,
+  parseNpmChannel,
+  silentExitHint,
+} from './env'
+import {
+  ACTIVITY_MAX_LINES,
   DETECTION_CACHE_TTL_MS,
-  DSH_INSTALL_MANIFEST_NAME,
-  DSH_BUILD_PROFILE_OFFICIAL,
-  DSH_BUILD_PROFILE_SELECTOR,
-  DSH_NO_OPEN_MIN_VERSION,
   GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
   GIT_REMOTE_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   LOG_RELOAD_LINES,
   LOG_TAIL_POLL_MS,
-  MAX_PORT,
   MODULE_PROGRESS_EVERY,
   NODE_PROBE_TIMEOUT_MS,
   PNPM_PROBE_TIMEOUT_MS,
   PNPM_VIEW_TIMEOUT_MS,
-  TASKKILL_TIMEOUT_MS,
-  PORT_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
+  PORT_PROBE_TIMEOUT_MS,
   STOP_POLL_ATTEMPTS,
   STOP_POLL_INTERVAL_MS,
   STOP_POLL_PROBE_MS,
-  canTransition,
+  TASKKILL_TIMEOUT_MS,
+} from './timing'
+import { canTransition, type ServerPhase } from './phases'
+import {
+  DSH_BUILD_PROFILE_OFFICIAL,
+  DSH_BUILD_PROFILE_SELECTOR,
+  DSH_INSTALL_MANIFEST_NAME,
   checkoutHasOfficialBrand,
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
-  decideSourceUpdate,
-  decodeChildOutput,
   dshBaseDir,
-  dshVersionAtLeast,
-  dshVersionFromDescribe,
-  extractWebToken,
-  findPnpm,
   installedDshVersion,
   isDshCheckout,
   isDshInstallDirUsable,
-  isProcessAlive,
   maskPath,
-  newestReleaseTag,
-  npmSpecForChannel,
-  parseImportMetaMainProbe,
-  parseNpmChannel,
-  parseLocalProxySettings,
-  parseRemoteReleaseTags,
-  pnpmSupportsDangerouslyAllowAllBuilds,
-  psQuote,
-  quoteCmdArg,
   resolveDshHome,
-  runFile,
-  silentExitHint,
-  sleep,
-  type RemoteReleaseTag,
-  type ServerPhase,
-  type UpdateCheckOutcome,
+} from './paths'
+import {
+  DSH_NO_OPEN_MIN_VERSION,
+  decideSourceUpdate,
+  dshVersionAtLeast,
+  dshVersionFromDescribe,
+  newestReleaseTag,
+  parseRemoteReleaseTags,
   versionFromDescribe,
-} from './common'
+  type RemoteReleaseTag,
+  type UpdateCheckOutcome,
+} from './versions'
+import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc'
+import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm'
+import { parseLocalProxySettings } from './git'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
 // module stays focused on server lifecycle).

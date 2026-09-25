@@ -1,7 +1,10 @@
 import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, PEAK_WINDOWS_BJ_HOURS, pricingWindowAt, STATUS_REFRESH_INTERVAL_MS } from './common'
+import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env'
+import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing'
+import { describeDshUpdate } from './versions'
+import { STATUS_REFRESH_INTERVAL_MS } from './timing'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
