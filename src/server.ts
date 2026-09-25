@@ -1,11 +1,19 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
 import { findPnpm } from './pnpm.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
-import { startLogTail as startTail, stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
+import { stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
+import {
+  findPortOwner,
+  getTrackedPid,
+  killPid,
+  spawnPkg as spawnPkgInner,
+  spawnSource as spawnSourceInner,
+  takeTracked,
+  type ProcessHost,
+} from './server/process.ts'
 import {
   checkNodeOnce as checkNodeOnceInner,
   reportSilentExit as reportSilentExitInner,
@@ -41,12 +49,10 @@ import {
   DETECTION_CACHE_TTL_MS,
   GIT_OP_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
-  NODE_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
   STOP_POLL_INTERVAL_MS,
   STOP_POLL_PROBE_MS,
-  TASKKILL_TIMEOUT_MS,
 } from './timing.ts'
 import { canTransition, type ServerPhase } from './phases.ts'
 import {
@@ -54,26 +60,21 @@ import {
   resolveDshHome,
 } from './paths.ts'
 import {
-  DSH_NO_OPEN_MIN_VERSION,
-  dshVersionAtLeast,
   dshVersionFromDescribe,
   versionFromDescribe,
 } from './versions.ts'
-import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
+import { isProcessAlive, runFile, sleep } from './proc.ts'
 import {
   activityLogFile,
   addActivity,
   appendOutput,
-  dbg,
   displayLine,
-  ensureLogDir,
+  dbg,
   fileSizeSafe,
   finishBusy,
   outputLineCount,
-  resetRunCounters,
   scanLogForToken,
   serverLogFile,
-  truncateServerLog,
 } from './server/activity.ts'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
@@ -139,8 +140,6 @@ export interface ServerStatus {
   sourceDebug: boolean
 }
 
-let trackedChild: ChildProcess | undefined
-let trackedPid: number | undefined
 /** The in-flight setup/update terminal task, so Stop can terminate it. */
 let activeTerminalTask: vscode.TaskExecution | undefined
 let busy: Promise<boolean> | undefined
@@ -180,6 +179,26 @@ const checkoutHost: CheckoutHost = {
   runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
   runInstalling: (task) => runInstalling(task),
   isStarting: () => serverPhase === 'starting',
+}
+
+// The server log tailer lives in server/log-tail.ts; it is handed the log path
+// and the feed it writes into.
+const logTailHost: LogTailHost = { serverLogFile, displayLine, addActivity }
+
+/** The process layer's view of this module's lifecycle state. */
+const processHost: ProcessHost = {
+  appendOutput,
+  addActivity,
+  setDshState: (state) => { dshState = state },
+  setStartBusyId: (id) => { startBusyId = id },
+  clearWebToken: () => { webToken = undefined },
+  isStarting: () => serverPhase === 'starting',
+  onLaunchFailed: () => {
+    setServerPhase('stopped')
+    addActivity('✗ Server failed to launch — no process id was reported (see the log above)')
+  },
+  logTail: logTailHost,
+  dbg,
 }
 
 /**
@@ -466,204 +485,10 @@ async function runInTerminal(title: string, command: string, args: string[], env
   })
 }
 
-// The server log tailer lives in server/log-tail.ts; it is handed the log path
-// and the feed it writes into.
-const logTailHost: LogTailHost = { serverLogFile, displayLine, addActivity }
-
 export function stopLogTail(): void {
   stopTail(logTailHost)
 }
 
-/**
- * Spawn the DSH server inside a hidden console on Windows. A hidden console
- * (SW_HIDE via Start-Process -WindowStyle Hidden) lets the tool subprocesses
- * DSH spawns (bash/pwsh) attach to it without flashing their own cmd windows,
- * unlike `windowsHide` (CREATE_NO_WINDOW), which leaves them console-less and
- * forces each child to create a new visible window.
- *
- * The server itself runs as `cmd /c ... > log 2>&1` so output lands in the log
- * file that the tailer streams into the dashboard; Start-Process must NOT use
- * -RedirectStandardOutput/Error, because that keeps the parent PowerShell alive
- * until the child exits (a PowerShell quirk with long-running children).
- * `-PassThru` echoes the cmd.exe PID, which stays alive for the server's
- * lifetime (cmd /c blocks on the server process).
- */
-function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | undefined, env?: Record<string, string>): void {
-  const program = quoteCmdArg(cmd)
-  const rest = args.map(quoteCmdArg).join(' ')
-  let run = rest ? `${program} ${rest}` : program
-  if (env) {
-    // The quoted `set "K=V"` form keeps cmd metacharacters out of the value.
-    const setEnv = Object.entries(env).map(([k, v]) => `set "${k}=${v}"`).join('&& ')
-    run = `${setEnv}&& ${run}`
-  }
-  const inner = `${run} >> ${quoteCmdArg(serverLogFile())} 2>&1`
-  const wd = cwd ? `-WorkingDirectory '${psQuote(cwd)}' ` : ''
-  const script =
-    `$p = Start-Process -FilePath 'cmd.exe' ${wd}-ArgumentList '/d','/s','/c','${psQuote(inner)}' ` +
-    `-WindowStyle Hidden -PassThru; Write-Output "DSH_PID=$($p.Id)"`
-
-  startTail(logTailHost)
-
-  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    // NOTE: no `detached` here — on Windows it breaks powershell's stdio and
-    // Start-Process (empirically verified). The server survives regardless,
-    // because Start-Process launches it as an independent process.
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  child.unref()
-  trackedChild = child
-
-  let pidBuf = ''
-  child.stdout?.on('data', (chunk: Buffer) => {
-    pidBuf += chunk.toString()
-    const m = /DSH_PID=(\d+)/.exec(pidBuf)
-    if (m && trackedChild === child) trackedPid = Number(m[1])
-  })
-  child.stdout?.on('error', () => {})
-  child.stderr?.on('data', (chunk: Buffer) => {
-    const text = chunk.toString().trim()
-    if (text) addActivity(text)
-  })
-  child.stderr?.on('error', () => {})
-
-  child.once('error', (error) => {
-    // Do not clear trackedChild here: 'close' always follows and owns the
-    // cleanup, so its fail-fast below can still observe the child. Clearing
-    // early made the close guard dead code and left a dead spawn spinning in
-    // waitForPort forever.
-    void vscode.window.showErrorMessage(`DeepSeek Harness: failed to start (${error.message}).`)
-  })
-  // 'close' fires after 'exit' and after stdout is fully delivered; this
-  // launcher exits right after Start-Process. If no PID was ever reported,
-  // the server never came up — fail the start instead of letting waitForPort
-  // spin forever.
-  child.once('close', () => {
-    if (trackedChild === child) trackedChild = undefined
-    if (trackedPid === undefined && serverPhase === 'starting') {
-      setServerPhase('stopped')
-      addActivity('✗ Server failed to launch — no process id was reported (see the log above)')
-    }
-  })
-}
-
-/**
- * Spawn the DSH server with no console window (Windows) and stream its
- * stdout/stderr into the dashboard activity feed + log file.
- */
-function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell = false, env?: Record<string, string>): void {
-  trackedPid = undefined
-  resetRunCounters()
-  // Each run mints its own web token; drop the previous run's.
-  webToken = undefined
-  const logDir = ensureLogDir()
-  if (!logDir.ok) {
-    // Failing here used to escape as an unhandled rejection from the Start
-    // command; report it and abort the spawn instead.
-    addActivity('✗ Could not create the log folder — check write permissions under your home directory')
-    void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${logDir.dir}. Check write permissions.`)
-    return
-  }
-  // Each start gets a fresh server log (dsh.clearServerLogOnStart, default on)
-  // — otherwise output from every previous run accumulates (NODE_DEBUG=module
-  // alone produced a ~90MB file) and mixes with the current run. Truncation is
-  // best effort: a just-stopped server may still hold the file open.
-  if (vscode.workspace.getConfiguration('dsh').get<boolean>('clearServerLogOnStart') ?? true) {
-    truncateServerLog()
-  }
-
-  const hideConsole = vscode.workspace.getConfiguration('dsh').get<boolean>('hideConsole') ?? true
-
-  if (process.platform === 'win32' && hideConsole) {
-    spawnHiddenViaPowerShell(cmd, args, cwd, env)
-    return
-  }
-
-  const child = spawn(cmd, args, {
-    cwd,
-    shell,
-    windowsHide: hideConsole,
-    detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: env ? { ...process.env, ...env } : undefined,
-  })
-  child.unref()
-  trackedChild = child
-  // Mirror the hidden-console path so waitForPort's fail-fast (which checks
-  // trackedPid) also covers a directly-spawned child that exits immediately.
-  trackedPid = child.pid
-
-  let outBuffer = ''
-  child.stdout?.on('data', (chunk: Buffer) => {
-    outBuffer += chunk.toString()
-    const lines = outBuffer.split(/\r?\n/)
-    outBuffer = lines.pop() ?? ''
-    for (const line of lines) appendOutput(line)
-  })
-  child.stdout?.on('error', () => {})
-  let errBuffer = ''
-  child.stderr?.on('data', (chunk: Buffer) => {
-    errBuffer += chunk.toString()
-    const lines = errBuffer.split(/\r?\n/)
-    errBuffer = lines.pop() ?? ''
-    for (const line of lines) appendOutput(line)
-  })
-  child.stderr?.on('error', () => {})
-
-  child.once('error', (error) => {
-    trackedChild = undefined
-    void vscode.window.showErrorMessage(`DeepSeek Harness: failed to start (${error.message}).`)
-  })
-  child.once('exit', () => {
-    trackedChild = undefined
-  })
-}
-
-/**
- * The `web` command tail: the port, plus `--no-open` when dsh ≥ rc.8 would
- * open the system browser on its own. `version` is the exact version about
- * to run — passed explicitly because the `dshVersion` global is recomputed
- * by status refreshes and can be empty mid-install.
- */
-function buildWebArgs(cfg: DshConfig, version: string): string[] {
-  const args = ['web', '--port', String(cfg.port)]
-  if (version && dshVersionAtLeast(version, DSH_NO_OPEN_MIN_VERSION)) args.push('--no-open')
-  return args
-}
-
-/** Source mode: run a checkout via `node --import tsx/esm apps/cli/src/bin.ts web`. */
-function spawnSource(repoPath: string, cfg: DshConfig, version: string): void {
-  const node = cfg.nodePath || 'node'
-  dshState = 'ok'
-  addActivity('✓ dsh detected (source run)')
-  addActivity('ℹ Source mode compiles TypeScript on the fly with tsx — the first start is slower, please wait')
-  const webArgs = buildWebArgs(cfg, version)
-  startBusyId = addActivity(`▶ Start: ${node} --import tsx/esm apps/cli/src/bin.ts ${webArgs.join(' ')}`, true)
-  const env = cfg.sourceDebug ? { NODE_DEBUG: 'module' } : undefined
-  spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, false, env)
-}
-
-/** pkg mode: run the managed dsh via `pnpm exec dsh web` (pnpm sets up the module path). */
-function spawnPkg(cfg: DshConfig, pnpmCmd: string, version: string): void {
-  dshState = 'ok'
-  addActivity('✓ dsh detected (pkg run)')
-  const webArgs = buildWebArgs(cfg, version)
-  startBusyId = addActivity(`▶ Start: pnpm exec dsh ${webArgs.join(' ')}`, true)
-  const dir = pkgInstallDir(cfg)
-  // verify-deps-before-run=false：安装决定权只在 launcher（首次安装 / Update）。
-  // pnpm exec 默认会在依赖状态不一致时自动重跑 pnpm install——那次重装撞上
-  // 网络/元数据问题时，会把本可正常运行的已装 dsh 挡在启动之外。
-  const execArgs = ['--config.verify-deps-before-run=false', 'exec', 'dsh', ...webArgs]
-  if (process.platform === 'win32') {
-    // pnpm is a .cmd shim: drive it through cmd with the arguments array, so
-    // Windows quoting keeps fallback shim paths (possibly containing spaces)
-    // intact in both the hidden-console and the visible-console spawn paths.
-    spawnServer('cmd', ['/c', quoteCmdArg(pnpmCmd), ...execArgs], dir, false)
-  } else {
-    spawnServer(pnpmCmd, execArgs, dir, false)
-  }
-}
 
 /** Poll the port until it opens, the spawned process dies, or the user stops. */
 async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
@@ -703,7 +528,8 @@ async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
       return true
     }
     // Fail fast when the spawned process already exited (e.g. port already in use).
-    if (trackedPid !== undefined && !isProcessAlive(trackedPid)) {
+    const pid = getTrackedPid()
+    if (pid !== undefined && !isProcessAlive(pid)) {
       setServerPhase('stopped')
       addActivity('✗ Server exited before opening the port (see the log above)')
       finishBusy(startBusyId)
@@ -786,7 +612,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // dshVersion 在 source 模式是规整过的 git describe 输出（如 v0.1.2-rc.1-99-g76fda72），
     // buildWebArgs 需要干净的语义化版本号来比较 --no-open。
     const runVersion = versionFromDescribe(dshVersion) ?? dshVersion
-    spawnSource(checkout.path, cfg, runVersion)
+    spawnSourceInner(checkout.path, cfg, runVersion, processHost)
     return waitForPort(cfg, runVersion)
   }
 
@@ -798,7 +624,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   // The install may have run while the user pressed Stop; honour that request
   // instead of starting a server nobody is waiting for.
   if (serverPhase !== 'starting') return false
-  spawnPkg(cfg, pnpmCmd.command, version)
+  spawnPkgInner(cfg, pnpmCmd.command, version, pkgInstallDir(cfg), processHost)
   return waitForPort(cfg, version)
 }
 
@@ -811,85 +637,22 @@ export function ensureRunning(cfg: DshConfig = readConfig()): Promise<boolean> {
   return exclusive(() => ensureRunningUnlocked(cfg))
 }
 
-/** PID of the process listening on `port`, if any. Windows uses netstat, POSIX uses lsof. */
-async function findPortOwner(port: number): Promise<number | undefined> {
-  if (process.platform === 'win32') {
-    return new Promise((resolve) => {
-      execFile('netstat', ['-ano'], { windowsHide: true, timeout: NODE_PROBE_TIMEOUT_MS }, (error, stdout) => {
-        if (error) {
-          resolve(undefined)
-          return
-        }
-        const re = new RegExp(`:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`)
-        for (const line of stdout.split(/\r?\n/)) {
-          const match = re.exec(line)
-          if (match) {
-            resolve(Number(match[1]))
-            return
-          }
-        }
-        resolve(undefined)
-      })
-    })
-  }
-  return new Promise((resolve) => {
-    execFile('lsof', ['-ti', `tcp:${port}`], { windowsHide: true, timeout: NODE_PROBE_TIMEOUT_MS }, (error, stdout) => {
-      if (error) {
-        resolve(undefined)
-        return
-      }
-      const pid = Number(stdout.trim().split(/\r?\n/)[0])
-      resolve(Number.isFinite(pid) && pid > 0 ? pid : undefined)
-    })
-  })
-}
-
-function killPid(pid: number): void {
-  if (process.platform === 'win32') {
-    // Kill the process tree: trackedPid is cmd.exe, and the node child that
-    // `cmd /c` blocks on would otherwise survive and finish starting.
-    //
-    // `encoding: 'buffer'` plus an explicit decode, because taskkill answers in
-    // the system code page (GBK on a Chinese Windows): reading `error.message`
-    // instead yields the already-lossy UTF-8 reading, which is where the
-    // `????` in the activity log came from. Killing a pid that has already
-    // exited is a normal part of teardown, so the text has to stay legible.
-    execFile('taskkill', ['/T', '/F', '/PID', String(pid)], {
-      windowsHide: true, timeout: TASKKILL_TIMEOUT_MS, encoding: 'buffer',
-    }, (error, _stdout, stderr) => {
-      if (!error) return
-      const detail = decodeChildOutput(stderr ?? Buffer.alloc(0)).trim().split(/\r?\n/).filter(line => line.trim() !== '').join(' ')
-      dbg(`taskkill ${pid} failed: ${detail || error.message}`)
-    })
-    return
-  }
-  // POSIX: the spawned process is a group leader (detached spawn), so kill the
-  // whole group first — pnpm → node children would otherwise survive and keep
-  // holding the port. Fall back to the single pid when the group is gone.
-  try {
-    process.kill(-pid)
-  } catch {
-    try {
-      process.kill(pid)
-    } catch {
-      // Process already exited.
-    }
-  }
-}
 
 /** Stop the server, killing the tracked child and/or whatever owns the port (no guard). */
 async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   const cfg = readConfig()
   const pids: number[] = []
-  if (trackedPid) {
-    pids.push(trackedPid)
-    killPid(trackedPid)
-    trackedPid = undefined
+  // Take both handles in one pass: the process registry lives in
+  // server/process.ts, and clearing it here means a second stop cannot kill a
+  // pid this one already reaped.
+  const tracked = takeTracked()
+  if (tracked.pid) {
+    pids.push(tracked.pid)
+    killPid(tracked.pid, dbg)
   }
-  if (trackedChild?.pid) {
-    pids.push(trackedChild.pid)
-    killPid(trackedChild.pid)
-    trackedChild = undefined
+  if (tracked.child?.pid) {
+    pids.push(tracked.child.pid)
+    killPid(tracked.child.pid, dbg)
   }
   // A setup/update running in a terminal is not killed by the server tree:
   // terminate it so the start flow can settle instead of holding the busy
@@ -901,7 +664,7 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   // killing whatever owns the port could take down an unrelated app.
   if (pids.length === 0 && owner !== undefined && owner !== process.pid) {
     pids.push(owner)
-    killPid(owner)
+    killPid(owner, dbg)
   }
   // Keep the phase at 'stopping' through the kill + port polling below:
   // moving to 'stopped' early made the panel show Running/New Tab and accept
