@@ -2,8 +2,8 @@
  * Small pure helpers that do not belong to a subsystem: config values, log
  * parsing, and platform-independent text shaping.
  *
- * The test in `test/common.test.ts` treats these as the launcher's string
- * boundary — anything here must stay free of Node and VS Code APIs.
+ * `test/env.test.ts` treats these as the launcher's string boundary — anything
+ * here must stay free of Node and VS Code APIs.
  *
  * @module env
  */
