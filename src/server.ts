@@ -41,11 +41,7 @@ import {
   type InstallHost,
 } from './server/install.ts'
 import {
-  DEFAULT_PORT,
-  MAX_PORT,
   extractWebToken,
-  parseNpmChannel,
-  type NpmChannel,
 } from './env.ts'
 import {
   DETECTION_CACHE_TTL_MS,
@@ -81,25 +77,35 @@ import {
 // module stays focused on server lifecycle).
 export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
 
-type RunMode = 'pnpm' | 'source'
-
 /** dsh binds loopback only; the launcher probes and opens this fixed host. */
 const LOOPBACK_HOST = '127.0.0.1'
 
-/** Resolved extension settings (dsh.*). */
-export interface DshConfig {
-  runMode: RunMode
-  /** Which npm dist-tag pkg mode resolves: 'latest' (stable), 'next' (rc), or 'alpha'. */
-  npmChannel: NpmChannel
-  srcPath: string
-  /** Custom pkg install dir; empty means the launcher-managed default. */
-  pkgPath: string
-  nodePath: string
-  port: number
-  /** Print module-loading progress in source mode (NODE_DEBUG=module). */
-  sourceDebug: boolean
-  /** Open the browser automatically after Start (dsh.autoOpenBrowser; explicit 'New Tab' clicks always open). */
-  autoOpenBrowser: boolean
+import { migrateLegacyDshConfig, onDshConfigChanged, readConfig, writeRunMode, type DshConfig } from './server/config.ts'
+
+export { migrateLegacyDshConfig, onDshConfigChanged, readConfig, writeRunMode, type DshConfig }
+
+/** The run-mode literal type, owned by the config module. */
+export type RunMode = DshConfig['runMode']
+
+/**
+ * Persist the run mode chosen in the panel toggle.
+ *
+ * Both caches are mode-dependent (detection reads the pkg install or the source
+ * checkout; the update check reads the registry or the release tag), so they
+ * are dropped before the write lands.
+ */
+export async function applyMode(mode: RunMode): Promise<void> {
+  detectionCache = undefined
+  updateCache = undefined
+  await writeRunMode(mode)
+}
+
+/** Invalidate the mode-dependent caches when dsh settings change outside the panel. */
+export function registerConfigWatcher(): vscode.Disposable {
+  return onDshConfigChanged(() => {
+    detectionCache = undefined
+    updateCache = undefined
+  })
 }
 
 type ConditionState = 'unknown' | 'ok' | 'missing'
@@ -267,69 +273,6 @@ function detectConfig(cfg: DshConfig): DetectConfig {
   return { runMode: cfg.runMode, srcPath: cfg.srcPath, pkgPath: cfg.pkgPath }
 }
 
-export function readConfig(): DshConfig {
-  // Read the persisted settings every time: dsh.runMode is the single source
-  // of truth, so both the panel toggle and the Settings UI stay in sync.
-  const c = vscode.workspace.getConfiguration('dsh')
-  // Clamp the port to the valid TCP range; an out-of-range value from Settings
-  // Sync or manual edits would otherwise make every probe throw.
-  const port = c.get<number>('port') ?? DEFAULT_PORT
-  // 旧键名（dsh.mode / dsh.channel / dsh.path）兜底读取：migrateLegacyDshConfig
-  // 激活时会把旧值搬进新键并清掉旧键，这里保证迁移跑完前的短暂窗口也不丢值。
-  return {
-    runMode: (c.get<string>('runMode') ?? c.get<string>('mode')) === 'source' ? 'source' : 'pnpm',
-    npmChannel: parseNpmChannel(c.get<string>('npmChannel') ?? c.get<string>('channel') ?? undefined),
-    srcPath: c.get<string>('srcPath') ?? c.get<string>('path') ?? '',
-    pkgPath: c.get<string>('pkgPath') ?? '',
-    nodePath: c.get<string>('nodePath') ?? '',
-    port: Number.isInteger(port) && port > 0 && port <= MAX_PORT ? port : DEFAULT_PORT,
-    sourceDebug: c.get<boolean>('sourceDebug') ?? false,
-    autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
-  }
-}
-
-/** 0.2.6 改名的配置键（新键 ← 旧键）。 */
-const LEGACY_CONFIG_KEYS: [newKey: string, oldKey: string][] = [
-  ['runMode', 'mode'],
-  ['npmChannel', 'channel'],
-  ['srcPath', 'path'],
-]
-
-/**
- * One-time migration for the 0.2.6 key renames: when a legacy key still holds
- * a value and the new key is unset, move the value to the new key and clear
- * the old one, so settings.json does not keep dead keys. readConfig still
- * falls back to the legacy keys as a safety net (e.g. before this runs).
- */
-export async function migrateLegacyDshConfig(): Promise<void> {
-  const c = vscode.workspace.getConfiguration('dsh')
-  for (const [newKey, oldKey] of LEGACY_CONFIG_KEYS) {
-    if (c.get(newKey) !== undefined) continue
-    const legacy = c.get(oldKey)
-    if (legacy === undefined) continue
-    await c.update(newKey, legacy, vscode.ConfigurationTarget.Global)
-    await c.update(oldKey, undefined, vscode.ConfigurationTarget.Global)
-  }
-}
-
-/** Persist the run mode chosen in the panel toggle and apply it immediately. */
-export async function applyMode(mode: 'pnpm' | 'source'): Promise<void> {
-  // Both caches are mode-dependent: detection (pkg install vs source checkout)
-  // and the update check (registry vs release tag).
-  detectionCache = undefined
-  updateCache = undefined
-  await vscode.workspace.getConfiguration('dsh').update('runMode', mode, vscode.ConfigurationTarget.Global)
-}
-
-/** Invalidate caches when dsh settings change outside the panel (Settings UI, sync, …). */
-export function registerConfigWatcher(): vscode.Disposable {
-  return vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration('dsh')) {
-      detectionCache = undefined
-      updateCache = undefined
-    }
-  })
-}
 
 /** The web access token of the current run (dsh ≥ 0.1.2-alpha.1 prints one). */
 let webToken: string | undefined
