@@ -2,6 +2,11 @@ import * as vscode from 'vscode'
 
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
 import { isPortOpen } from './server/probes.ts'
+import {
+  runInTerminal as runInTerminalInner,
+  terminateActiveTask,
+  type TerminalHost,
+} from './server/terminal.ts'
 import { stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
 import {
   LOOPBACK_HOST,
@@ -150,8 +155,6 @@ export interface ServerStatus {
   sourceDebug: boolean
 }
 
-/** The in-flight setup/update terminal task, so Stop can terminate it. */
-let activeTerminalTask: vscode.TaskExecution | undefined
 let busy: Promise<boolean> | undefined
 let startBusyId = 0
 let nodeState: ConditionState = 'unknown'
@@ -165,6 +168,9 @@ export function isCheckingUpdates(): boolean {
   return checkingUpdates
 }
 
+/** The terminal layer's view of this module. */
+const terminalHost: TerminalHost = { addActivity }
+
 /**
  * The install layer's view of this module's lifecycle state.
  *
@@ -175,7 +181,7 @@ export function isCheckingUpdates(): boolean {
 const installHost: InstallHost = {
   addActivity,
   finishBusy,
-  runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
+  runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
   runInstalling: (task) => runInstalling(task),
   setDshVersion: (version) => { dshVersion = version },
   setDshState: (state) => { dshState = state },
@@ -186,7 +192,7 @@ const installHost: InstallHost = {
 /** The checkout layer's view of this module's lifecycle state (a subset). */
 const checkoutHost: CheckoutHost = {
   addActivity,
-  runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
+  runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
   runInstalling: (task) => runInstalling(task),
   isStarting: () => serverPhase === 'starting',
 }
@@ -233,7 +239,7 @@ const updateHost: UpdateHost = {
   findSourceCheckout: () => findSourceCheckout(readConfig()),
   addActivity,
   finishBusy,
-  runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
+  runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
   dbg,
   isStopped: () => serverPhase === 'stopped',
   invalidateUpdateCache: () => { updateCache = undefined },
@@ -307,45 +313,6 @@ export function checkNodeOnce(): Promise<void> {
 
 
 
-/**
- * Run a command in a visible VS Code terminal (used for setup and updates).
- * Arguments are passed as an array so VS Code quotes them for the active
- * shell — paths never go through manual string interpolation, which breaks on
- * `$`/backticks/parentheses in PowerShell and `%`/`&` in cmd. `env`
- * entries are merged into the terminal process environment, which is how the
- * source-mode build requests dsh's official client profile. The in-flight
- * execution is tracked so Stop can terminate it mid-setup.
- */
-async function runInTerminal(title: string, command: string, args: string[], env?: Record<string, string>): Promise<boolean> {
-  const task = new vscode.Task(
-    { type: 'dsh-shell' },
-    vscode.TaskScope.Global,
-    title,
-    'DeepSeek Harness',
-    new vscode.ShellExecution(command, args, env ? { env } : undefined),
-  )
-  return new Promise<boolean>((resolve) => {
-    let execution: vscode.TaskExecution | undefined
-    // Attach the end listener BEFORE executing: a task that finished before
-    // the listener would never resolve this promise, leaving the start flow
-    // (and the busy coalescing lock) hanging forever.
-    const disposable = vscode.tasks.onDidEndTaskProcess((event) => {
-      if (execution !== undefined && event.execution === execution) {
-        disposable.dispose()
-        if (activeTerminalTask === execution) activeTerminalTask = undefined
-        resolve(event.exitCode === 0)
-      }
-    })
-    void vscode.tasks.executeTask(task).then((ex) => {
-      execution = ex
-      activeTerminalTask = ex
-    }, () => {
-      disposable.dispose()
-      addActivity(`✗ could not run "${title}" in a terminal`)
-      resolve(false)
-    })
-  })
-}
 
 export function stopLogTail(): void {
   stopTail(logTailHost)
@@ -519,7 +486,7 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   // A setup/update running in a terminal is not killed by the server tree:
   // terminate it so the start flow can settle instead of holding the busy
   // promise until the command finishes on its own.
-  void activeTerminalTask?.terminate()
+  terminateActiveTask()
   const owner = await findPortOwner(cfg.port)
   // Only fall back to the port owner when no tracked process was recorded:
   // with a tracked tree, taskkill /T already covers the descendants, and
