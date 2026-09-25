@@ -1,7 +1,15 @@
 import * as vscode from 'vscode'
-import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
+
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
+import { isPortOpen } from './server/probes.ts'
 import { stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
+import {
+  LOOPBACK_HOST,
+  clearWebToken,
+  displayUrl,
+  resolveWebUrl,
+  uiUrl as uiUrlForPort,
+} from './server/web-url.ts'
 import {
   detectDsh as detectDshInner,
   detectDshVersion as detectDshVersionInner,
@@ -41,7 +49,6 @@ import {
   type InstallHost,
 } from './server/install.ts'
 import {
-  extractWebToken,
 } from './env.ts'
 import {
   DETECTION_CACHE_TTL_MS,
@@ -69,7 +76,6 @@ import {
   fileSizeSafe,
   finishBusy,
   outputLineCount,
-  scanLogForToken,
   serverLogFile,
 } from './server/activity.ts'
 
@@ -77,8 +83,6 @@ import {
 // module stays focused on server lifecycle).
 export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
 
-/** dsh binds loopback only; the launcher probes and opens this fixed host. */
-const LOOPBACK_HOST = '127.0.0.1'
 
 import { migrateLegacyDshConfig, onDshConfigChanged, readConfig, writeRunMode, type DshConfig } from './server/config.ts'
 
@@ -197,7 +201,7 @@ const processHost: ProcessHost = {
   addActivity,
   setDshState: (state) => { dshState = state },
   setStartBusyId: (id) => { startBusyId = id },
-  clearWebToken: () => { webToken = undefined },
+  clearWebToken: () => { clearWebToken() },
   isStarting: () => serverPhase === 'starting',
   onLaunchFailed: () => {
     setServerPhase('stopped')
@@ -274,60 +278,11 @@ function detectConfig(cfg: DshConfig): DetectConfig {
 }
 
 
-/** The web access token of the current run (dsh ≥ 0.1.2-alpha.1 prints one). */
-let webToken: string | undefined
-
-export function uiUrl(cfg: DshConfig = readConfig()): string {
-  const token = webToken ? `/?token=${webToken}` : ''
-  return `http://${LOOPBACK_HOST}:${cfg.port}${token}`
-}
-
-/** The URL shown in the panel/status line — never carries the auth token (uiUrl is for opening the browser). */
-function displayUrl(cfg: DshConfig = readConfig()): string {
-  return `http://${LOOPBACK_HOST}:${cfg.port}`
-}
-
-/**
- * The token dsh ≥ 0.1.2-alpha.1 prints on startup (e.g.
- * `dsh web: http://127.0.0.1:3080/?token=…`): the web UI answers 401 without
- * it. Read it from the server log — the single output sink on every platform —
- * and cache it for the run.
- */
-function readServerToken(): string | undefined {
-  if (webToken) return webToken
-  const token = scanLogForToken(extractWebToken)
-  if (token) webToken = token
-  return token
-}
 
 // The activity feed and the two log files live in server/activity.ts; the panel
 // and the extension read them through this module's re-exports.
 export { clearConsole, getActivity, setLogPath, dbg, addActivity, finishBusy, type ActivityEntry } from './server/activity.ts'
 
-/**
- * The URL that actually serves the web UI, or undefined while it is not ready
- * yet. Version-agnostic by probing instead of assuming: older dsh versions
- * (pkg or source) serve the plain URL directly, so it is tried first; dsh ≥
- * 0.1.2-alpha.1 answers token-less requests with 401 and needs the token URL
- * it prints on startup. A cached token that no longer works is dropped, so
- * the next poll rescans the log instead of being stuck on a dead token.
- */
-async function resolveWebUrl(host: string, port: number, timeoutMs: number, token: string | undefined): Promise<string | undefined> {
-  const plain = `http://${host}:${port}/`
-  if (await httpOk(plain, timeoutMs)) {
-    // The plain URL serves: whatever token was cached belongs to another run
-    // (or the version never prints one), so the browser gets the plain URL.
-    webToken = undefined
-    return plain
-  }
-  if (token) {
-    const tokenUrl = `http://${host}:${port}/?token=${token}`
-    if (await tokenAccepted(tokenUrl, timeoutMs)) return tokenUrl
-    // Stale or not yet accepted: drop the cache so the next poll rescans.
-    webToken = undefined
-  }
-  return undefined
-}
 
 // The Node version check and the silent-exit diagnosis live in
 // server/node-check.ts; they read this module's detected values through host.
@@ -419,7 +374,7 @@ async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
     // response so the browser doesn't open onto a blank page. resolveWebUrl
     // handles both dsh ≥ 0.1.2-alpha.1 (token URL) and older versions (plain
     // URL) by probing whichever actually answers 2xx.
-    if ((await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())) !== undefined) {
+    if ((await resolveWebUrl(cfg.port, HTTP_PROBE_TIMEOUT_MS)) !== undefined) {
       // Stop can complete while the HTTP probe is in flight (it takes up to
       // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
       // server back to 'running'.
@@ -430,7 +385,7 @@ async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
       setServerPhase('running')
       const secs = Math.round((Date.now() - startedAt) / 1000)
       const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
-      addActivity(`✓ Server started ${displayUrl(cfg)} in ${dur}`)
+      addActivity(`✓ Server started ${displayUrl(cfg.port)} in ${dur}`)
       finishBusy(startBusyId)
       return true
     }
@@ -474,8 +429,8 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // still needs the right URL: probe the running server so the browser
     // opens the token URL for dsh ≥ 0.1.2-alpha.1 and the plain URL for
     // versions that do not use one.
-    await resolveWebUrl(LOOPBACK_HOST, cfg.port, HTTP_PROBE_TIMEOUT_MS, readServerToken())
-    addActivity(`✓ Server already running ${displayUrl(cfg)}`)
+    await resolveWebUrl(cfg.port, HTTP_PROBE_TIMEOUT_MS)
+    addActivity(`✓ Server already running ${displayUrl(cfg.port)}`)
     return true
   }
 
@@ -576,7 +531,7 @@ async function stopServerUnlocked(wasStarting: boolean): Promise<boolean> {
   // Keep the phase at 'stopping' through the kill + port polling below:
   // moving to 'stopped' early made the panel show Running/New Tab and accept
   // a Start while the kill was still in flight.
-  webToken = undefined
+  clearWebToken()
   stopLogTail()
   if (pids.length === 0) {
     setServerPhase('stopped')
@@ -659,7 +614,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
     updating: isUpdating(),
-    url: displayUrl(cfg),
+    url: displayUrl(cfg.port),
     dsh: dshState,
     dshVersion,
     dshPath,
@@ -703,6 +658,11 @@ export function setCheckingUpdates(value: boolean): void {
  * A thin wrapper: the flow itself lives in server/update.ts, which owns the
  * in-flight guard and the rule that an update may only run while stopped.
  */
+/** The URL to open for the user, carrying this run's token when it has one. */
+export function uiUrl(cfg: DshConfig = readConfig()): string {
+  return uiUrlForPort(cfg.port)
+}
+
 export function runDshUpdate(): Promise<void> {
   return runDshUpdateInner(updateHost)
 }
