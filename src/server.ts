@@ -3,15 +3,19 @@ import * as path from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
-import { commitIsContained, explainGitFailure, listReleaseTags } from './server/release-tags.ts'
 import { findPnpm } from './pnpm.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
 import {
-  ensureDshInstalled,
+  checkDshUpdateStatus,
+  isUpdating,
+  runDshUpdate as runDshUpdateInner,
+  type DshUpdate,
+  type UpdateHost,
+} from './server/update.ts'
+import {
   ensurePnpmAvailable,
   ensureSourceCheckout,
   findSourceCheckout,
-  latestDshVersion,
   managedSourceCheckout,
   pkgInstallDir,
   pkgInstalledVersion,
@@ -29,7 +33,6 @@ import {
 } from './env.ts'
 import {
   DETECTION_CACHE_TTL_MS,
-  GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   LOG_TAIL_POLL_MS,
@@ -47,12 +50,9 @@ import {
 } from './paths.ts'
 import {
   DSH_NO_OPEN_MIN_VERSION,
-  decideSourceUpdate,
   dshVersionAtLeast,
   dshVersionFromDescribe,
-  newestReleaseTag,
   versionFromDescribe,
-  type UpdateCheckOutcome,
 } from './versions.ts'
 import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
 import {
@@ -87,7 +87,7 @@ export interface DshConfig {
   /** Which npm dist-tag pkg mode resolves: 'latest' (stable), 'next' (rc), or 'alpha'. */
   npmChannel: NpmChannel
   srcPath: string
-  /** Custom pkg install dir (defaults to the managed dir when empty). */
+  /** Custom pkg install dir; empty means the launcher-managed default. */
   pkgPath: string
   nodePath: string
   port: number
@@ -135,12 +135,6 @@ export interface ServerStatus {
   sourceDebug: boolean
 }
 
-/**
- * The panel-facing result of one update check. Shares the shape the pure
- * decision helpers in common.ts return, so the two cannot drift apart.
- */
-export type DshUpdate = UpdateCheckOutcome
-
 let trackedChild: ChildProcess | undefined
 let trackedPid: number | undefined
 /** The in-flight setup/update terminal task, so Stop can terminate it. */
@@ -182,6 +176,25 @@ const checkoutHost: CheckoutHost = {
   runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
   runInstalling: (task) => runInstalling(task),
   isStarting: () => serverPhase === 'starting',
+}
+
+/**
+ * The update layer's view of this module's lifecycle state.
+ *
+ * An update may only run while the server is stopped, so it is handed that
+ * question rather than the phase itself — the rule stays in one place.
+ */
+const updateHost: UpdateHost = {
+  readConfig,
+  findSourceCheckout: () => findSourceCheckout(readConfig()),
+  addActivity,
+  finishBusy,
+  runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
+  dbg,
+  isStopped: () => serverPhase === 'stopped',
+  invalidateUpdateCache: () => { updateCache = undefined },
+  installHost,
+  checkoutHost,
 }
 
 /**
@@ -864,7 +877,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   // the update's own entry guard cannot cover, because its `git fetch` can take
   // minutes. The panel greys Start for the same reason; this guard also covers
   // the command palette and the status-bar menu.
-  if (updateInFlight) {
+  if (isUpdating()) {
     addActivity('⚠ Update is in progress — wait for it to finish before starting')
     return false
   }
@@ -1053,151 +1066,9 @@ export function stopServer(): Promise<boolean> {
   return stopInFlight
 }
 
-/** Check for a newer dsh version: pkg compares the registry; source compares the newest official release tag. */
-async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
-  if (cfg.runMode === 'pnpm') {
-    const installed = pkgInstalledVersion(cfg)
-    if (!installed) return { hasUpdate: false, label: '' }
-    const latest = await latestDshVersion(cfg.npmChannel, dbg)
-    if ('error' in latest) {
-      return { hasUpdate: false, label: '', failed: true, failedReason: latest.error }
-    }
-    if (latest.version !== installed && dshVersionAtLeast(latest.version, installed)) {
-      return { hasUpdate: true, label: `v${latest.version}` }
-    }
-    return { hasUpdate: false, label: '' }
-  }
-  const checkout = findSourceCheckout(cfg)
-  if (!checkout) return { hasUpdate: false, label: '' }
-  // Compare by *commit*, not by fetching: the listing already carries the sha
-  // the tag resolves to, so containment is a purely local question (is that
-  // commit in HEAD?) that needs no network beyond the one listing.
-  const listed = await listReleaseTags(checkout)
-  if ('error' in listed) {
-    return { hasUpdate: false, label: '', failed: true, failedReason: listed.error }
-  }
-  const newest = newestReleaseTag(listed.tags)
-  // Contained means the checkout sits on that tag or is already past it (e.g.
-  // master after the tag) — updating would move the checkout backwards.
-  const contained = newest !== undefined && await commitIsContained(checkout, newest.commit)
-  return decideSourceUpdate(newest, contained)
-}
-
-let updateInFlight = false
-
-/** Current update state (the panel fallback reads it instead of assuming false). */
-export function isUpdating(): boolean {
-  return updateInFlight
-}
-
-/** Update dsh: pkg reinstalls the latest published version; source checks out the newest official release tag. */
-export async function runDshUpdate(): Promise<void> {
-  // No phase state covers an update, so guard it directly: coalesce repeat
-  // clicks onto one run, and refuse to update while the server is up (a git
-  // checkout / pnpm install under a running dsh can break it).
-  if (updateInFlight) {
-    addActivity('↑ Update already in progress')
-    return
-  }
-  if (serverPhase !== 'stopped') {
-    addActivity('↑ Stop dsh before updating')
-    return
-  }
-  updateInFlight = true
-  try {
-    await runDshUpdateInner()
-  } finally {
-    updateInFlight = false
-  }
-}
-
-/**
- * Whether an update may still rewrite the tree. The entry guard runs before the
- * slow steps (a registry lookup, a `git fetch` that scales with how far behind
- * the checkout is), so every destructive boundary re-checks the phase instead
- * of trusting a decision made minutes earlier. Start is refused while an update
- * runs, but a Stop or any other path that brought a server up still has to be
- * honoured here.
- */
-function updateMayProceed(): boolean {
-  if (serverPhase === 'stopped') return true
-  addActivity('↑ Update abandoned — dsh is no longer stopped')
-  return false
-}
-
-async function runDshUpdateInner(): Promise<void> {
-  const cfg = readConfig()
-  if (cfg.runMode === 'pnpm') {
-    const pnpm = await ensurePnpmAvailable(installHost)
-    if (!pnpm) return
-    const latest = await latestDshVersion(cfg.npmChannel, dbg, pnpm.command)
-    if ('error' in latest) {
-      addActivity(`↑ Update check failed (network) — ${latest.error}`)
-      return
-    }
-    if (pkgInstalledVersion(cfg) === latest.version) {
-      addActivity('↑ dsh is already up to date')
-      return
-    }
-    addActivity(`↑ Updating dsh to v${latest.version}…`)
-    if (!updateMayProceed()) return
-    if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg), installHost)) {
-      addActivity('↑ dsh updated')
-      updateCache = undefined
-    }
-    return
-  }
-  const checkout = findSourceCheckout(cfg)
-  if (!checkout) {
-    addActivity('↑ No source checkout configured')
-    return
-  }
-  // Source updates pin the newest official release tag (never upstream master
-  // and never the npm channel — that only governs pkg installs).
-  const listed = await listReleaseTags(checkout)
-  if ('error' in listed) {
-    addActivity(`↑ Update check failed (network) — ${listed.error}`)
-    return
-  }
-  const newest = newestReleaseTag(listed.tags)
-  if (newest === undefined) {
-    addActivity('↑ Update check failed — origin lists no official dsh release tag')
-    return
-  }
-  const tag = newest.tag
-  const version = tag.slice('dsh-v'.length)
-  if (await commitIsContained(checkout, newest.commit)) {
-    addActivity('↑ dsh is already up to date')
-    return
-  }
-  // The transfer below is the one operation whose size the launcher cannot
-  // bound (it scales with how far behind the checkout is), so it gets the long
-  // fetch timeout and its own progress note. Everything before it — the tag
-  // listing and the containment probe — can take seconds too, so re-check here.
-  if (!updateMayProceed()) return
-  const fetchingId = addActivity(`↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`, true)
-  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
-  finishBusy(fetchingId)
-  if (!fetchResult.ok) {
-    const cause = await explainGitFailure(checkout)
-    addActivity(`↑ Update failed — ${cause ?? fetchResult.error ?? `could not fetch ${tag}`}`)
-    return
-  }
-  // The fetch above can run for minutes: re-check before the checkout rewrites
-  // the tree the (possibly now running) server would be reading from.
-  if (!updateMayProceed()) return
-  addActivity(`↑ Updating dsh to v${version}…`)
-  const ok = await runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'checkout', '--detach', tag])
-  if (!ok) {
-    addActivity('↑ dsh update failed')
-    return
-  }
-  // A different tag usually carries a different lockfile: refresh the
-  // checkout's setup so the next start runs the released tree.
-  const ready = await ensureCheckoutReady(checkout, checkoutHost)
-  addActivity(ready ? '↑ dsh updated' : '↑ dsh updated — the checkout setup still needs to finish before the next start')
-  updateCache = undefined
-}
+// The update check and the update itself live in server/update.ts; this module
+// supplies the lifecycle state they must respect.
+export { isUpdating, type DshUpdate } from './server/update.ts'
 
 let detectionCache: { dsh: DshDetection; at: number } | undefined
 let updateCache: { update: DshUpdate; at: number } | undefined
@@ -1236,7 +1107,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     installing: serverPhase === 'installing',
     stopping: serverPhase === 'stopping',
     checking: checkingUpdates,
-    updating: updateInFlight,
+    updating: isUpdating(),
     url: displayUrl(cfg),
     dsh: dshState,
     dshVersion,
@@ -1263,7 +1134,7 @@ export async function clearRequirementsCaches(): Promise<void> {
   updateCache = undefined
   checkingUpdates = true
   try {
-    const update = await checkDshUpdateStatus(readConfig())
+    const update = await checkDshUpdateStatus(updateHost)
     updateCache = { update, at: Date.now() }
   } finally {
     checkingUpdates = false
@@ -1273,5 +1144,15 @@ export async function clearRequirementsCaches(): Promise<void> {
 /** Mark the update check in-flight before the first refresh, so the button stays grey. */
 export function setCheckingUpdates(value: boolean): void {
   checkingUpdates = value
+}
+
+/**
+ * Update dsh to the newest version this mode tracks.
+ *
+ * A thin wrapper: the flow itself lives in server/update.ts, which owns the
+ * in-flight guard and the rule that an update may only run while stopped.
+ */
+export function runDshUpdate(): Promise<void> {
+  return runDshUpdateInner(updateHost)
 }
 
