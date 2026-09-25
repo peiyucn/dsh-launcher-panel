@@ -5,6 +5,7 @@ import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
 import { findPnpm } from './pnpm.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
+import { startLogTail as startTail, stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
 import {
   checkDshUpdateStatus,
   isUpdating,
@@ -35,7 +36,6 @@ import {
   DETECTION_CACHE_TTL_MS,
   GIT_OP_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
-  LOG_TAIL_POLL_MS,
   NODE_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
@@ -68,7 +68,6 @@ import {
   resetRunCounters,
   scanLogForToken,
   serverLogFile,
-  serverLogSize,
   truncateServerLog,
 } from './server/activity.ts'
 
@@ -224,10 +223,6 @@ async function runInstalling<T>(task: () => Promise<T>): Promise<T> {
     if (serverPhase === 'installing') setServerPhase('starting')
   }
 }
-let logTailWatcher: fs.FSWatcher | undefined
-let logTailTimer: ReturnType<typeof setInterval> | undefined
-let logTailOffset = 0
-let logTailBuffer = ''
 let dshVersion = ''
 let dshPath = ''
 let nodeVersion = ''
@@ -525,68 +520,12 @@ async function runInTerminal(title: string, command: string, args: string[], env
   })
 }
 
-/**
- * Stream the DSH log file (written via cmd redirection by the hidden-console
- * launcher) into the dashboard activity feed as it grows.
- */
-function startLogTail(): void {
-  stopLogTail()
-  logTailBuffer = ''
-  try {
-    // Ensure the log file exists before watching it, otherwise fs.watch dies
-    // on ENOENT and never recovers when cmd later creates the file.
-    fs.closeSync(fs.openSync(serverLogFile(), 'a'))
-    // Stream only output written after this point (the file is appended to).
-    logTailOffset = serverLogSize()
-  } catch {
-    logTailOffset = 0
-    return
-  }
-  const pump = (): void => {
-    let size: number
-    try {
-      size = serverLogSize()
-    } catch {
-      return
-    }
-    if (size < logTailOffset) logTailOffset = 0 // file truncated by a fresh start
-    if (size <= logTailOffset) return
-    let fd: number | undefined
-    try {
-      fd = fs.openSync(serverLogFile(), 'r')
-      const buf = Buffer.alloc(size - logTailOffset)
-      const read = fs.readSync(fd, buf, 0, buf.length, logTailOffset)
-      logTailOffset += read
-      logTailBuffer += buf.subarray(0, read).toString()
-      const lines = logTailBuffer.split(/\r?\n/)
-      logTailBuffer = lines.pop() ?? ''
-      for (const line of lines) displayLine(line)
-    } catch {
-      // File may be locked mid-write; retry on the next change event.
-    } finally {
-      if (fd !== undefined) fs.closeSync(fd)
-    }
-  }
-  pump()
-  logTailWatcher = fs.watch(serverLogFile(), () => pump())
-  logTailWatcher.on('error', () => {})
-  // fs.watch can miss appends on Windows; poll as a reliable fallback.
-  logTailTimer = setInterval(() => pump(), LOG_TAIL_POLL_MS)
-}
+// The server log tailer lives in server/log-tail.ts; it is handed the log path
+// and the feed it writes into.
+const logTailHost: LogTailHost = { serverLogFile, displayLine, addActivity }
 
-/** Stop streaming the server log into the dashboard (safe to call on deactivate). */
 export function stopLogTail(): void {
-  if (logTailTimer) {
-    clearInterval(logTailTimer)
-    logTailTimer = undefined
-  }
-  logTailWatcher?.close()
-  logTailWatcher = undefined
-  if (logTailBuffer) {
-    const trimmed = logTailBuffer.trimEnd()
-    if (trimmed) addActivity(trimmed)
-    logTailBuffer = ''
-  }
+  stopTail(logTailHost)
 }
 
 /**
@@ -618,7 +557,7 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
     `$p = Start-Process -FilePath 'cmd.exe' ${wd}-ArgumentList '/d','/s','/c','${psQuote(inner)}' ` +
     `-WindowStyle Hidden -PassThru; Write-Output "DSH_PID=$($p.Id)"`
 
-  startLogTail()
+  startTail(logTailHost)
 
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
     // NOTE: no `detached` here — on Windows it breaks powershell's stdio and
