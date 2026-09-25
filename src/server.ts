@@ -1,10 +1,14 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
-import { findPnpm } from './pnpm.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
 import { stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
+import {
+  detectDsh as detectDshInner,
+  detectDshVersion as detectDshVersionInner,
+  type DetectConfig,
+  type DetectHost,
+  type DshDetection,
+} from './server/detect.ts'
 import {
   findPortOwner,
   getTrackedPid,
@@ -32,9 +36,7 @@ import {
   ensurePnpmAvailable,
   ensureSourceCheckout,
   findSourceCheckout,
-  managedSourceCheckout,
   pkgInstallDir,
-  pkgInstalledVersion,
   preparePkgStart,
   type InstallHost,
 } from './server/install.ts'
@@ -47,7 +49,6 @@ import {
 } from './env.ts'
 import {
   DETECTION_CACHE_TTL_MS,
-  GIT_OP_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
@@ -60,10 +61,9 @@ import {
   resolveDshHome,
 } from './paths.ts'
 import {
-  dshVersionFromDescribe,
   versionFromDescribe,
 } from './versions.ts'
-import { isProcessAlive, runFile, sleep } from './proc.ts'
+import { isProcessAlive, sleep } from './proc.ts'
 import {
   activityLogFile,
   addActivity,
@@ -202,6 +202,17 @@ const processHost: ProcessHost = {
 }
 
 /**
+ * The detection layer's view of this module.
+ *
+ * Detection reads settings and the checkout locator; it is handed both so the
+ * "where do settings come from" question stays in one place.
+ */
+const detectHost: DetectHost = {
+  findSourceCheckout: (cfg) => findSourceCheckout(cfg),
+  setDshVersion: (version) => { dshVersion = version },
+}
+
+/**
  * The update layer's view of this module's lifecycle state.
  *
  * An update may only run while the server is stopped, so it is handed that
@@ -250,6 +261,11 @@ async function runInstalling<T>(task: () => Promise<T>): Promise<T> {
 let dshVersion = ''
 let dshPath = ''
 let nodeVersion = ''
+
+/** The subset of settings the detection layer needs. */
+function detectConfig(cfg: DshConfig): DetectConfig {
+  return { runMode: cfg.runMode, srcPath: cfg.srcPath, pkgPath: cfg.pkgPath }
+}
 
 export function readConfig(): DshConfig {
   // Read the persisted settings every time: dsh.runMode is the single source
@@ -390,60 +406,8 @@ export function checkNodeOnce(): Promise<void> {
   return checkNodeOnceInner(nodeCheckHost)
 }
 
-/** Detect the local dsh version: a source checkout (source mode), else the managed install. */
-async function detectDshVersion(cfg: DshConfig): Promise<void> {
-  if (cfg.runMode === 'source') {
-    const checkout = findSourceCheckout(cfg)
-    if (!checkout) {
-      // No checkout configured: dsh is 'missing', so drop any stale version.
-      dshVersion = ''
-      return
-    }
-    // git describe 是唯一诚实的版本来源：在 tag 上显示 tag，不在 tag 上显示
-    // tag-N-gsha（官方 master 的 manifest 版本号只在切割时变，显示它会撒谎）。
-    // 值按 pkg 模式的写法规整（去掉 tag 的 dsh- 前缀），面板与版本比较共用一种写法。
-    const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
-    if (described.ok && described.stdout.trim() !== '') {
-      dshVersion = dshVersionFromDescribe(described.stdout)
-      return
-    }
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'apps', 'cli', 'package.json'), 'utf8'))
-      dshVersion = pkg?.version ?? ''
-    } catch {
-      dshVersion = ''
-    }
-    return
-  }
-  // pkg mode: only the pkg install counts (Start reinstalls from the registry on demand).
-  dshVersion = pkgInstalledVersion(cfg) ?? ''
-}
 
-interface DshDetection {
-  state: ConditionState
-  path: string
-}
 
-/** Detect dsh: source mode uses a checkout; pkg uses the managed pnpm install. */
-async function detectDsh(cfg: DshConfig): Promise<DshDetection> {
-  if (cfg.runMode === 'source') {
-    const checkout = findSourceCheckout(cfg)
-    if (checkout) return { state: 'ok', path: checkout }
-    // Not cloned yet; show the chosen path only once the clone has started
-    // (the dir appears as soon as the user picks a location).
-    const chosen = cfg.srcPath && cfg.srcPath.trim() !== '' ? cfg.srcPath : managedSourceCheckout()
-    return fs.existsSync(chosen)
-      ? { state: 'unknown', path: chosen }
-      : { state: 'unknown', path: '' }
-  }
-  if (!(await findPnpm())) return { state: 'missing', path: '' }
-  const dir = pkgInstallDir(cfg)
-  // 'ok' once installed; show the path as soon as it exists (install started).
-  if (pkgInstalledVersion(cfg) !== undefined) return { state: 'ok', path: dir }
-  return fs.existsSync(dir)
-    ? { state: 'unknown', path: dir }
-    : { state: 'unknown', path: '' }
-}
 
 /**
  * Run a command in a visible VS Code terminal (used for setup and updates).
@@ -559,7 +523,7 @@ function exclusive(task: () => Promise<boolean>): Promise<boolean> {
 
 /** Make sure the server is running (no re-entrancy guard). */
 async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
-  await detectDshVersion(cfg)
+  await detectDshVersionInner(detectConfig(cfg), detectHost)
   if (await isPortOpen(LOOPBACK_HOST, cfg.port)) {
     nodeState = 'ok'
     dshState = 'ok'
@@ -729,14 +693,14 @@ export async function currentStatus(): Promise<ServerStatus> {
   // Periodically probe node/dsh so the panel reflects reality without a start.
   const now = Date.now()
   if (!detectionCache || now - detectionCache.at > DETECTION_CACHE_TTL_MS) {
-    const dshDet = await detectDsh(cfg)
+    const dshDet = await detectDshInner(detectConfig(cfg), detectHost)
     dshState = dshDet.state
     dshPath = dshDet.path
     detectionCache = { dsh: dshDet, at: now }
     // Installing/starting is mid-flight: the package tree may not be ready yet,
     // and a re-detect here clobbers dshVersion (the panel version row flashes
     // a placeholder during first-run installs).
-    if (serverPhase !== 'starting' && serverPhase !== 'installing') await detectDshVersion(cfg)
+    if (serverPhase !== 'starting' && serverPhase !== 'installing') await detectDshVersionInner(detectConfig(cfg), detectHost)
   }
 
   if (running) {
