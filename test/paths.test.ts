@@ -210,18 +210,25 @@ test('checkoutDepsStale compares the lockfile against the install record', () =>
     assert.equal(checkoutDepsStale(root), false)
 
     const record = join(root, 'node_modules', '.pnpm', 'lock.yaml')
+    const lock = join(root, 'pnpm-lock.yaml')
     mkdirSync(dirname(record), { recursive: true })
     writeFileSync(record, 'installed')
     // Only one side present: still not comparable.
     assert.equal(checkoutDepsStale(root), false)
 
-    writeFileSync(join(root, 'pnpm-lock.yaml'), 'lock')
-    // The install record is newer, so deps are current.
+    writeFileSync(lock, 'lock')
+    // Set both mtimes explicitly: two files written back-to-back can land on
+    // the same mtimeMs, so relying on write order makes this assertion flaky.
+    const installedAt = new Date(Date.now() - 60_000)
+    const lockAt = new Date(Date.now() - 120_000)
+    utimesSync(record, installedAt, installedAt)
+    utimesSync(lock, lockAt, lockAt)
+    // The install record is newer than the lockfile, so deps are current.
     assert.equal(checkoutDepsStale(root), false)
 
-    // Touch the lockfile past the record: deps are now stale.
-    const future = new Date(Date.now() + 60_000)
-    utimesSync(join(root, 'pnpm-lock.yaml'), future, future)
+    // Now the lockfile is newer: the recorded install predates it.
+    const newer = new Date(Date.now())
+    utimesSync(lock, newer, newer)
     assert.equal(checkoutDepsStale(root), true)
   } finally {
     rmSync(root, { recursive: true, force: true })
