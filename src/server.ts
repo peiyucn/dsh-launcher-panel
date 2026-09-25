@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
+import { commitIsContained, explainGitFailure, listReleaseTags } from './server/release-tags.ts'
 import {
   DEFAULT_PORT,
   MAX_PORT,
@@ -16,14 +17,12 @@ import {
   DETECTION_CACHE_TTL_MS,
   GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
-  GIT_REMOTE_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
   LOG_TAIL_POLL_MS,
   NODE_PROBE_TIMEOUT_MS,
   PNPM_PROBE_TIMEOUT_MS,
   PNPM_VIEW_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
-  PORT_PROBE_TIMEOUT_MS,
   STOP_POLL_ATTEMPTS,
   STOP_POLL_INTERVAL_MS,
   STOP_POLL_PROBE_MS,
@@ -51,14 +50,11 @@ import {
   dshVersionAtLeast,
   dshVersionFromDescribe,
   newestReleaseTag,
-  parseRemoteReleaseTags,
   versionFromDescribe,
-  type RemoteReleaseTag,
   type UpdateCheckOutcome,
 } from './versions.ts'
 import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
-import { parseLocalProxySettings } from './git.ts'
 import {
   activityLogFile,
   addActivity,
@@ -1460,58 +1456,6 @@ export function stopServer(): Promise<boolean> {
     stopInFlight = undefined
   })
   return stopInFlight
-}
-
-/**
- * A git command failed. When git is configured to use a local proxy whose port
- * nothing is listening on (a VPN/proxy app that was switched off), every
- * network operation fails with a generic error and the user is left guessing
- * at "npm is down". Say which proxy is dead instead — that is the actual fault.
- *
- * The lookup is scoped to `checkout` with `-C`: `git config` otherwise resolves
- * against the extension host's cwd, so it would read some unrelated repository's
- * local config — naming a proxy that has nothing to do with the command that
- * failed, while missing one configured in the checkout itself.
- *
- * Returns undefined when no stale proxy explains the failure.
- * @param checkout - the checkout the failed git command ran against.
- */
-async function explainGitFailure(checkout: string): Promise<string | undefined> {
-  const r = await runFile('git', ['-C', checkout, 'config', '--get-regexp', 'proxy'], GIT_OP_TIMEOUT_MS)
-  // Exit 1 with no output simply means no proxy is configured.
-  if (r.stdout.trim() === '') return undefined
-  for (const setting of parseLocalProxySettings(r.stdout)) {
-    if (await isPortOpen(setting.host, setting.port, PORT_PROBE_TIMEOUT_MS)) continue
-    return `git is configured to use the proxy ${setting.host}:${setting.port} (${setting.key}), but nothing is listening there — start your proxy app or remove that git setting`
-  }
-  return undefined
-}
-
-/**
- * List the official release tags on origin (dsh-vX.Y.Z[-pre]) with the commits
- * they point at. Source mode tracks these directly from git — the npm channel
- * (dsh.npmChannel) only governs pkg installs, so it plays no part here.
- *
- * This is a ref listing only: it transfers no history, so it stays fast no
- * matter how far behind the checkout is. Fetching the target tag is the Update
- * button's job, not the check's.
- */
-async function listReleaseTags(checkout: string): Promise<{ tags: RemoteReleaseTag[] } | { error: string }> {
-  const r = await runFile('git', ['-C', checkout, 'ls-remote', '--tags', 'origin'], GIT_REMOTE_TIMEOUT_MS)
-  if (!r.ok) {
-    const cause = await explainGitFailure(checkout)
-    return { error: cause ?? r.error ?? 'could not list the official release tags' }
-  }
-  return { tags: parseRemoteReleaseTags(r.stdout) }
-}
-
-/** Whether `commit` is already contained in the checkout's HEAD (on it, or past it). */
-async function commitIsContained(checkout: string, commit: string): Promise<boolean> {
-  // `--is-ancestor` exits 0 for an ancestor *or* the commit itself, and 1 for a
-  // commit HEAD does not contain. An unknown object exits 128 — treated as "not
-  // contained", which is the same answer the user needs: update available.
-  const r = await runFile('git', ['-C', checkout, 'merge-base', '--is-ancestor', commit, 'HEAD'], GIT_OP_TIMEOUT_MS)
-  return r.ok
 }
 
 /** Check for a newer dsh version: pkg compares the registry; source compares the newest official release tag. */
