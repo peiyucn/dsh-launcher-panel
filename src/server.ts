@@ -1,8 +1,8 @@
 import * as fs from 'node:fs'
-import * as net from 'node:net'
 import * as path from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
+import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
 import {
   DEFAULT_PORT,
   MAX_PORT,
@@ -402,73 +402,6 @@ function fileSizeSafe(p: string): number {
     return fs.statSync(p).size
   } catch {
     return 0
-  }
-}
-
-/** Non-destructive port probe; resolves without throwing. */
-function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TIMEOUT_MS): Promise<boolean> {
-  return new Promise((resolve) => {
-    let socket: net.Socket
-    try {
-      socket = new net.Socket()
-    } catch {
-      resolve(false)
-      return
-    }
-    let settled = false
-    const finish = (open: boolean): void => {
-      if (settled) return
-      settled = true
-      try {
-        socket.destroy()
-      } catch {
-        // already closed
-      }
-      resolve(open)
-    }
-    socket.setTimeout(timeoutMs)
-    socket.once('connect', () => finish(true))
-    socket.once('timeout', () => finish(false))
-    socket.once('error', () => finish(false))
-    try {
-      socket.connect(port, host)
-    } catch {
-      finish(false)
-    }
-  })
-}
-
-/** Whether a GET against `url` answers 2xx (resolves without throwing). */
-async function httpOk(url: string, timeoutMs: number): Promise<boolean> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetch(url, { signal: controller.signal })
-    return res.ok
-  } catch {
-    return false
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-/**
- * Whether a token URL proves the server is up. dsh ≥ 0.1.2-alpha.1 answers a
- * valid launch token with a 303 cookie-minting redirect; following it without
- * a cookie jar lands back on a 401 (undici's fetch keeps no cookies), so the
- * probe stops at the redirect — the browser performs the cookie dance itself
- * when the tab opens the token URL.
- */
-async function tokenAccepted(url: string, timeoutMs: number): Promise<boolean> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetch(url, { signal: controller.signal, redirect: 'manual' })
-    return res.status === 303 || res.ok
-  } catch {
-    return false
-  } finally {
-    clearTimeout(timer)
   }
 }
 
