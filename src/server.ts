@@ -13,15 +13,12 @@ import {
   silentExitHint,
 } from './env.ts'
 import {
-  ACTIVITY_MAX_LINES,
   DETECTION_CACHE_TTL_MS,
   GIT_FETCH_TIMEOUT_MS,
   GIT_OP_TIMEOUT_MS,
   GIT_REMOTE_TIMEOUT_MS,
   HTTP_PROBE_TIMEOUT_MS,
-  LOG_RELOAD_LINES,
   LOG_TAIL_POLL_MS,
-  MODULE_PROGRESS_EVERY,
   NODE_PROBE_TIMEOUT_MS,
   PNPM_PROBE_TIMEOUT_MS,
   PNPM_VIEW_TIMEOUT_MS,
@@ -62,6 +59,22 @@ import {
 import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
 import { parseLocalProxySettings } from './git.ts'
+import {
+  activityLogFile,
+  addActivity,
+  appendOutput,
+  dbg,
+  displayLine,
+  ensureLogDir,
+  fileSizeSafe,
+  finishBusy,
+  outputLineCount,
+  resetRunCounters,
+  scanLogForToken,
+  serverLogFile,
+  serverLogSize,
+  truncateServerLog,
+} from './server/activity.ts'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
 // module stays focused on server lifecycle).
@@ -138,18 +151,7 @@ let trackedChild: ChildProcess | undefined
 let trackedPid: number | undefined
 /** The in-flight setup/update terminal task, so Stop can terminate it. */
 let activeTerminalTask: vscode.TaskExecution | undefined
-let logPath = ''
-let consolePath = ''
 let busy: Promise<boolean> | undefined
-/** One line in the panel activity feed; `busy` marks an in-progress operation. */
-interface ActivityEntry {
-  id: number
-  text: string
-  busy: boolean
-}
-
-const activity: ActivityEntry[] = []
-let activitySeq = 0
 let startBusyId = 0
 let nodeState: ConditionState = 'unknown'
 let dshState: ConditionState = 'unknown'
@@ -193,9 +195,6 @@ let logTailWatcher: fs.FSWatcher | undefined
 let logTailTimer: ReturnType<typeof setInterval> | undefined
 let logTailOffset = 0
 let logTailBuffer = ''
-let moduleLoadCount = 0
-/** Server output lines captured for the current run (0 = the child died silently). */
-let serverOutputLines = 0
 let dshVersion = ''
 let dshPath = ''
 let nodeVersion = ''
@@ -285,125 +284,14 @@ function displayUrl(cfg: DshConfig = readConfig()): string {
  */
 function readServerToken(): string | undefined {
   if (webToken) return webToken
-  try {
-    const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/)
-    // Newest line first: with dsh.clearServerLogOnStart off, the log may hold
-    // several runs, and the current run's token is the most recent one.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const token = extractWebToken(lines[i])
-      if (token) {
-        webToken = token
-        return token
-      }
-    }
-  } catch {
-    // log not written yet
-  }
-  return undefined
+  const token = scanLogForToken(extractWebToken)
+  if (token) webToken = token
+  return token
 }
 
-export function setLogPath(value: string): void {
-  // Both logs live in one folder (client.log = launcher activity, server.log
-  // = server output). The server redirects to the latter (holding it open),
-  // so keeping them distinct avoids the launcher's writes being lost to locks.
-  consolePath = value
-  logPath = path.join(path.dirname(value), 'server.log')
-  try {
-    if (fs.existsSync(consolePath)) {
-      const lines = fs.readFileSync(consolePath, 'utf8').split(/\r?\n/).filter((l) => l.length > 0)
-      for (const line of lines.slice(-LOG_RELOAD_LINES)) {
-        if (line.includes('[dbg]')) continue
-        pushActivity(line)
-      }
-    }
-  } catch {
-    // best effort
-  }
-}
-
-/** Append one entry to the console log file (best effort). */
-function appendLog(entry: string): void {
-  if (!consolePath) return
-  try {
-    fs.mkdirSync(path.dirname(consolePath), { recursive: true })
-    fs.appendFileSync(consolePath, entry + '\n')
-  } catch {
-    // best effort
-  }
-}
-
-/** Append a diagnostic line to the log file only (kept out of the console feed). */
-export function dbg(line: string): void {
-  appendLog(`[${new Date().toLocaleTimeString()}] [dbg] ${line}`)
-}
-
-function pushActivity(entry: string, isBusy = false): number {
-  const id = ++activitySeq
-  activity.push({ id, text: entry, busy: isBusy })
-  if (activity.length > ACTIVITY_MAX_LINES) activity.splice(0, activity.length - ACTIVITY_MAX_LINES)
-  return id
-}
-
-/** Append one line to the panel activity feed + the log file. */
-export function addActivity(line: string, isBusy = false): number {
-  const entry = `[${new Date().toLocaleTimeString()}] ${line}`
-  const id = pushActivity(entry, isBusy)
-  appendLog(entry)
-  return id
-}
-
-/** Append one server-output line to the activity feed only (already in the log file). */
-function displayLine(line: string): void {
-  const trimmed = line.trimEnd()
-  if (!trimmed) return
-  // Both output paths funnel through here — the piped spawn and the
-  // hidden-console tail that reads the server log — so this counts every line
-  // the run produced (0 = the child died without printing anything).
-  serverOutputLines++
-  // NODE_DEBUG=module is extremely verbose; keep individual lines out of the
-  // console feed (they stay in the server log file), but surface a periodic
-  // count so a slow source startup still shows progress.
-  if (/^MODULE\s/.test(trimmed)) {
-    moduleLoadCount++
-    if (moduleLoadCount % MODULE_PROGRESS_EVERY === 0) {
-      pushActivity(`[${new Date().toLocaleTimeString()}] ℹ Loading modules… (${moduleLoadCount})`)
-    }
-    return
-  }
-  pushActivity(`[${new Date().toLocaleTimeString()}] ${trimmed}`)
-}
-
-/** Append one raw server output line to the activity feed + log file. */
-function appendOutput(line: string): void {
-  displayLine(line)
-  const trimmed = line.trimEnd()
-  if (!trimmed) return
-  fs.appendFile(logPath, trimmed + '\n', (error) => {
-    if (error) dbg(`server log append failed: ${error.message}`)
-  })
-}
-
-/** The panel activity feed (Start/Stop command dynamics), newest last. */
-export function getActivity(): ActivityEntry[] {
-  return activity
-}
-
-/** Finish one busy entry by its addActivity id (concurrent busy operations each
- * clear only their own spinner). */
-export function finishBusy(id: number): void {
-  const entry = activity.find((e) => e.id === id)
-  if (entry !== undefined) entry.busy = false
-}
-
-/** Size of a file in bytes, 0 when absent or unreadable. */
-function fileSizeSafe(p: string): number {
-  if (!p) return 0
-  try {
-    return fs.statSync(p).size
-  } catch {
-    return 0
-  }
-}
+// The activity feed and the two log files live in server/activity.ts; the panel
+// and the extension read them through this module's re-exports.
+export { clearConsole, getActivity, setLogPath, dbg, addActivity, finishBusy, type ActivityEntry } from './server/activity.ts'
 
 /**
  * The URL that actually serves the web UI, or undefined while it is not ready
@@ -499,7 +387,7 @@ async function reportSilentExit(cfg: DshConfig, version: string): Promise<void> 
     dshVersion: version,
     nodeVersion,
     supportsImportMetaMain: await nodeSupportsImportMetaMain(cfg),
-    outputLines: serverOutputLines,
+    outputLines: outputLineCount(),
   })
   if (hint === undefined) return
   addActivity(`✗ ${hint}`)
@@ -914,9 +802,9 @@ function startLogTail(): void {
   try {
     // Ensure the log file exists before watching it, otherwise fs.watch dies
     // on ENOENT and never recovers when cmd later creates the file.
-    fs.closeSync(fs.openSync(logPath, 'a'))
+    fs.closeSync(fs.openSync(serverLogFile(), 'a'))
     // Stream only output written after this point (the file is appended to).
-    logTailOffset = fs.statSync(logPath).size
+    logTailOffset = serverLogSize()
   } catch {
     logTailOffset = 0
     return
@@ -924,7 +812,7 @@ function startLogTail(): void {
   const pump = (): void => {
     let size: number
     try {
-      size = fs.statSync(logPath).size
+      size = serverLogSize()
     } catch {
       return
     }
@@ -932,7 +820,7 @@ function startLogTail(): void {
     if (size <= logTailOffset) return
     let fd: number | undefined
     try {
-      fd = fs.openSync(logPath, 'r')
+      fd = fs.openSync(serverLogFile(), 'r')
       const buf = Buffer.alloc(size - logTailOffset)
       const read = fs.readSync(fd, buf, 0, buf.length, logTailOffset)
       logTailOffset += read
@@ -947,7 +835,7 @@ function startLogTail(): void {
     }
   }
   pump()
-  logTailWatcher = fs.watch(logPath, () => pump())
+  logTailWatcher = fs.watch(serverLogFile(), () => pump())
   logTailWatcher.on('error', () => {})
   // fs.watch can miss appends on Windows; poll as a reliable fallback.
   logTailTimer = setInterval(() => pump(), LOG_TAIL_POLL_MS)
@@ -991,7 +879,7 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
     const setEnv = Object.entries(env).map(([k, v]) => `set "${k}=${v}"`).join('&& ')
     run = `${setEnv}&& ${run}`
   }
-  const inner = `${run} >> ${quoteCmdArg(logPath)} 2>&1`
+  const inner = `${run} >> ${quoteCmdArg(serverLogFile())} 2>&1`
   const wd = cwd ? `-WorkingDirectory '${psQuote(cwd)}' ` : ''
   const script =
     `$p = Start-Process -FilePath 'cmd.exe' ${wd}-ArgumentList '/d','/s','/c','${psQuote(inner)}' ` +
@@ -1048,17 +936,16 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
  */
 function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell = false, env?: Record<string, string>): void {
   trackedPid = undefined
-  moduleLoadCount = 0
-  serverOutputLines = 0
+  resetRunCounters()
   // Each run mints its own web token; drop the previous run's.
   webToken = undefined
   try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true })
+    ensureLogDir()
   } catch {
     // Failing here used to escape as an unhandled rejection from the Start
     // command; report it and abort the spawn instead.
     addActivity('✗ Could not create the log folder — check write permissions under your home directory')
-    void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${path.dirname(logPath)}. Check write permissions.`)
+    void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${path.dirname(serverLogFile())}. Check write permissions.`)
     return
   }
   // Each start gets a fresh server log (dsh.clearServerLogOnStart, default on)
@@ -1066,7 +953,7 @@ function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell
   // alone produced a ~90MB file) and mixes with the current run.
   if (vscode.workspace.getConfiguration('dsh').get<boolean>('clearServerLogOnStart') ?? true) {
     try {
-      fs.writeFileSync(logPath, '')
+      truncateServerLog()
     } catch {
       // Best effort: a just-stopped server may still hold the file open.
     }
@@ -1821,12 +1708,12 @@ export async function currentStatus(): Promise<ServerStatus> {
     nodeVersion,
     mode: cfg.runMode === 'source' ? 'source' : 'pnpm',
     update: updateCache?.update,
-    consoleLogPath: consolePath,
-    consoleLogPathShort: maskPath(consolePath),
-    serverLogPath: logPath,
-    serverLogPathShort: maskPath(logPath),
-    consoleLogSize: fileSizeSafe(consolePath),
-    serverLogSize: fileSizeSafe(logPath),
+    consoleLogPath: activityLogFile(),
+    consoleLogPathShort: maskPath(activityLogFile()),
+    serverLogPath: serverLogFile(),
+    serverLogPathShort: maskPath(serverLogFile()),
+    consoleLogSize: fileSizeSafe(activityLogFile()),
+    serverLogSize: fileSizeSafe(serverLogFile()),
     sourceDebug: cfg.sourceDebug,
   }
 }
@@ -1849,20 +1736,3 @@ export function setCheckingUpdates(value: boolean): void {
   checkingUpdates = value
 }
 
-/** Clear the console log (in-memory feed and the persisted file). */
-export function clearConsole(): void {
-  activity.length = 0
-  for (const file of [consolePath, logPath]) {
-    if (!file) continue
-    try {
-      fs.mkdirSync(path.dirname(file), { recursive: true })
-      fs.writeFileSync(file, '')
-    } catch {
-      // Only a real lock (EBUSY/EPERM from the running server) is worth
-      // telling the user about; a missing folder is handled by the mkdir above.
-      if (file === logPath) {
-        pushActivity('⚠ Server log is locked by the running server — Stop first, then Clear')
-      }
-    }
-  }
-}
