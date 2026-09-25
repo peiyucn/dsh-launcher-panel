@@ -27,13 +27,16 @@ export function normalizeBrowser(value: unknown): 'built-in' | 'external' {
   return value === 'external' ? 'external' : DEFAULT_BROWSER
 }
 
+/** The npm dist-tag channel the launcher installs and updates from. */
+export type NpmChannel = 'latest' | 'next' | 'alpha'
+
 /** 归一化 npm 通道配置（settings 值可能是任意字符串）。 */
-export function parseNpmChannel(value: string | undefined): 'latest' | 'next' | 'alpha' {
+export function parseNpmChannel(value: string | undefined): NpmChannel {
   return value === 'next' || value === 'alpha' ? value : 'latest'
 }
 
 /** npm 通道 → 解析规格（latest 是默认 dist-tag 不带后缀；next/alpha 显式指定）。 */
-export function npmSpecForChannel(channel: 'latest' | 'next' | 'alpha'): string {
+export function npmSpecForChannel(channel: NpmChannel): string {
   return channel === 'latest' ? '@deepseek-ai/dsh' : `@deepseek-ai/dsh@${channel}`
 }
 

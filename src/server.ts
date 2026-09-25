@@ -4,13 +4,26 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import { httpOk, isPortOpen, tokenAccepted } from './server/probes.ts'
 import { commitIsContained, explainGitFailure, listReleaseTags } from './server/release-tags.ts'
+import { findPnpm } from './pnpm.ts'
+import {
+  ensureDshInstalled,
+  ensurePnpmAvailable,
+  ensureSourceCheckout,
+  findSourceCheckout,
+  latestDshVersion,
+  managedSourceCheckout,
+  pkgInstallDir,
+  pkgInstalledVersion,
+  preparePkgStart,
+  type InstallHost,
+} from './server/install.ts'
 import {
   DEFAULT_PORT,
   MAX_PORT,
   extractWebToken,
-  npmSpecForChannel,
   parseImportMetaMainProbe,
   parseNpmChannel,
+  type NpmChannel,
   silentExitHint,
 } from './env.ts'
 import {
@@ -20,8 +33,6 @@ import {
   HTTP_PROBE_TIMEOUT_MS,
   LOG_TAIL_POLL_MS,
   NODE_PROBE_TIMEOUT_MS,
-  PNPM_PROBE_TIMEOUT_MS,
-  PNPM_VIEW_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
   STOP_POLL_INTERVAL_MS,
@@ -32,15 +43,10 @@ import { canTransition, type ServerPhase } from './phases.ts'
 import {
   DSH_BUILD_PROFILE_OFFICIAL,
   DSH_BUILD_PROFILE_SELECTOR,
-  DSH_INSTALL_MANIFEST_NAME,
   checkoutHasOfficialBrand,
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
-  dshBaseDir,
-  installedDshVersion,
-  isDshCheckout,
-  isDshInstallDirUsable,
   maskPath,
   resolveDshHome,
 } from './paths.ts'
@@ -54,7 +60,6 @@ import {
   type UpdateCheckOutcome,
 } from './versions.ts'
 import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
-import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
 import {
   activityLogFile,
   addActivity,
@@ -80,8 +85,6 @@ type RunMode = 'pnpm' | 'source'
 
 /** dsh binds loopback only; the launcher probes and opens this fixed host. */
 const LOOPBACK_HOST = '127.0.0.1'
-
-type NpmChannel = 'latest' | 'next' | 'alpha'
 
 /** Resolved extension settings (dsh.*). */
 export interface DshConfig {
@@ -158,6 +161,24 @@ let checkingUpdates = false
 /** Current in-flight check state (panel fallback reads it instead of assuming false). */
 export function isCheckingUpdates(): boolean {
   return checkingUpdates
+}
+
+/**
+ * The install layer's view of this module's lifecycle state.
+ *
+ * The install code owns everything about *getting* dsh; it is handed these
+ * accessors instead of importing them, so the dependency runs one way and this
+ * module stays the single owner of the server's state.
+ */
+const installHost: InstallHost = {
+  addActivity,
+  finishBusy,
+  runInTerminal: (title, command, args, env) => runInTerminal(title, command, args, env),
+  runInstalling: (task) => runInstalling(task),
+  setDshVersion: (version) => { dshVersion = version },
+  setDshState: (state) => { dshState = state },
+  isStarting: () => serverPhase === 'starting',
+  dbg,
 }
 
 /**
@@ -392,306 +413,6 @@ async function reportSilentExit(cfg: DshConfig, version: string): Promise<void> 
   void vscode.window.showErrorMessage(`DeepSeek Harness: ${hint}.`)
 }
 
-/**
- * The launcher's default dsh package dir for pkg mode — named `package` to
- * mirror the `source` checkout dir: the published package vs the source.
- */
-function managedPackageDir(): string {
-  return path.join(dshBaseDir(), 'package')
-}
-
-/** The launcher's managed source checkout dir (where dsh is cloned for source mode). */
-function managedSourceCheckout(): string {
-  return path.join(dshBaseDir(), 'source')
-}
-
-/** The pkg package dir: the user's dsh.pkgPath when set, else the managed default. */
-function pkgInstallDir(cfg: DshConfig): string {
-  return cfg.pkgPath && cfg.pkgPath.trim() !== '' ? cfg.pkgPath : managedPackageDir()
-}
-
-/** The installed @deepseek-ai/dsh version for the current pkg install dir. */
-function pkgInstalledVersion(cfg: DshConfig): string | undefined {
-  return installedDshVersion(pkgInstallDir(cfg))
-}
-
-/** Ask where to install dsh when nothing is installed yet: default or a custom folder. */
-async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: string): Promise<string | undefined> {
-  const pick = await vscode.window.showInformationMessage(
-    `Install dsh (${kind}) to the default location?`,
-    'Use default location',
-    'Choose folder…',
-  )
-  if (pick === 'Use default location') return defaultDir
-  if (pick === 'Choose folder…') {
-    const picked = await vscode.window.showOpenDialog({
-      canSelectFolders: true,
-      canSelectFiles: false,
-      canSelectMany: false,
-      openLabel: 'Select install folder',
-      title: `Choose where to install dsh (${kind})`,
-    })
-    return picked?.[0]?.fsPath
-  }
-  return undefined
-}
-
-/** Persist a dsh path setting (idempotent). */
-async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promise<void> {
-  const c = vscode.workspace.getConfiguration('dsh')
-  if ((c.get<string>(key) ?? '') !== value) {
-    await c.update(key, value, vscode.ConfigurationTarget.Global)
-  }
-}
-
-/**
- * Resolve the published @deepseek-ai/dsh version for a channel. The failure
- * carries its reason (`pnpm view` stderr / a timeout) so the panel can say why
- * instead of a blanket "could not resolve the latest dsh version".
- */
-async function latestDshVersion(
-  channel: NpmChannel,
-  pnpmCmd = 'pnpm',
-): Promise<{ version: string } | { error: string }> {
-  const spec = npmSpecForChannel(channel)
-  const result = process.platform === 'win32'
-    ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), 'view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
-    : await runFile(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
-  if (!result.ok) {
-    // Keep the failure visible for diagnosis: registry outages and cmd
-    // quoting problems both surface here as "unreachable" to the user.
-    const error = result.error ?? `could not resolve ${spec}`
-    dbg(`pnpm view failed: ${error}`)
-    return { error }
-  }
-  const version = result.stdout.trim().split(/\r?\n/).pop()?.trim()
-  return version ? { version } : { error: `the registry returned no version for ${spec}` }
-}
-
-/**
- * Prepare the pkg start: the installed version IS the version that runs — the
- * channel (dsh.npmChannel) only decides what to install on first run and what
- * the Update button targets; Start never upgrades or downgrades an installed
- * dsh. Only when nothing is installed does Start resolve the channel version,
- * install it, and run it. Returns the version to run, or undefined to abort.
- */
-async function preparePkgStart(cfg: DshConfig, pnpmCmd: string, allowBuild: boolean): Promise<string | undefined> {
-  const dir = pkgInstallDir(cfg)
-  const installed = installedDshVersion(dir)
-  if (installed !== undefined) {
-    // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
-    // 顺手修复历史残局（失败的安装尝试可能留下 manifest 与已装版本不一致的状态）——
-    // 但只在 manifest 是 launcher 所写（或缺失）时才写回：pkgPath 若指向自带
-    // package.json 的用户项目，绝不能覆盖人家的 manifest。写失败不阻断启动
-    // （spawnPkg 已禁用 verify-deps-before-run，pnpm 不会自动重装）。
-    if (installManifestRepairable(dir) && !writeInstallManifest(installed, dir)) {
-      dbg('could not repair the install manifest; continuing with the installed dsh')
-    }
-    dshVersion = installed
-    return installed
-  }
-  // 首次安装：解析通道版本 → 选安装目录 → 安装。注册表查询可能耗时数秒，
-  // 展示进度避免慢网络下看起来像 Start 卡死。
-  const resolvingId = addActivity('ℹ Resolving the dsh channel version…', true)
-  const resolved = await latestDshVersion(cfg.npmChannel, pnpmCmd)
-  finishBusy(resolvingId)
-  if ('error' in resolved) {
-    dshState = 'missing'
-    addActivity(`✗ dsh is not installed and the registry is unreachable (${resolved.error}) — check your network and try again`)
-    void vscode.window.showErrorMessage('DeepSeek Harness: unable to reach the registry to install dsh. Check your network connection.')
-    return undefined
-  }
-  const version = resolved.version
-  // A custom dsh.pkgPath wins; on a first install with no custom path, let the
-  // user choose the default or a custom folder.
-  let installDir = dir
-  if (!cfg.pkgPath) {
-    const chosen = await chooseInstallDir('pkg', managedPackageDir())
-    if (!chosen) return undefined
-    // Persist the user's choice even when it is the managed default: the
-    // setting then shows the actual install path and pins it against future
-    // default-location changes.
-    await saveDshSetting('pkgPath', chosen)
-    installDir = chosen
-  }
-  addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
-  // The panel shows the version that is about to run (buildWebArgs also reads
-  // this to decide --no-open).
-  dshVersion = version
-  if (!(await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir))) return undefined
-  return version
-}
-
-/**
- * Whether the install dir's manifest may be written by the launcher: only when
- * it is absent (nothing of the user's to destroy) or carries the launcher's own
- * manifest name. A foreign package.json (pkgPath pointing at a user project) —
- * or an unreadable one whose ownership cannot be confirmed — is never touched.
- */
-function installManifestRepairable(dir: string): boolean {
-  const manifestPath = path.join(dir, 'package.json')
-  if (!fs.existsSync(manifestPath)) {
-    // 没有 manifest 就没有用户文件可毁。
-    return true
-  }
-  try {
-    const pkg = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { name?: string }
-    return pkg?.name === DSH_INSTALL_MANIFEST_NAME
-  } catch {
-    // 存在但读不了/损坏：归属无法确认，宁可不动（可能是用户自己的损坏文件）。
-    return false
-  }
-}
-
-/** Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version. */
-function writeInstallManifest(version: string, dir: string): boolean {
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
-      name: DSH_INSTALL_MANIFEST_NAME,
-      private: true,
-      dependencies: { '@deepseek-ai/dsh': version },
-    }, null, 2) + '\n')
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Install @deepseek-ai/dsh@<version> into the managed dir: write the pinned
- * manifest and run `pnpm install`, approving build scripts non-interactively
- * on pnpm ≥ 10.16 (the same thing npm does on every install). Returns true
- * once the requested version is present.
- */
-async function ensureDshInstalled(version: string, pnpmCmd: string, allowBuild: boolean, dir: string): Promise<boolean> {
-  // Refuse to install into a folder that holds other files: writing the
-  // pinned manifest there would destroy the user's package.json.
-  if (!isDshInstallDirUsable(dir)) {
-    addActivity(`✗ ${maskPath(dir)} is not empty — install into an empty or dedicated folder instead`)
-    void vscode.window.showErrorMessage(`DeepSeek Harness: ${maskPath(dir)} is not empty. Choose an empty or dedicated folder for the dsh install.`)
-    return false
-  }
-  if (!writeInstallManifest(version, dir)) {
-    addActivity('✗ could not write the dsh install manifest — check write permissions')
-    return false
-  }
-  // The phase is already 'starting' (set at the top of ensureRunningUnlocked).
-  addActivity(`▶ Installing dsh v${version} (pnpm install)…`)
-  const args = ['install', '--dir', dir]
-  if (allowBuild) args.push('--dangerously-allow-all-builds')
-  const ok = await runInstalling(() => runInTerminal(`Install dsh v${version}`, pnpmCmd, args))
-  if (!ok || installedDshVersion(dir) !== version) {
-    if (serverPhase === 'starting') {
-      addActivity('✗ dsh install failed — see the terminal output above')
-      void vscode.window.showErrorMessage('DeepSeek Harness: dsh install failed. Check the terminal output.')
-    }
-    return false
-  }
-  return true
-}
-/** The pnpm version string ('' on failure). */
-async function pnpmVersion(pnpmCmd: string): Promise<string> {
-  const result = process.platform === 'win32'
-    ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), '--version'], PNPM_PROBE_TIMEOUT_MS)
-    : await runFile(pnpmCmd, ['--version'], PNPM_PROBE_TIMEOUT_MS)
-  return result.ok ? result.stdout.trim().split(/\r?\n/)[0]?.trim() ?? '' : ''
-}
-
-/**
- * Make sure pnpm is available in pnpm mode: resolve it on PATH (or the known
- * Windows shim locations), and install it via npm when missing. There is no
- * prompt — without pnpm the start cannot proceed, so the console announces
- * the reason and the install begins immediately.
- * Returns the resolved command and whether install accepts
- * --dangerously-allow-all-builds (build-script approval, which would
- * otherwise prompt interactively), or undefined when the start must abort.
- */
-async function ensurePnpmAvailable(): Promise<{ command: string; allowBuild: boolean } | undefined> {
-  const found = await findPnpm()
-  if (found) return { command: found, allowBuild: pnpmSupportsDangerouslyAllowAllBuilds(await pnpmVersion(found)) }
-  dshState = 'missing'
-  addActivity('✗ pnpm not found — installing it now (npm install -g pnpm)')
-  // The phase is already 'starting' (set at the top of ensureRunningUnlocked).
-  addActivity('▶ Installing pnpm (npm install -g pnpm)…')
-  const ok = await runInstalling(() => runInTerminal('Install pnpm', 'npm', ['install', '-g', 'pnpm']))
-  if (!ok) {
-    if (serverPhase === 'starting') {
-      addActivity('✗ pnpm install failed — run `npm install -g pnpm` in a terminal, then try again')
-      void vscode.window.showErrorMessage('DeepSeek Harness: pnpm install failed. Run "npm install -g pnpm" in a terminal, then try again.')
-    }
-    return undefined
-  }
-  const after = await findPnpm()
-  if (!after) {
-    addActivity('✗ pnpm installed but not on PATH — restart VS Code, then try again')
-    void vscode.window.showErrorMessage('DeepSeek Harness: pnpm was installed but is not on PATH yet. Restart VS Code, then try again.')
-    return undefined
-  }
-  dshState = 'unknown'
-  addActivity('✓ pnpm installed')
-  return { command: after, allowBuild: pnpmSupportsDangerouslyAllowAllBuilds(await pnpmVersion(after)) }
-}
-
-/**
- * Locate the source checkout: the explicit `dsh.srcPath` setting when it is a
- * valid checkout, else the launcher's managed clone.
- */
-function findSourceCheckout(cfg: DshConfig): string | undefined {
-  if (isDshCheckout(cfg.srcPath)) return cfg.srcPath
-  const managed = managedSourceCheckout()
-  return isDshCheckout(managed) ? managed : undefined
-}
-
-/** A source checkout resolved for a start: its path, and whether this start cloned it. */
-interface SourceCheckout {
-  path: string
-  /** This start cloned the checkout (first install), so setup should follow without asking. */
-  cloned: boolean
-}
-
-/** Make sure a source checkout exists: reuse one, or clone deepseek-harness into the managed dir. */
-async function ensureSourceCheckout(cfg: DshConfig): Promise<SourceCheckout | undefined> {
-  const existing = findSourceCheckout(cfg)
-  if (existing) return { path: existing, cloned: false }
-  // Nothing cloned yet: let the user pick the default or a custom location.
-  const chosen = await chooseInstallDir('source', managedSourceCheckout())
-  if (!chosen) return undefined
-  // Persist the choice even when it is the managed default: the setting then
-  // shows the actual clone path and pins it against future default changes.
-  await saveDshSetting('srcPath', chosen)
-  // The picked folder may already be a checkout (e.g. the user pointed at
-  // their own clone): reuse it instead of cloning into it, which git would
-  // refuse for a non-empty folder anyway.
-  if (isDshCheckout(chosen)) {
-    addActivity('✓ Existing deepseek-harness checkout found — reusing it')
-    return { path: chosen, cloned: false }
-  }
-  try {
-    if (fs.readdirSync(chosen).length > 0) {
-      addActivity(`✗ ${maskPath(chosen)} is not empty and is not a deepseek-harness checkout — pick an empty folder`)
-      void vscode.window.showErrorMessage('DeepSeek Harness: that folder already contains files. Pick an empty folder or an existing deepseek-harness checkout.')
-      return undefined
-    }
-  } catch {
-    // Unreadable or not created yet: let the clone attempt surface the error.
-  }
-  dshState = 'missing'
-  addActivity('✗ No dsh source checkout found — cloning deepseek-harness…')
-  addActivity(`▶ Cloning deepseek-harness → ${chosen}`)
-  const ok = await runInstalling(() => runInTerminal('Clone deepseek-harness', 'git', ['clone', 'https://github.com/deepseek-ai/deepseek-harness.git', chosen]))
-  if (!ok || !isDshCheckout(chosen)) {
-    // Suppress the failure report when Stop interrupted the clone: the user
-    // asked for it, so the terminal error is noise, not news.
-    if (serverPhase === 'starting') {
-      addActivity('✗ clone failed — see the terminal output above')
-      void vscode.window.showErrorMessage('DeepSeek Harness: could not clone deepseek-harness. Check your network and git, then try again.')
-    }
-    return undefined
-  }
-  addActivity('✓ deepseek-harness cloned')
-  return { path: chosen, cloned: true }
-}
 
 /** Detect the local dsh version: a source checkout (source mode), else the managed install. */
 async function detectDshVersion(cfg: DshConfig): Promise<void> {
@@ -1285,7 +1006,7 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   }
 
   if (cfg.runMode === 'source') {
-    const checkout = await ensureSourceCheckout(cfg)
+    const checkout = await ensureSourceCheckout(cfg, installHost)
     if (!checkout) return false
     if (!(await ensureCheckoutReady(checkout.path, checkout.cloned))) {
       dshState = 'missing'
@@ -1302,9 +1023,9 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   }
 
   // pkg mode: install dsh into the managed pnpm project, then run it (source needs explicit opt-in)
-  const pnpmCmd = await ensurePnpmAvailable()
+  const pnpmCmd = await ensurePnpmAvailable(installHost)
   if (!pnpmCmd) return false
-  const version = await preparePkgStart(cfg, pnpmCmd.command, pnpmCmd.allowBuild)
+  const version = await preparePkgStart(cfg, pnpmCmd.command, pnpmCmd.allowBuild, installHost)
   if (!version) return false
   // The install may have run while the user pressed Stop; honour that request
   // instead of starting a server nobody is waiting for.
@@ -1463,7 +1184,7 @@ async function checkDshUpdateStatus(cfg: DshConfig): Promise<DshUpdate> {
   if (cfg.runMode === 'pnpm') {
     const installed = pkgInstalledVersion(cfg)
     if (!installed) return { hasUpdate: false, label: '' }
-    const latest = await latestDshVersion(cfg.npmChannel)
+    const latest = await latestDshVersion(cfg.npmChannel, dbg)
     if ('error' in latest) {
       return { hasUpdate: false, label: '', failed: true, failedReason: latest.error }
     }
@@ -1533,9 +1254,9 @@ function updateMayProceed(): boolean {
 async function runDshUpdateInner(): Promise<void> {
   const cfg = readConfig()
   if (cfg.runMode === 'pnpm') {
-    const pnpm = await ensurePnpmAvailable()
+    const pnpm = await ensurePnpmAvailable(installHost)
     if (!pnpm) return
-    const latest = await latestDshVersion(cfg.npmChannel, pnpm.command)
+    const latest = await latestDshVersion(cfg.npmChannel, dbg, pnpm.command)
     if ('error' in latest) {
       addActivity(`↑ Update check failed (network) — ${latest.error}`)
       return
@@ -1546,7 +1267,7 @@ async function runDshUpdateInner(): Promise<void> {
     }
     addActivity(`↑ Updating dsh to v${latest.version}…`)
     if (!updateMayProceed()) return
-    if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg))) {
+    if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg), installHost)) {
       addActivity('↑ dsh updated')
       updateCache = undefined
     }
