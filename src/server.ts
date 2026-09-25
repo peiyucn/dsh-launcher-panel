@@ -557,24 +557,20 @@ function spawnServer(cmd: string, args: string[], cwd: string | undefined, shell
   resetRunCounters()
   // Each run mints its own web token; drop the previous run's.
   webToken = undefined
-  try {
-    ensureLogDir()
-  } catch {
+  const logDir = ensureLogDir()
+  if (!logDir.ok) {
     // Failing here used to escape as an unhandled rejection from the Start
     // command; report it and abort the spawn instead.
     addActivity('✗ Could not create the log folder — check write permissions under your home directory')
-    void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${path.dirname(serverLogFile())}. Check write permissions.`)
+    void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${logDir.dir}. Check write permissions.`)
     return
   }
   // Each start gets a fresh server log (dsh.clearServerLogOnStart, default on)
   // — otherwise output from every previous run accumulates (NODE_DEBUG=module
-  // alone produced a ~90MB file) and mixes with the current run.
+  // alone produced a ~90MB file) and mixes with the current run. Truncation is
+  // best effort: a just-stopped server may still hold the file open.
   if (vscode.workspace.getConfiguration('dsh').get<boolean>('clearServerLogOnStart') ?? true) {
-    try {
-      truncateServerLog()
-    } catch {
-      // Best effort: a just-stopped server may still hold the file open.
-    }
+    truncateServerLog()
   }
 
   const hideConsole = vscode.workspace.getConfiguration('dsh').get<boolean>('hideConsole') ?? true
