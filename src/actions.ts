@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
-import { normalizeBrowser, shouldOpenBrowser } from './env'
-import { currentStatus, ensureRunning, readConfig, stopServer, uiUrl } from './server'
+import { normalizeBrowser, shouldOpenBrowser } from './env.ts'
+import { currentStatus, ensureRunning, readConfig, stopServer, uiUrl } from './server.ts'
 
 /** Open a URL per dsh.browser: built-in Simple Browser (with fallback) or external. */
 export async function openUrl(url: string): Promise<void> {

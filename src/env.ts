@@ -8,7 +8,7 @@
  * @module env
  */
 
-import { DSH_CLI_ENTRY_GUARD_MIN_VERSION, dshVersionAtLeast } from './versions'
+import { DSH_CLI_ENTRY_GUARD_MIN_VERSION, dshVersionAtLeast } from './versions.ts'
 
 /** The port the web UI listens on when `dsh.port` is unset (mirrors package.json). */
 export const DEFAULT_PORT = 3080

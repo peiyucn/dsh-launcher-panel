@@ -11,7 +11,7 @@ import {
   parseImportMetaMainProbe,
   parseNpmChannel,
   silentExitHint,
-} from './env'
+} from './env.ts'
 import {
   ACTIVITY_MAX_LINES,
   DETECTION_CACHE_TTL_MS,
@@ -31,8 +31,8 @@ import {
   STOP_POLL_INTERVAL_MS,
   STOP_POLL_PROBE_MS,
   TASKKILL_TIMEOUT_MS,
-} from './timing'
-import { canTransition, type ServerPhase } from './phases'
+} from './timing.ts'
+import { canTransition, type ServerPhase } from './phases.ts'
 import {
   DSH_BUILD_PROFILE_OFFICIAL,
   DSH_BUILD_PROFILE_SELECTOR,
@@ -47,7 +47,7 @@ import {
   isDshInstallDirUsable,
   maskPath,
   resolveDshHome,
-} from './paths'
+} from './paths.ts'
 import {
   DSH_NO_OPEN_MIN_VERSION,
   decideSourceUpdate,
@@ -58,14 +58,14 @@ import {
   versionFromDescribe,
   type RemoteReleaseTag,
   type UpdateCheckOutcome,
-} from './versions'
-import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc'
-import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm'
-import { parseLocalProxySettings } from './git'
+} from './versions.ts'
+import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile, sleep } from './proc.ts'
+import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
+import { parseLocalProxySettings } from './git.ts'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
 // module stays focused on server lifecycle).
-export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds'
+export { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
 
 type RunMode = 'pnpm' | 'source'
 

@@ -8,7 +8,12 @@
     "sourceMap": true,
     "strict": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    // 源码内部的 import 带真实 `.ts` 后缀：Node 能直接跑源码（原生剥离类型，
+    // 但不解析无后缀路径），而 tsc 发出的 CommonJS 会把它们重写成 `.js`——
+    // 也就是真正发布的那份。tsx 因此不再是必需依赖。
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src"]
 }

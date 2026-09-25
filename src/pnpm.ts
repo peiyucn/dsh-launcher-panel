@@ -10,8 +10,8 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { runFile } from './proc'
-import { PNPM_PROBE_TIMEOUT_MS } from './timing'
+import { runFile } from './proc.ts'
+import { PNPM_PROBE_TIMEOUT_MS } from './timing.ts'
 
 /** Candidate pnpm.cmd shim locations on Windows (npm global bin, pnpm standalone installer). */
 export function windowsPnpmCandidates(env: Record<string, string | undefined>): string[] {

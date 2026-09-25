@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { resolveDshHome } from './paths'
-import { toEnglish } from './env'
+import { resolveDshHome } from './paths.ts'
+import { toEnglish } from './env.ts'
 
 /** One DeepSeek API service component on the official status page. */
 export interface DsComponentStatus {

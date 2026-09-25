@@ -1,4 +1,4 @@
-import type { ServerStatus } from './server'
+import type { ServerStatus } from './server.ts'
 
 export type StatusMenuAction = 'start' | 'stop' | 'open' | 'dashboard' | 'settings'
 

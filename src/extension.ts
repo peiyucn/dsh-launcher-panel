@@ -1,11 +1,11 @@
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { actionStart, actionStop } from './actions'
-import { DshPanelProvider } from './panel'
-import { dshBaseDir } from './paths'
-import { STATUS_REFRESH_INTERVAL_MS } from './timing'
-import { checkNodeOnce, currentStatus, dbg, migrateLegacyDshConfig, registerConfigWatcher, setLogPath, stopLogTail } from './server'
-import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu'
+import { actionStart, actionStop } from './actions.ts'
+import { DshPanelProvider } from './panel.ts'
+import { dshBaseDir } from './paths.ts'
+import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
+import { checkNodeOnce, currentStatus, dbg, migrateLegacyDshConfig, registerConfigWatcher, setLogPath, stopLogTail } from './server.ts'
+import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
 // Running state paints its own background + foreground as theme colors

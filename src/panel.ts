@@ -1,11 +1,11 @@
 import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
-import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env'
-import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing'
-import { describeDshUpdate } from './versions'
-import { STATUS_REFRESH_INTERVAL_MS } from './timing'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
+import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions.ts'
+import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
+import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
+import { describeDshUpdate } from './versions.ts'
+import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
+import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server.ts'
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
