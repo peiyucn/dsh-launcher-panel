@@ -1,8 +1,33 @@
 /** Tests for `src/proc.ts` (subprocess capture) and `src/git.ts` (git output parsing). */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile } from '../src/proc.ts'
 import { parseLocalProxySettings } from '../src/git.ts'
+
+/**
+ * Whether this environment lets a process capture another process's piped
+ * output.
+ *
+ * Sandboxes that forbid named pipes (including the DSH agent sandbox in its
+ * confined modes) fail every subprocess capture with EPERM. The `runFile` tests
+ * below genuinely need that capability, so they are skipped with a stated
+ * reason instead of reported as failures — a red suite that everyone has to
+ * re-diagnose is worse than an honest skip, and a real defect in `runFile`
+ * still surfaces (it would not manifest as EPERM).
+ */
+const canSpawnWithPipes = await new Promise<boolean>((resolve) => {
+  try {
+    execFile(process.execPath, ['-e', 'process.stdout.write("1")'], (error) => {
+      resolve(error === null || (error as { code?: string }).code !== 'EPERM')
+    })
+  } catch {
+    resolve(false)
+  }
+})
+const skipReason = canSpawnWithPipes
+  ? false
+  : 'this environment forbids capturing a subprocess output pipe (EPERM)'
 
 test('decodeChildOutput keeps UTF-8 intact and recovers a GBK console message', () => {
   // Real UTF-8 must never be reinterpreted through the legacy code page.
@@ -36,7 +61,7 @@ test('psQuote doubles single quotes', () => {
   assert.equal(psQuote('plain'), 'plain')
 })
 
-test('runFile reports success with stdout and no error', async () => {
+test('runFile reports success with stdout and no error', { skip: skipReason }, async () => {
   const r = await runFile(process.execPath, ['-e', 'process.stdout.write("hello")'])
   assert.equal(r.ok, true)
   assert.equal(r.stdout.trim(), 'hello')
@@ -45,7 +70,7 @@ test('runFile reports success with stdout and no error', async () => {
   assert.equal(r.code, undefined)
 })
 
-test('runFile keeps the exit code and last stderr line of a failed command', async () => {
+test('runFile keeps the exit code and last stderr line of a failed command', { skip: skipReason }, async () => {
   const r = await runFile(process.execPath, ['-e', 'process.stderr.write("first\\nsecond\\n"); process.exit(3)'])
   assert.equal(r.ok, false)
   assert.equal(r.code, 3)
@@ -54,7 +79,7 @@ test('runFile keeps the exit code and last stderr line of a failed command', asy
   assert.equal(r.error, 'second')
 })
 
-test('runFile marks a timeout as such instead of a bare failure', async () => {
+test('runFile marks a timeout as such instead of a bare failure', { skip: skipReason }, async () => {
   const r = await runFile(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], 600)
   assert.equal(r.ok, false)
   assert.equal(r.timedOut, true)
@@ -62,7 +87,7 @@ test('runFile marks a timeout as such instead of a bare failure', async () => {
   assert.match(r.error ?? '', /^timed out after 1s$/)
 })
 
-test('runFile reports a spawn failure with its reason', async () => {
+test('runFile reports a spawn failure with its reason', { skip: skipReason }, async () => {
   const r = await runFile('definitely-not-a-real-binary-xyz', [])
   assert.equal(r.ok, false)
   assert.equal(r.timedOut, undefined)
