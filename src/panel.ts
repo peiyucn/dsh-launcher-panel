@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
 import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions'
-import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, STATUS_REFRESH_INTERVAL_MS } from './common'
+import { DEFAULT_BROWSER, describeDshUpdate, NONCE_LENGTH, normalizeBrowser, PEAK_WINDOWS_BJ_HOURS, pricingWindowAt, STATUS_REFRESH_INTERVAL_MS } from './common'
 import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server'
 
 function getNonce(): string {
@@ -181,6 +181,8 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
+  /* No holiday calendar for this year: a neutral pill, since neither rate is known. */
+  .ds-pricing.unknown { color: var(--lap-fg2); background: var(--lap-hover); }
   .ds-components { display: flex; flex-direction: column; gap: 4px; }
   .ds-comp { display: flex; align-items: center; gap: 6px; font-size: 11px; }
   .ds-comp-name { flex: 1; min-width: 0; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -495,28 +497,27 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    // DeepSeek peak-billing windows as UTC minutes since midnight (Beijing
-    // 09:00–12:00 and 14:00–18:00); off-peak is half the peak rate.
-    const PEAK_WINDOWS_UTC_MIN = [[60, 240], [360, 600]]
-    const BJ_UTC_OFFSET_MS = 8 * 3600 * 1000
-    // Weekends (Beijing time) are billed at the off-peak rate all day,
-    // effective 2026-08-23 00:00 Beijing (= UTC 2026-08-22T16:00).
-    const WEEKEND_OFF_PEAK_START_MS = Date.UTC(2026, 7, 22, 16, 0)
-    function renderPricing() {
+    // Peak/off-peak is decided by the extension host (common.ts
+    // pricingWindowAt) and only rendered here: the holiday table belongs to the
+    // shipped build, and a second copy in the webview would be one more thing to
+    // keep in step. 'unknown' means this build has no calendar for the current
+    // year — say so rather than guess a rate.
+    const PEAK_WINDOWS_BJ = ${JSON.stringify(PEAK_WINDOWS_BJ_HOURS)}
+    function renderPricing(pricing) {
       const el = document.getElementById('dsPricing')
+      const known = pricing === 'peak' || pricing === 'offpeak'
+      el.textContent = pricing === 'peak' ? 'Peak' : (pricing === 'offpeak' ? 'Off-peak' : 'Peak?')
+      el.className = 'ds-pricing ' + (known ? pricing : 'unknown')
       const now = new Date()
-      const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes()
-      // Day of week in Beijing time (UTC+8).
-      const bjDay = new Date(now.getTime() + BJ_UTC_OFFSET_MS).getUTCDay()
-      const weekendOffPeak = now.getTime() >= WEEKEND_OFF_PEAK_START_MS && (bjDay === 0 || bjDay === 6)
-      const peak = !weekendOffPeak && PEAK_WINDOWS_UTC_MIN.some(([start, end]) => utcMin >= start && utcMin < end)
-      el.textContent = peak ? 'Peak' : 'Off-peak'
-      el.className = 'ds-pricing ' + (peak ? 'peak' : 'offpeak')
       const local = (h) => {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, 0))
         return String(d.getHours()).padStart(2, '0') + ':00'
       }
-      el.title = 'Peak: 09:00–12:00, 14:00–18:00 Beijing (your time ' + local(1) + '–' + local(4) + ', ' + local(6) + '–' + local(10) + '); off-peak is half the peak rate; weekends are all off-peak'
+      // Beijing hour H is UTC hour H-8; local() renders that instant at the
+      // viewer's own offset.
+      const windows = PEAK_WINDOWS_BJ.map(([from, to]) => local(from - 8) + '–' + local(to - 8)).join(', ')
+      el.title = 'Peak: 09:00–12:00, 14:00–18:00 Beijing (your time ' + windows + '); off-peak is half the peak rate; weekends and Chinese public holidays are all off-peak'
+        + (known ? '' : ' — this build has no holiday calendar for the current year, so the rate cannot be determined')
     }
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
@@ -687,7 +688,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       renderDebug(m.status)
       renderDs(m.dsStatus)
       renderBalance(m.balance)
-      renderPricing()
+      renderPricing(m.pricing)
     })
   </script>
 </body>
@@ -818,7 +819,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
       // setBrowser click would otherwise deliver a stale value and flip the
       // trigger back for one cycle.
       const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
-      await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs })
+      await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs, pricing: pricingWindowAt(new Date()) })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error('[dsh-launcher-panel] refresh failed:', error)
@@ -859,6 +860,7 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
           activity: [{ text: `✗ Status refresh failed: ${msg}`, busy: false }],
           browser,
           balance: undefined,
+          pricing: pricingWindowAt(new Date()),
         })
       } catch {
         // Webview is gone; nothing more to do.
