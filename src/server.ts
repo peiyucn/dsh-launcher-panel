@@ -7,6 +7,13 @@ import { findPnpm } from './pnpm.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './server/checkout.ts'
 import { startLogTail as startTail, stopLogTail as stopTail, type LogTailHost } from './server/log-tail.ts'
 import {
+  checkNodeOnce as checkNodeOnceInner,
+  reportSilentExit as reportSilentExitInner,
+  NODE_22_MIN_MINOR,
+  NODE_MIN_MAJOR,
+  type NodeCheckHost,
+} from './server/node-check.ts'
+import {
   checkDshUpdateStatus,
   isUpdating,
   runDshUpdate as runDshUpdateInner,
@@ -27,10 +34,8 @@ import {
   DEFAULT_PORT,
   MAX_PORT,
   extractWebToken,
-  parseImportMetaMainProbe,
   parseNpmChannel,
   type NpmChannel,
-  silentExitHint,
 } from './env.ts'
 import {
   DETECTION_CACHE_TTL_MS,
@@ -346,84 +351,25 @@ async function resolveWebUrl(host: string, port: number, timeoutMs: number, toke
   return undefined
 }
 
-/** Node.js engines range the harness requires: ^22.19 || >=24. */
-const NODE_MIN_MAJOR = 24
-const NODE_22_MIN_MINOR = 19
-
-/** Whether Node.js is present and satisfies the harness engines range. */
-async function checkNode(cfg: DshConfig): Promise<{ ok: boolean; version: string }> {
-  const result = await runFile(cfg.nodePath || 'node', ['--version'], NODE_PROBE_TIMEOUT_MS)
-  const version = result.ok ? result.stdout.trim().replace(/^v/, '') : ''
-  if (!result.ok) return { ok: false, version: '' }
-  const match = /^v?(\d+)\.(\d+)/.exec(result.stdout.trim())
-  if (!match) return { ok: false, version }
-  const major = Number(match[1])
-  const minor = Number(match[2])
-  return { ok: major >= NODE_MIN_MAJOR || (major === 22 && minor >= NODE_22_MIN_MINOR), version }
+// The Node version check and the silent-exit diagnosis live in
+// server/node-check.ts; they read this module's detected values through host.
+const nodeCheckHost: NodeCheckHost = {
+  nodePath: () => readConfig().nodePath,
+  addActivity,
+  setNodeState: (state) => { nodeState = state },
+  setNodeVersion: (version) => { nodeVersion = version },
+  nodeVersion: () => nodeVersion,
+  outputLineCount,
 }
-
-/** Memoized one-shot Node check, run once at extension activation. */
-let nodeChecked: Promise<void> | undefined
 
 /**
  * Check Node once (memoized) and cache the result. Called at activation so
- * Start and the status refresh never re-probe Node.
+ * Start and the status refresh never re-probe Node. The check itself lives in
+ * server/node-check.ts.
  */
 export function checkNodeOnce(): Promise<void> {
-  if (!nodeChecked) {
-    nodeChecked = (async () => {
-      const r = await checkNode(readConfig())
-      nodeState = r.ok ? 'ok' : 'missing'
-      nodeVersion = r.version
-      if (!r.ok) {
-        addActivity(`✗ Node.js not found (need 22.x >= 22.${NODE_22_MIN_MINOR} or >= ${NODE_MIN_MAJOR})`)
-        void vscode.window.showErrorMessage(`DeepSeek Harness requires Node.js 22.x (22.${NODE_22_MIN_MINOR} or later) or >= ${NODE_MIN_MAJOR}. Install it from https://nodejs.org and restart VS Code.`)
-      }
-    })()
-  }
-  return nodeChecked
+  return checkNodeOnceInner(nodeCheckHost)
 }
-
-/** Memoized `import.meta.main` capability probe for the configured Node. */
-let importMetaMainProbe: Promise<boolean> | undefined
-
-/**
- * Probe whether the configured Node exposes `import.meta.main`: dsh ≥
- * 0.1.3-alpha.2 runs its CLI behind that guard, but dsh's engines still admit
- * Node 24.0/24.1, where the binding does not exist and dsh exits silently with
- * no output. Only consulted after a start already failed without any output;
- * a failed probe reports support, so a broken probe never claims a Node lacks
- * something it actually has.
- */
-function nodeSupportsImportMetaMain(cfg: DshConfig): Promise<boolean> {
-  if (!importMetaMainProbe) {
-    importMetaMainProbe = runFile(
-      cfg.nodePath || 'node',
-      ['--input-type=module', '-e', 'process.stdout.write(String(import.meta.main))'],
-      NODE_PROBE_TIMEOUT_MS,
-    ).then((r) => (r.ok ? parseImportMetaMainProbe(r.stdout) : true))
-  }
-  return importMetaMainProbe
-}
-
-/** Whether the silent-exit diagnosis was already raised as a toast this session. */
-let silentExitToastShown = false
-
-/** Explain a server that died before opening its port without printing anything. */
-async function reportSilentExit(cfg: DshConfig, version: string): Promise<void> {
-  const hint = silentExitHint({
-    dshVersion: version,
-    nodeVersion,
-    supportsImportMetaMain: await nodeSupportsImportMetaMain(cfg),
-    outputLines: outputLineCount(),
-  })
-  if (hint === undefined) return
-  addActivity(`✗ ${hint}`)
-  if (silentExitToastShown) return
-  silentExitToastShown = true
-  void vscode.window.showErrorMessage(`DeepSeek Harness: ${hint}.`)
-}
-
 
 /** Detect the local dsh version: a source checkout (source mode), else the managed install. */
 async function detectDshVersion(cfg: DshConfig): Promise<void> {
@@ -766,7 +712,7 @@ async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
       addActivity('✗ Server exited before opening the port (see the log above)')
       finishBusy(startBusyId)
       // The diagnosis runs a Node capability probe; the spinner is already off.
-      await reportSilentExit(cfg, version)
+      await reportSilentExitInner(nodeCheckHost, version)
       return false
     }
   }
