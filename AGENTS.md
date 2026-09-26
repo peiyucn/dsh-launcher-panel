@@ -11,6 +11,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
   * **L2 装配**：`extension.ts`（激活与状态栏）、`server.ts`（生命周期编排）、`actions.ts`、`panel.ts`（Dashboard webview）、`statusMenu.ts`、`ds.ts`；`webview/`（`panel-body` / `panel-styles` / `panel-script`，内联前端三段）
 * 测试：`npm test`（Node 原生类型剥离直跑 `node:test`，`--test-isolation=none`），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块
 * 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 会先建目录再调 vsce）
+* **生成文件**：`src/holidays.generated.ts`（法定节假日，`npm run build:holidays` 从国务院公告刷新）与 `resources/dsh-icon.woff`（`npm run build:icon-font`）。两者都是生成物但**入库**——扩展零运行时依赖、构建要可复现，生成物必须随版本固定；改完提交 diff 以便评审
 * **定位与退役判据**：见 `docs/positioning-and-retirement.md`——本文件不复述，避免指令文件膨胀；`docs/` 属开发文档，不进 VSIX
 
 ## 文档规范
