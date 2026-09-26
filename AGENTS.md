@@ -48,8 +48,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * **文档对齐**：README 中英 Settings 表与 `package.json` contributes.configuration 一一对应；文件路径 / 日志文件 / 行为描述与实现一致；CHANGELOG 双份覆盖本版全部用户可感知改动
 * **死代码**：grep 每个导出符号与常量确认调用方；清未使用的 import / 导出 / 变量 / 类型字段 / CSS 类
-* **高危 BUG**：状态一致性（异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径与引号（Windows 参数转义含空格路径；临时 / 缓存目录与持久数据目录区分）；资源 / 内存泄漏（timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界；Webview 消息引用不滞留）；部分失败（中途失败状态诚实并校验结果）；环境边界（首装 / 离线 / 断网 / 权限不足降级不挂死、有提示）
-* **安全热点**：子进程优先 execFile 参数数组，`shell: true` 仅在必要时；用户配置路径先校验再使用、展示用 `maskPath`、删除确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP + 动态注入 `esc` 转义；fetch 带超时 + AbortController；外部 URL 走白名单
+* **高危 BUG**：状态一致性（异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径（含空格与非 ASCII 的路径必须能跑；临时 / 缓存目录与持久数据目录区分）；资源 / 内存泄漏（timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界；Webview 消息引用不滞留）；部分失败（中途失败状态诚实并校验结果；**「没启动」与「还没启动」必须可区分**——不确定的状态会让轮询永不退出，见 `cf9c23e`）；环境边界（首装 / 离线 / 断网 / 权限不足降级不挂死、有提示）
+* **安全热点**：子进程**一律 `spawn`/`execFile` + 参数数组，绝不拼命令行、绝不用 `shell: true`**——参数一旦经过 shell 解析就可能变成第二条命令（`dsh.nodePath` 曾因此可注入，见 `7bd6db7`）。Windows 的 `.cmd`/`.bat` 不能被 `spawn` 直接调用（Node 的 CVE-2024-27980 防护）也不能交给 shell，用 `proc.ts` 的 `resolveCommand`/`runResolved` 读 shim 后直接跑它的 Node 入口。用户配置路径先校验再使用、展示用 `maskPath`、删除确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP + 动态注入 `esc` 转义；fetch 带超时 + AbortController；外部 URL 走白名单
 * **代码异味**：单一职责（生命周期 / 检测 / UI / 状态各归其位）；可变状态经函数封装；命名达意；同类对称；无超长函数 / 重复逻辑 / 魔术字符串
 * **魔法数字**：语义数字命名常量（`*_MS`）
 * **鲁棒性**：外部调用（dsh CLI / Node / 网络 / 子进程）有超时与容错；异常输入返回安全默认值；失败路径有用户可见反馈（面板状态栏 / 日志文件）
