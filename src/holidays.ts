@@ -15,8 +15,8 @@
  * it against the original.
  *
  * To add a year: append its spans from that year's 通知, with the document URL.
- * Years not listed make `pricingWindowAt` answer `unknown` rather than guess —
- * an uncovered year shows "Peak?" in the panel instead of a wrong rate.
+ * A year not listed simply has no holiday override, so its weekday peak windows
+ * are Peak (see pricing.ts) — there is no "unknown" state to show.
  *
  * Only holiday *spans* are listed. 调休 make-up workdays (e.g. 2026-02-28) are
  * deliberately absent: they fall on weekends, and weekends are off-peak in full

@@ -4,8 +4,8 @@
  * The dates are decreed, so there is nothing to compute — what is worth pinning
  * is that the table keeps the shape `pricingWindowAt` reads, that the covered
  * year is internally coherent, and that each entry can be traced back to the
- * announcement it came from. A silent change of shape would otherwise show up as
- * "Peak?" in the panel rather than as a failing build.
+ * announcement it came from. A silent change of shape would otherwise mislabel
+ * a peak-window weekday in the panel rather than fail the build.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

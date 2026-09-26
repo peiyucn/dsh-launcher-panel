@@ -142,8 +142,6 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  /* No holiday calendar for this year: a neutral pill, since neither rate is known. */
-  .ds-pricing.unknown { color: var(--lap-fg2); background: var(--lap-hover); }
   .ds-components { display: flex; flex-direction: column; gap: 4px; }
   .ds-comp { display: flex; align-items: center; gap: 6px; font-size: 11px; }
   .ds-comp-name { flex: 1; min-width: 0; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

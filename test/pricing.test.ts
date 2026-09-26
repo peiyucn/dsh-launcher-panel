@@ -38,12 +38,11 @@ test('pricingWindowAt treats a statutory holiday on a weekday as off-peak', () =
   assert.equal(pricingWindowAt(new Date('2026-10-08T02:00:00Z')), 'peak') // 10-08 周四 10:00
 })
 
-test('pricingWindowAt says unknown rather than guessing an uncovered year', () => {
-  // A weekday inside a peak window of a year with no holiday table: the answer
-  // genuinely depends on dates this build does not have, so it must not guess.
-  assert.equal(pricingWindowAt(new Date('2027-01-05T02:00:00Z')), 'unknown') // 2027-01-05 周二 10:00
-  // Outside a peak window the calendar cannot change anything, so a weekend or
-  // an off-hours instant in an uncovered year is still decided.
+test('pricingWindowAt treats an uncovered year as having no holidays', () => {
+  // A weekday inside a peak window of a year with no holiday table: no holiday
+  // override applies, so it is Peak — there is no third state.
+  assert.equal(pricingWindowAt(new Date('2027-01-05T02:00:00Z')), 'peak') // 2027-01-05 周二 10:00
+  // Outside a peak window the calendar cannot change anything.
   assert.equal(pricingWindowAt(new Date('2027-01-02T02:00:00Z')), 'offpeak') // 2027-01-02 周六
   assert.equal(pricingWindowAt(new Date('2027-01-05T05:00:00Z')), 'offpeak') // 2027-01-05 13:00
 })

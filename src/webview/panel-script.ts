@@ -212,14 +212,13 @@ export function panelScript(values: PanelScriptValues): string {
     // Peak/off-peak is decided by the extension host (pricing.ts
     // pricingWindowAt) and only rendered here: the holiday table belongs to the
     // shipped build, and a second copy in the webview would be one more thing to
-    // keep in step. 'unknown' means this build has no calendar for the current
-    // year — say so rather than guess a rate.
+    // keep in step. A year without a calendar has no holiday override, so a
+    // peak-window weekday is simply Peak.
     const PEAK_WINDOWS_BJ = ${values.peakWindows}
     function renderPricing(pricing) {
       const el = document.getElementById('dsPricing')
-      const known = pricing === 'peak' || pricing === 'offpeak'
-      el.textContent = pricing === 'peak' ? 'Peak' : (pricing === 'offpeak' ? 'Off-peak' : 'Peak?')
-      el.className = 'ds-pricing ' + (known ? pricing : 'unknown')
+      el.textContent = pricing === 'peak' ? 'Peak' : 'Off-peak'
+      el.className = 'ds-pricing ' + pricing
       const now = new Date()
       const local = (h) => {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, 0))
@@ -229,7 +228,6 @@ export function panelScript(values: PanelScriptValues): string {
       // viewer's own offset.
       const windows = PEAK_WINDOWS_BJ.map(([from, to]) => local(from - 8) + '–' + local(to - 8)).join(', ')
       el.title = 'Peak: 09:00–12:00, 14:00–18:00 Beijing (your time ' + windows + '); off-peak is half the peak rate; weekends and Chinese public holidays are all off-peak'
-        + (known ? '' : ' — this build has no holiday calendar for the current year, so the rate cannot be determined')
     }
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
