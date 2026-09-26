@@ -12,6 +12,8 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Start is more reliable: it stays disabled while an update runs; it no longer goes through a shell, so a path containing a space works and `dsh.nodePath` is only ever a path; and a log folder that cannot be created now reports the failure instead of leaving the panel on "Starting…".
 - Update no longer overwrites a `package.json` the launcher did not write — pointing `dsh.pkgPath` at your own project could lose that project's scripts and dependencies.
 - The activity log no longer shows question marks and boxes when a stop finds a process that already exited.
+- The panel recovers from a failing action. A command that threw used to leave the panel on stale data, and could leave Check updates greyed out for the rest of the session; the failure is now reported in the activity log and the panel refreshes anyway.
+- Spinners no longer turn forever: a "checking" or "loading" row that threw before finishing used to keep its spinner running until VS Code was reloaded.
 - Chinese public holidays are off-peak in full, following the updated rule (previously only weekends were, so a holiday on a weekday showed as Peak). The 2026 calendar ships with the extension.
 
 ## [0.2.12]
