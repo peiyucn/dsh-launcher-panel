@@ -14,6 +14,9 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Keep the activity log readable when a stop finds a process that already exited: system messages in the console code page used to appear as question marks and boxes on a localized Windows.
 - Stop Check updates from reporting a false timeout when GitHub (or the npm registry) answers slowly: network and purely local queries shared one 10-second limit, so a single slow round trip failed the check; network queries now have their own 60-second limit while local queries keep 10 seconds.
 - Follow the updated peak/off-peak rule: Chinese public holidays are off-peak in full (previously only weekends were, so a holiday falling on a weekday showed as Peak). The holiday calendar ships with the extension (2024–2026); a year whose announcement is not out yet shows "Peak?" rather than guessing a rate.
+- Starting dsh no longer goes through a shell. A path containing a space used to break pkg mode, and a `dsh.nodePath` value could be read as more than a path — a workspace could point it at a command. The server is now launched directly, so a configured path is only ever a path.
+- Update no longer replaces a `package.json` the launcher does not own. If `dsh.pkgPath` pointed at a folder that already contained dsh (for example your own project), pressing Update could overwrite your project's `package.json` without asking, losing its scripts and dependencies; only a manifest the launcher wrote is ever rewritten now.
+- Starting no longer hangs when the log folder cannot be created (a permissions or antivirus problem). The panel used to sit on "Starting…" indefinitely with Start greyed out until you pressed Stop; it now reports the failure and settles.
 
 ## [0.2.12]
 
