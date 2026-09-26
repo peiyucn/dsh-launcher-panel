@@ -38,7 +38,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 ### 发布（tag 触发）
 
-* **step1 发布前审计**：按《代码审计》条目全面检查
+* **step1 发布前审计**：按《代码审计》条目全面检查，并过一遍《发布前检查》
 * **step2 定版编辑**：CHANGELOG 双份新版本条目放最顶 → `package.json` 版本号 → README 如有功能变更同步
 * **step3 再验证**：`npm run verify` 全绿 + `git diff --check` 干净
 * **step4 合并**：dev → main 并 push
@@ -91,3 +91,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常——`onMessage` 失败记一条活动流并照常 refresh，面板不会停在旧数据
 * **busy 必须成对收尾**：`addActivity(…, true)` 用 `withBusy(label, task)` 包住。各 `*Host` 只暴露 `withBusy`、不暴露 `finishBusy`，所以手写这对调用写不出来——抛错会漏收尾，而活动流没有回收器，spinner 会转到会话结束
 * **模块顶层不依赖易变导出**：不 import VS Code 内部模块
+
+### 发布前检查
+
+* **节假日表**：检查 `src/holidays.ts` 是否覆盖当前年份；没有就按该年国务院公告补上（连文件 URL 一起写进注释）。漏了不会报错——只会把那一年的工作日节假日误显示成 Peak
