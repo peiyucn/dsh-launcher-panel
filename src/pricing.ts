@@ -2,12 +2,15 @@
  * DeepSeek peak / off-peak billing windows.
  *
  * The rule is stated in Beijing time and is the only thing this module knows
- * about: off-peak costs half the peak rate. It is deliberately self-contained —
- * the calendar is decreed data, not a computation, so it lives next to the one
- * function that reads it.
+ * about: off-peak costs half the peak rate. The holiday calendar it consults is
+ * decreed data, so it lives in a generated module (see
+ * `scripts/build-holidays.mjs`) rather than being typed in here — the dates come
+ * from 国务院办公厅's annual announcement, which is not computable.
  *
  * @module pricing
  */
+
+import { CN_HOLIDAY_RANGES } from './holidays.generated.ts'
 
 /** Beijing wall clock (UTC+8); the billing rule is stated in Beijing time. */
 const BJ_UTC_OFFSET_MS = 8 * 3600 * 1000
@@ -24,32 +27,6 @@ const PEAK_WINDOWS_BJ_MIN: readonly (readonly [number, number])[] = PEAK_WINDOWS
  * cutoff is kept rather than assumed.
  */
 const WEEKEND_OFF_PEAK_START_MS = Date.UTC(2026, 7, 22, 16, 0)
-
-/**
- * Statutory holiday ranges per covered year, as inclusive Beijing dates.
- *
- * Transcribed from 国务院办公厅关于2026年部分节假日安排的通知 (2025-11-04), which
- * is the only authority for these dates — they are decreed, not computable, so
- * a year absent from this table yields "unknown" rather than a guess.
- *
- * Only the holiday spans are listed. 调休 make-up workdays (e.g. 2026-02-28) are
- * deliberately absent: they fall on weekends, and weekends are off-peak in full
- * regardless of whether people work them.
- *
- * Adding a year: append its ranges from that year's 通知. `YYYY-MM-DD` compares
- * correctly as a string, which is why the dates are stored in that form.
- */
-const CN_HOLIDAY_RANGES: Record<number, readonly (readonly [string, string])[]> = {
-  2026: [
-    ['2026-01-01', '2026-01-03'], // 元旦
-    ['2026-02-15', '2026-02-23'], // 春节
-    ['2026-04-04', '2026-04-06'], // 清明节
-    ['2026-05-01', '2026-05-05'], // 劳动节
-    ['2026-06-19', '2026-06-21'], // 端午节
-    ['2026-09-25', '2026-09-27'], // 中秋节
-    ['2026-10-01', '2026-10-07'], // 国庆节
-  ],
-}
 
 /** Which billing rate applies right now; `unknown` means the year is not covered. */
 export type PricingWindow = 'peak' | 'offpeak' | 'unknown'

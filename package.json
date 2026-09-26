@@ -200,6 +200,7 @@
   },
   "scripts": {
     "build:icon-font": "node scripts/build-icon-font.mjs",
+    "build:holidays": "node scripts/build-holidays.mjs",
     "typecheck": "tsc -p ./ --noEmit",
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
