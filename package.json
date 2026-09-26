@@ -200,9 +200,9 @@
   },
   "scripts": {
     "build:icon-font": "node scripts/build-icon-font.mjs",
-    "build:holidays": "node scripts/build-holidays.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
     "typecheck": "tsc -p ./ --noEmit",
-    "compile": "tsc -p ./",
+    "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -w -p ./",
     "package": "node -e \"require('node:fs').mkdirSync('releases',{recursive:true})\" && vsce package --out releases --no-dependencies",
     "test": "node --test --test-isolation=none \"test/*.test.ts\"",

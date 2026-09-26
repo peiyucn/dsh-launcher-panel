@@ -3,14 +3,13 @@
  *
  * The rule is stated in Beijing time and is the only thing this module knows
  * about: off-peak costs half the peak rate. The holiday calendar it consults is
- * decreed data, so it lives in a generated module (see
- * `scripts/build-holidays.mjs`) rather than being typed in here — the dates come
- * from 国务院办公厅's annual announcement, which is not computable.
+ * decreed data and lives in `holidays.ts`, which also records why it is
+ * hand-maintained rather than fetched.
  *
  * @module pricing
  */
 
-import { CN_HOLIDAY_RANGES } from './holidays.generated.ts'
+import { CN_HOLIDAY_RANGES } from './holidays.ts'
 
 /** Beijing wall clock (UTC+8); the billing rule is stated in Beijing time. */
 const BJ_UTC_OFFSET_MS = 8 * 3600 * 1000
