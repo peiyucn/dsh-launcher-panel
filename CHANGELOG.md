@@ -11,10 +11,10 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Updating in source mode announces the release-tag fetch before it starts: that step scales with how far behind the checkout is and can take minutes. The transfer is no longer cut off after 10 seconds.
 - When a git operation fails because git still points at a local proxy you have closed, the panel names that dead proxy instead of giving a vague network error.
 - Start stays greyed out, and is dropped from the status menu, while an update runs — starting mid-update ran dsh from a checkout or package tree that was being replaced.
-- The activity log stays readable when a stop finds a process that already exited; system messages in the console code page used to appear as question marks and boxes on a localized Windows.
+- The activity log no longer shows question marks and boxes when a stop finds a process that already exited: on a localized Windows those messages came back in the console code page.
 - Check updates no longer reports a false timeout when GitHub or the npm registry answers slowly: network queries now allow 60 seconds, while local queries keep 10.
 - Chinese public holidays are off-peak in full, following the updated rule (previously only weekends were, so a holiday on a weekday showed as Peak). The 2026 calendar ships with the extension; a year without one shows "Peak?" rather than guessing.
-- Starting dsh no longer goes through a shell. A path containing a space used to break pkg mode, and a `dsh.nodePath` value could be read as a command — a workspace setting could point it at one. A configured path is now only ever a path.
+- Starting dsh no longer goes through a shell, so a configured path is only ever a path. That fixes two things: pkg mode broke on a path containing a space, and a `dsh.nodePath` value could be read as a command.
 - Update no longer overwrites a `package.json` the launcher did not write. If `dsh.pkgPath` pointed at a folder that already contained dsh (your own project, say), Update could replace its `package.json` without asking, losing its scripts and dependencies.
 - Starting no longer hangs when the log folder cannot be created (a permissions or antivirus problem). The panel used to sit on "Starting…" with Start greyed out until you pressed Stop; it now reports the failure and settles.
 
