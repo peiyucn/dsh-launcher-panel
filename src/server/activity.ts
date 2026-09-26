@@ -203,11 +203,6 @@ export function truncateServerLog(): void {
   }
 }
 
-/** Whether the server log currently holds anything (used by the tail offset). */
-export function serverLogSize(): number {
-  return fileSizeSafe(logPath)
-}
-
 /**
  * Read the newest web access token out of the server log.
  *
