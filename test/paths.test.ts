@@ -1,7 +1,7 @@
 /** Tests for `src/paths.ts`: where things live and what dsh wrote there. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -25,6 +25,7 @@ import {
   isDshInstallDirUsable,
   maskPath,
   resolveDshHome,
+  writeInstallManifest,
 } from '../src/paths.ts'
 
 test('dshBaseDir resolves the home directory on every platform', () => {
@@ -154,6 +155,58 @@ test('installManifestRepairable accepts only absent or launcher-owned manifests'
     mkdirSync(corrupt, { recursive: true })
     writeFileSync(join(corrupt, 'package.json'), '{ not json')
     assert.equal(installManifestRepairable(corrupt), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+/**
+ * The guard must sit in the *writer*, not at its call sites — the Update path
+ * once called an unguarded writer while Start called a guarded one, and the
+ * user's package.json was replaced. So this asserts the writer's effect on disk:
+ * testing the predicate alone would still pass if the writer ignored it, which
+ * is exactly the failure that shipped once.
+ */
+test('writeInstallManifest never replaces a package.json it does not own', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-write-'))
+  try {
+    const dir = join(root, 'user-project')
+    mkdirSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh'), { recursive: true })
+    writeFileSync(
+      join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.7-rc.2' }),
+    )
+    const userManifest = {
+      name: 'my-web-app',
+      version: '3.1.4',
+      scripts: { build: 'vite build', test: 'vitest' },
+      dependencies: { express: '^4.21.0' },
+    }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(userManifest, null, 2))
+
+    // The folder is a legitimate install target, so nothing upstream refuses…
+    assert.equal(isDshInstallDirUsable(dir), true)
+    // …and the write must still be refused, leaving the file untouched.
+    assert.equal(writeInstallManifest('0.1.7-rc.2', dir), false)
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')), userManifest)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('writeInstallManifest writes into an absent or launcher-owned dir', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-write-ok-'))
+  try {
+    // Absent dir: the first-install case.
+    const fresh = join(root, 'fresh')
+    assert.equal(writeInstallManifest('0.1.7-rc.2', fresh), true)
+    assert.equal(JSON.parse(readFileSync(join(fresh, 'package.json'), 'utf8')).name, DSH_INSTALL_MANIFEST_NAME)
+    // Its own manifest: the repair path re-pins the version.
+    assert.equal(writeInstallManifest('0.1.7-rc.3', fresh), true)
+    assert.equal(
+      JSON.parse(readFileSync(join(fresh, 'package.json'), 'utf8')).dependencies['@deepseek-ai/dsh'],
+      '0.1.7-rc.3',
+    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

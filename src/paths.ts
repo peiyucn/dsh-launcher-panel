@@ -119,6 +119,38 @@ export function installManifestRepairable(dir: string): boolean {
   return pkg?.name === DSH_INSTALL_MANIFEST_NAME
 }
 
+/**
+ * Write the launcher-owned install manifest pinning `@deepseek-ai/dsh` to a
+ * version.
+ *
+ * The ownership check and the write are deliberately one function: the Update
+ * path once called a writer that had no guard (while the Start path used a
+ * guarded one), so a folder holding the *user's* package.json got replaced by
+ * ours — silently, and with their scripts and dependencies gone. Keeping the two
+ * together means a caller cannot bypass the check, and keeping them here (rather
+ * than in the vscode-importing install module) means a test can prove it.
+ *
+ * @returns true when the launcher's manifest is in place afterwards; false when
+ *   the existing manifest is not ours, or the write failed.
+ */
+export function writeInstallManifest(version: string, dir: string): boolean {
+  if (!installManifestRepairable(dir)) return false
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: DSH_INSTALL_MANIFEST_NAME,
+        private: true,
+        dependencies: { '@deepseek-ai/dsh': version },
+      }, null, 2) + '\n',
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** The scripts block of a checkout's root package.json, or undefined when unreadable. */
 function checkoutScripts(checkout: string): Record<string, string> | undefined {
   return readJson<{ scripts?: Record<string, string> }>(path.join(checkout, 'package.json'))?.scripts

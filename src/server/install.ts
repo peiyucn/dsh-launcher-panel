@@ -18,7 +18,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { DSH_INSTALL_MANIFEST_NAME, dshBaseDir, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath } from '../paths.ts'
+import { dshBaseDir, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from '../paths.ts'
 import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
 import { runResolved } from '../proc.ts'
@@ -120,31 +120,6 @@ export async function latestDshVersion(
   }
   const version = result.stdout.trim().split(/\r?\n/).pop()?.trim()
   return version ? { version } : { error: `the registry returned no version for ${spec}` }
-}
-
-/**
- * Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version.
- *
- * Refuses to touch a `package.json` the launcher does not own, so this is safe
- * to call from any entry point (first install, Start's repair, Update). The
- * guard lives here rather than at each call site because a call site can be
- * added — or, as happened, bypassed — without one, and the damage (a user's
- * manifest replaced by ours) is silent and irreversible.
- *
- * @returns true when the launcher's manifest is in place afterwards.
- */
-export function writeInstallManifest(version: string, dir: string): boolean {
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
-      name: DSH_INSTALL_MANIFEST_NAME,
-      private: true,
-      dependencies: { '@deepseek-ai/dsh': version },
-    }, null, 2) + '\n')
-    return true
-  } catch {
-    return false
-  }
 }
 
 /**
