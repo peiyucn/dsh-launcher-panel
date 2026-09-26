@@ -4,6 +4,7 @@
 
 VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并在 VS Code 内置浏览器中打开它的 Web UI。
 
+* 语言：与 owner 对话用中文；commit 中文描述 + 英文类型前缀；代码注释以英文为主（写清「为什么」），指向上游契约或踩过的坑时可用中文
 * TypeScript 实现，源码 `src/`；`out/` 与 `releases/`（本地打包的 `*.vsix`）不入库
 * 模块（按层次，依赖单向：L0 纯逻辑 → L1 子系统 → L2 装配）：
   * **L0 纯逻辑**：`env.ts`（默认值与小工具）、`versions.ts`（版本比较与更新判定）、`pricing.ts`（峰谷判定）、`holidays.ts`（法定节假日静态表，手工维护）、`paths.ts`（路径与 dsh 落盘产物）、`timing.ts`（全部超时）、`proc.ts`（子进程封装与输出解码）、`git.ts`、`pnpm.ts`、`phases.ts`。此层不 import `vscode`
@@ -11,7 +12,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
   * **L2 装配**：`extension.ts`（激活与状态栏）、`server.ts`（生命周期编排）、`actions.ts`、`panel.ts`（Dashboard webview）、`statusMenu.ts`、`ds.ts`；`webview/`（`panel-body` / `panel-styles` / `panel-script`，内联前端三段）
 * 测试：`npm test`（Node 原生类型剥离直跑 `node:test`，`--test-isolation=none`），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块
 * 本地验证 = `npm run verify`（typecheck + test + build + package）；VSIX 落在 `releases/`（`npm run package` 会先建目录再调 vsce）
-* **生成文件**：`resources/dsh-icon.woff`（`npm run build:icon-font`）是生成物但**入库**——扩展零运行时依赖、构建要可复现，生成物必须随版本固定，改完提交 diff 以便评审。**节假日表不是生成物**：`src/holidays.ts` 手工维护（每年从国务院公告抄一次，附文件 URL），刻意不引入抓取脚本——见该文件注释
+* **生成物入库**：`resources/dsh-icon.woff`（`npm run build:icon-font`）是生成物，但随版本入库——扩展零运行时依赖、构建要可复现；重新生成后提交 diff 以便评审。节假日表相反：`src/holidays.ts` 是手工静态数据（详见该文件注释），不用脚本抓取
 * **定位与退役判据**：见 `docs/positioning-and-retirement.md`——本文件不复述，避免指令文件膨胀；`docs/` 属开发文档，不进 VSIX
 
 ## 文档规范
@@ -21,6 +22,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 * `AGENTS.md`：中文一份；唯一 agent 指令文件（不留 CLAUDE.md 等其它厂商指令文件）
 * `README`：中英双份（英文默认 + 简体中文，顶部互链）；**面向用户**——只写安装 / 使用 / 配置的用法与行为，不写实现细节与开发历史
 * `CHANGELOG`：中英双份；**面向用户**——每条 = 一条用户可感知的变化（一句话、行为级）——**纯依赖版本除外**，那种版本按《运维》如实写「无用户可感知的变化」；不写实现细节与修复过程（归 commit 信息）
+
+本项目实际文档：`README.md` + `README.zh-CN.md`、`CHANGELOG.md` + `CHANGELOG.zh-CN.md`、`SECURITY.md`、`docs/positioning-and-retirement.md`（开发文档，不进 VSIX）。无 CONTRIBUTING。
 
 ## 工程管线（本仓库自含）
 
@@ -48,8 +51,9 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * **文档对齐**：README 中英 Settings 表与 `package.json` contributes.configuration 一一对应；文件路径 / 日志文件 / 行为描述与实现一致；CHANGELOG 双份覆盖本版全部用户可感知改动
 * **死代码**：grep 每个导出符号与常量确认调用方；清未使用的 import / 导出 / 变量 / 类型字段 / CSS 类
-* **高危 BUG**：状态一致性（异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径（含空格与非 ASCII 的路径必须能跑；临时 / 缓存目录与持久数据目录区分）；资源 / 内存泄漏（timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界；Webview 消息引用不滞留）；部分失败（中途失败状态诚实并校验结果；**「没启动」与「还没启动」必须可区分**——不确定的状态会让轮询永不退出，见 `cf9c23e`）；环境边界（首装 / 离线 / 断网 / 权限不足降级不挂死、有提示）
-* **安全热点**：子进程**一律 `spawn`/`execFile` + 参数数组，绝不拼命令行、绝不用 `shell: true`**——参数一旦经过 shell 解析就可能变成第二条命令（`dsh.nodePath` 曾因此可注入，见 `7bd6db7`）。Windows 的 `.cmd`/`.bat` 不能被 `spawn` 直接调用（Node 的 CVE-2024-27980 防护）也不能交给 shell，用 `proc.ts` 的 `resolveCommand`/`runResolved` 读 shim 后直接跑它的 Node 入口。用户配置路径先校验再使用、展示用 `maskPath`、删除确认 + 校验；API key 不写日志、不进面板 HTML；Webview CSP + 动态注入 `esc` 转义；fetch 带超时 + AbortController；外部 URL 走白名单
+* **高危 BUG**：状态一致性（异步动作由显式状态驱动，动作开始瞬间即置状态）；竞态（Start/Stop/切模式并发不撞车，中断后残留标志不影响下次，定时器动作结束后清理）；路径（含空格与非 ASCII 的路径必须能跑；临时 / 缓存目录与持久数据目录区分）；资源 / 内存泄漏（timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界；Webview 消息引用不滞留）；部分失败（中途失败状态诚实并校验结果；**「没启动」与「还没启动」必须可区分**——分不清会让等待端永远等下去，启动流程必须如实报告「进程有没有真的起来」）；环境边界（首装 / 离线 / 断网 / 权限不足降级不挂死、有提示）
+* **安全热点**：子进程**一律 `spawn`/`execFile` + 参数数组，绝不拼命令行、绝不用 `shell: true`**——参数经 shell 解析就可能变成第二条命令（用户配置的路径尤其如此）。Windows 的 `.cmd`/`.bat` 既不能被 `spawn` 直接调用（Node 的 CVE-2024-27980 防护）也不能交给 shell，用 `proc.ts` 的 `resolveCommand`/`runResolved` 读 shim 后跑它的 Node 入口。用户配置路径先校验再用、展示用 `maskPath`；API key 不进日志 / 面板；Webview CSP + `esc` 转义；fetch 带超时 + AbortController；外部 URL 白名单
+* **改写文件前先确认归属**：覆写 / 删除前必须确认那是本扩展自己的产物（如安装清单按名字识别），不是就不动——搞错会静默毁掉用户数据，且不可逆
 * **代码异味**：单一职责（生命周期 / 检测 / UI / 状态各归其位）；可变状态经函数封装；命名达意；同类对称；无超长函数 / 重复逻辑 / 魔术字符串
 * **魔法数字**：语义数字命名常量（`*_MS`）
 * **鲁棒性**：外部调用（dsh CLI / Node / 网络 / 子进程）有超时与容错；异常输入返回安全默认值；失败路径有用户可见反馈（面板状态栏 / 日志文件）
@@ -82,8 +86,8 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 > 本仓库有两个外部契约：**VS Code**（宿主）与 **dsh**（被启动、独立升级的 CLI）。根规范《扩展与宿主兼容（fail-safe）》在此落地：
 
-* **VS Code 版本门走清单**：`engines.vscode`（当前 `^1.85.0`）是声明式门，VS Code 在激活前自行判定；用到新 API 时必须同步抬它
-* **dsh 版本差异降级不崩**：只按公开契约读写 dsh 的 CLI 输出与配置目录（`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断）；不认的字段 / 输出走降级路径
-* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常。`src/panel.ts` 的 `onDidReceiveMessage` → `onMessage` 已加整体兜底：命令失败记一条 `✗ Command failed (…)` 进活动流，末尾 refresh 照常执行，面板不会因一次失败停在旧数据
-* **busy 必须成对收尾**：`addActivity(…, true)` 要用 `withBusy(label, task)` 包住，不手写 addActivity/finishBusy 这对调用——抛错路径会漏收尾，spinner 会转到会话结束（活动流没有回收器）
+* **VS Code 版本门走清单**：`engines.vscode`（当前 `^1.85.0`）由 VS Code 在激活前自行判定；用到新 API 时同步抬它
+* **dsh 版本差异降级不崩**：只按公开契约读 dsh 的 CLI 输出与配置目录（`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断）；不认的字段 / 输出走降级路径
+* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常——`onMessage` 失败记一条活动流并照常 refresh，面板不会停在旧数据
+* **busy 必须成对收尾**：`addActivity(…, true)` 用 `withBusy(label, task)` 包住。各 `*Host` 只暴露 `withBusy`、不暴露 `finishBusy`，所以手写这对调用写不出来——抛错会漏收尾，而活动流没有回收器，spinner 会转到会话结束
 * **模块顶层不依赖易变导出**：不 import VS Code 内部模块

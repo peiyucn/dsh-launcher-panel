@@ -6,17 +6,17 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.2.13]
 
-- Checking for updates in source mode no longer downloads anything: the check lists the release tags and compares commits, so it stays fast however far behind the checkout is. It used to fetch the candidate tag as part of the check, which on a checkout that was far behind meant pulling a large amount of history just to press Check updates.
-- A failed update check now says why (for example `timed out after 60s`, or the git error) instead of a bare "Update check failed".
-- Updating in source mode says it is fetching the release tag before the transfer starts, because that step scales with how far behind the checkout is and can take minutes; the transfer itself is no longer cut off after 10 seconds.
-- When a git operation fails because git is still configured to use a local proxy (for example a VPN/proxy app you have since closed) whose port nothing is listening on, the panel now names that dead proxy instead of reporting a vague network error.
-- Keep Start greyed out, and drop it from the status menu, while an update runs (triggering it from the command palette explains why): a start used to remain possible mid-update, running dsh while its checkout or package tree was being replaced.
-- Keep the activity log readable when a stop finds a process that already exited: system messages in the console code page used to appear as question marks and boxes on a localized Windows.
-- Stop Check updates from reporting a false timeout when GitHub (or the npm registry) answers slowly: network and purely local queries shared one 10-second limit, so a single slow round trip failed the check; network queries now have their own 60-second limit while local queries keep 10 seconds.
-- Follow the updated peak/off-peak rule: Chinese public holidays are off-peak in full (previously only weekends were, so a holiday falling on a weekday showed as Peak). The 2026 holiday calendar ships with the extension; a year without one shows "Peak?" rather than guessing a rate.
-- Starting dsh no longer goes through a shell. A path containing a space used to break pkg mode, and a `dsh.nodePath` value could be read as more than a path — a workspace could point it at a command. The server is now launched directly, so a configured path is only ever a path.
-- Update no longer replaces a `package.json` the launcher does not own. If `dsh.pkgPath` pointed at a folder that already contained dsh (for example your own project), pressing Update could overwrite your project's `package.json` without asking, losing its scripts and dependencies; only a manifest the launcher wrote is ever rewritten now.
-- Starting no longer hangs when the log folder cannot be created (a permissions or antivirus problem). The panel used to sit on "Starting…" indefinitely with Start greyed out until you pressed Stop; it now reports the failure and settles.
+- Checking for updates in source mode no longer downloads anything — it lists the release tags and compares commits, so it stays fast however far behind the checkout is.
+- A failed update check now says why (`timed out after 60s`, or the git error) instead of a bare "Update check failed".
+- Updating in source mode announces the release-tag fetch before it starts: that step scales with how far behind the checkout is and can take minutes. The transfer is no longer cut off after 10 seconds.
+- When a git operation fails because git still points at a local proxy you have closed, the panel names that dead proxy instead of giving a vague network error.
+- Start stays greyed out, and is dropped from the status menu, while an update runs — starting mid-update ran dsh from a checkout or package tree that was being replaced.
+- The activity log stays readable when a stop finds a process that already exited; system messages in the console code page used to appear as question marks and boxes on a localized Windows.
+- Check updates no longer reports a false timeout when GitHub or the npm registry answers slowly: network queries now allow 60 seconds, while local queries keep 10.
+- Chinese public holidays are off-peak in full, following the updated rule (previously only weekends were, so a holiday on a weekday showed as Peak). The 2026 calendar ships with the extension; a year without one shows "Peak?" rather than guessing.
+- Starting dsh no longer goes through a shell. A path containing a space used to break pkg mode, and a `dsh.nodePath` value could be read as a command — a workspace setting could point it at one. A configured path is now only ever a path.
+- Update no longer overwrites a `package.json` the launcher did not write. If `dsh.pkgPath` pointed at a folder that already contained dsh (your own project, say), Update could replace its `package.json` without asking, losing its scripts and dependencies.
+- Starting no longer hangs when the log folder cannot be created (a permissions or antivirus problem). The panel used to sit on "Starting…" with Start greyed out until you pressed Stop; it now reports the failure and settles.
 
 ## [0.2.12]
 
