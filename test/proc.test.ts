@@ -2,7 +2,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg, runFile } from '../src/proc.ts'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { decodeChildOutput, isProcessAlive, resolveCommand, runFile, runResolved } from '../src/proc.ts'
 import { parseLocalProxySettings } from '../src/git.ts'
 
 /**
@@ -49,16 +52,69 @@ test('isProcessAlive reports own pid alive and an impossible pid dead', () => {
   assert.equal(isProcessAlive(999999999), false)
 })
 
-test('quoteCmdArg quotes args containing special characters', () => {
-  assert.equal(quoteCmdArg('a b'), '"a b"')
-  assert.equal(quoteCmdArg('a&b'), '"a&b"')
-  assert.equal(quoteCmdArg('a|b'), '"a|b"')
-  assert.equal(quoteCmdArg('plain'), 'plain')
+/**
+ * `resolveCommand` replaced the old shell-quoting helpers. Its whole reason to
+ * exist is that a Windows `.cmd` shim cannot be spawned by Node and must not be
+ * handed to a shell, so the shim is read and its Node target run instead — the
+ * arguments then stay arguments.
+ */
+test('resolveCommand passes a non-shim command through untouched', () => {
+  // On every platform a plain executable needs no resolution: same file, no
+  // extra leading arguments. (The `.cmd` branch is Windows-only, so it is
+  // exercised by the test below on Windows and skipped elsewhere.)
+  const r = resolveCommand(process.execPath)
+  assert.deepEqual(r, { file: process.execPath, args: [] })
 })
 
-test('psQuote doubles single quotes', () => {
-  assert.equal(psQuote("it's"), "it''s")
-  assert.equal(psQuote('plain'), 'plain')
+test('resolveCommand passes an argument array through without a shell', async () => {
+  // The security property that matters: an argument containing shell
+  // metacharacters is delivered as ONE argument, verbatim — it can never become
+  // a second command, because no shell parses it.
+  const hostile = 'x & echo INJECTED> marker & y'
+  const r = await runResolved(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', hostile])
+  assert.equal(r.ok, true)
+  const argv = JSON.parse(r.stdout)
+  assert.deepEqual(argv, [hostile])
+})
+
+test('resolveCommand refuses a batch file it cannot resolve, rather than spawning it', () => {
+  if (process.platform !== 'win32') return // the refusal is Windows-specific
+  // Node refuses to spawn `.cmd`/`.bat` directly (its CVE-2024-27980 guard), and
+  // handing one to a shell is the injection hole this replaced. An unresolvable
+  // shim must therefore be reported, not attempted.
+  const bogus = join(tmpdir(), 'dsh-no-such-shim.cmd')
+  assert.equal(resolveCommand(bogus), undefined)
+})
+
+test('resolveCommand reads a .cmd shim and returns its Node entry', () => {
+  if (process.platform !== 'win32') return
+  // The npm shim shape: a batch file that runs a script with `%dp0%` expanded to
+  // its own directory. Written here rather than relying on a machine's pnpm.
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-shim-'))
+  try {
+    const entry = join(dir, 'entry.mjs')
+    writeFileSync(entry, '')
+    const shim = join(dir, 'tool.cmd')
+    writeFileSync(shim, [
+      '@ECHO off',
+      'GOTO start',
+      ':find_dp0',
+      'SET dp0=%~dp0',
+      'EXIT /b',
+      ':start',
+      'SETLOCAL',
+      'CALL :find_dp0',
+      'endLocal & "%_prog%"  "%dp0%\\entry.mjs" %*',
+      '',
+    ].join('\r\n'))
+    const r = resolveCommand(shim)
+    assert.notEqual(r, undefined)
+    // It runs the script with the current Node, not the shim through cmd.
+    assert.equal(r?.file, process.execPath)
+    assert.equal(r?.args[0], entry)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('runFile reports success with stdout and no error', { skip: skipReason }, async () => {

@@ -21,7 +21,7 @@ import * as vscode from 'vscode'
 import { DSH_INSTALL_MANIFEST_NAME, dshBaseDir, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath } from '../paths.ts'
 import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
-import { quoteCmdArg, runFile } from '../proc.ts'
+import { runResolved } from '../proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from '../pnpm.ts'
 
 /**
@@ -110,9 +110,7 @@ export async function latestDshVersion(
   pnpmCmd = 'pnpm',
 ): Promise<{ version: string } | { error: string }> {
   const spec = npmSpecForChannel(channel)
-  const result = process.platform === 'win32'
-    ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), 'view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
-    : await runFile(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
+  const result = await runResolved(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
   if (!result.ok) {
     // Keep the failure visible for diagnosis: registry outages and cmd
     // quoting problems both surface here as "unreachable" to the user.
@@ -255,9 +253,7 @@ export async function preparePkgStart(
 
 /** The pnpm version string ('' on failure). */
 export async function pnpmVersion(pnpmCmd: string): Promise<string> {
-  const result = process.platform === 'win32'
-    ? await runFile('cmd', ['/c', quoteCmdArg(pnpmCmd), '--version'], PNPM_PROBE_TIMEOUT_MS)
-    : await runFile(pnpmCmd, ['--version'], PNPM_PROBE_TIMEOUT_MS)
+  const result = await runResolved(pnpmCmd, ['--version'], PNPM_PROBE_TIMEOUT_MS)
   return result.ok ? result.stdout.trim().split(/\r?\n/)[0]?.trim() ?? '' : ''
 }
 

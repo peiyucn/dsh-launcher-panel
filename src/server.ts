@@ -73,7 +73,6 @@ import { isProcessAlive, sleep } from './proc.ts'
 import {
   activityLogFile,
   addActivity,
-  appendOutput,
   displayLine,
   dbg,
   fileSizeSafe,
@@ -202,7 +201,6 @@ const logTailHost: LogTailHost = { serverLogFile, displayLine, addActivity }
 
 /** The process layer's view of this module's lifecycle state. */
 const processHost: ProcessHost = {
-  appendOutput,
   addActivity,
   setDshState: (state) => { dshState = state },
   setStartBusyId: (id) => { startBusyId = id },

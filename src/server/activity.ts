@@ -129,16 +129,6 @@ export function displayLine(line: string): void {
   pushActivity(`[${new Date().toLocaleTimeString()}] ${trimmed}`)
 }
 
-/** Append one raw server output line to the activity feed + log file. */
-export function appendOutput(line: string): void {
-  displayLine(line)
-  const trimmed = line.trimEnd()
-  if (!trimmed) return
-  fs.appendFile(logPath, trimmed + '\n', (error) => {
-    if (error) dbg(`server log append failed: ${error.message}`)
-  })
-}
-
 /** The panel activity feed (Start/Stop command dynamics), newest last. */
 export function getActivity(): ActivityEntry[] {
   return activity

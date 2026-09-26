@@ -1,13 +1,29 @@
 /**
  * Launching and killing the dsh server process.
  *
- * Two spawn paths exist and the difference is the console on Windows. The
- * server must run inside a *hidden console* (`Start-Process -WindowStyle
- * Hidden`) rather than a console-less child (`windowsHide`), because the tool
- * subprocesses dsh spawns — bash, pwsh — need a console to attach to; without
- * one each of them creates its own visible window. That path then loses the
- * child's pipes, so its output reaches the dashboard through the log file
- * instead (see server/log-tail).
+ * **Why there is no shell here.** The server is launched with Node's own
+ * `spawn(file, argsArray)`, which quotes arguments by the MSVCRT rule. Nothing
+ * is ever concatenated into a command line, so a value from a setting (a Node
+ * path, a package dir) is data — it cannot become a second command. An earlier
+ * version built a `cmd /c …` line inside a PowerShell `Start-Process`, which
+ * both broke on paths containing spaces and let a crafted `dsh.nodePath` inject
+ * a command. Two facts make that whole approach unnecessary:
+ *
+ * - `windowsHide: true` gives the child a console whose window is hidden, which
+ *   is all dsh's own tool subprocesses (bash, pwsh) need to attach to instead of
+ *   each flashing a window. This is the same choice dsh itself makes for its
+ *   ordinary subprocesses (`packages/subprocess/subprocess-local/src/spawn.ts`
+ *   passes `windowsHide: platform === 'win32'`), and its Win32 path documents
+ *   why it does *not* use `CREATE_NO_WINDOW`: that flag can break console
+ *   inheritance (`packages/subprocess/win32-process/src/process.ts`).
+ * - Output goes straight to the log file through `stdio: ['ignore', fd, fd]`,
+ *   which replaces what `>> log 2>&1` used to do without a shell.
+ *
+ * The one case a shell used to cover is a `.cmd` shim (`pnpm`): Node refuses to
+ * spawn a `.cmd`/`.bat` directly (an `EINVAL` guard added for CVE-2024-27980),
+ * and `shell: true` would reintroduce exactly the injection this module avoids.
+ * Those shims are Node wrappers, so {@link resolveNodeEntry} reads the shim and
+ * runs its target with the current Node instead.
  *
  * This module owns the process registry — the child handle and the pid — since
  * everything that stops or supervises a running server needs exactly those two
@@ -16,18 +32,17 @@
  * @module server/process
  */
 
+import * as fs from 'node:fs'
 import * as vscode from 'vscode'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
 import { NODE_PROBE_TIMEOUT_MS, TASKKILL_TIMEOUT_MS } from '../timing.ts'
-import { decodeChildOutput, isProcessAlive, psQuote, quoteCmdArg } from '../proc.ts'
+import { decodeChildOutput, isProcessAlive, resolveCommand } from '../proc.ts'
 import { ensureLogDir, serverLogFile, truncateServerLog } from './activity.ts'
 import { startLogTail, type LogTailHost } from './log-tail.ts'
 
 /** What the process layer needs from the lifecycle it runs inside. */
 export interface ProcessHost {
-  /** Append one server-output line to the activity feed + log file. */
-  appendOutput: (line: string) => void
   /** Report into the panel feed; returns the entry id. */
   addActivity: (line: string, isBusy?: boolean) => number
   /** Record dsh availability for the status line. */
@@ -72,81 +87,15 @@ export function takeTracked(): { child: ChildProcess | undefined; pid: number | 
 }
 
 /**
- * Spawn the DSH server inside a hidden console on Windows. A hidden console
- * (SW_HIDE via Start-Process -WindowStyle Hidden) lets the tool subprocesses
- * DSH spawns (bash/pwsh) attach to it without flashing their own cmd windows,
- * unlike `windowsHide` (CREATE_NO_WINDOW), which leaves them console-less and
- * forces each child to create a new visible window.
+ * Spawn the DSH server: no console window, output appended to the server log.
  *
- * The server itself runs as `cmd /c ... > log 2>&1` so output lands in the log
- * file that the tailer streams into the dashboard; Start-Process must NOT use
- * -RedirectStandardOutput/Error, because that keeps the parent PowerShell alive
- * until the child exits (a PowerShell quirk with long-running children).
- * `-PassThru` echoes the cmd.exe PID, which stays alive for the server's
- * lifetime (cmd /c blocks on the server process).
+ * Arguments are passed as an array, so nothing is parsed by a shell and a value
+ * from a setting can only ever be one argument. `windowsHide` keeps the console
+ * window hidden while still giving the child a console for its own tool
+ * subprocesses to inherit; `stdio` points straight at the log file, which is
+ * what the tailer streams into the dashboard.
  */
-function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, env?: Record<string, string>): void {
-  const program = quoteCmdArg(cmd)
-  const rest = args.map(quoteCmdArg).join(' ')
-  let run = rest ? `${program} ${rest}` : program
-  if (env) {
-    // The quoted `set "K=V"` form keeps cmd metacharacters out of the value.
-    const setEnv = Object.entries(env).map(([k, v]) => `set "${k}=${v}"`).join('&& ')
-    run = `${setEnv}&& ${run}`
-  }
-  const inner = `${run} >> ${quoteCmdArg(serverLogFile())} 2>&1`
-  const wd = cwd ? `-WorkingDirectory '${psQuote(cwd)}' ` : ''
-  const script =
-    `$p = Start-Process -FilePath 'cmd.exe' ${wd}-ArgumentList '/d','/s','/c','${psQuote(inner)}' ` +
-    `-WindowStyle Hidden -PassThru; Write-Output "DSH_PID=$($p.Id)"`
-
-  startLogTail(host.logTail)
-
-  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    // NOTE: no `detached` here — on Windows it breaks powershell's stdio and
-    // Start-Process (empirically verified). The server survives regardless,
-    // because Start-Process launches it as an independent process.
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  child.unref()
-  trackedChild = child
-
-  let pidBuf = ''
-  child.stdout?.on('data', (chunk: Buffer) => {
-    pidBuf += chunk.toString()
-    const m = /DSH_PID=(\d+)/.exec(pidBuf)
-    if (m && trackedChild === child) trackedPid = Number(m[1])
-  })
-  child.stdout?.on('error', () => {})
-  child.stderr?.on('data', (chunk: Buffer) => {
-    const text = chunk.toString().trim()
-    if (text) host.addActivity(text)
-  })
-  child.stderr?.on('error', () => {})
-
-  child.once('error', (error) => {
-    // Do not clear trackedChild here: 'close' always follows and owns the
-    // cleanup, so its fail-fast below can still observe the child. Clearing
-    // early made the close guard dead code and left a dead spawn spinning in
-    // waitForPort forever.
-    void vscode.window.showErrorMessage(`DeepSeek Harness: failed to start (${error.message}).`)
-  })
-  // 'close' fires after 'exit' and after stdout is fully delivered; this
-  // launcher exits right after Start-Process. If no PID was ever reported,
-  // the server never came up — fail the start instead of letting waitForPort
-  // spin forever.
-  child.once('close', () => {
-    if (trackedChild === child) trackedChild = undefined
-    if (trackedPid === undefined && host.isStarting()) host.onLaunchFailed()
-  })
-}
-
-/**
- * Spawn the DSH server with no console window (Windows) and stream its
- * stdout/stderr into the dashboard activity feed + log file.
- */
-export function spawnServer(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, shell = false, env?: Record<string, string>): void {
+export function spawnServer(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, env?: Record<string, string>): void {
   trackedPid = undefined
   host.clearWebToken()
   // Counters are per run: the silent-exit diagnosis treats "0 lines" as "died
@@ -156,9 +105,12 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
   const logDir = ensureLogDir()
   if (!logDir.ok) {
     // Failing here used to escape as an unhandled rejection from the Start
-    // command; report it and abort the spawn instead.
+    // command; report it and abort the spawn instead. Reporting through the
+    // return value also lets the caller skip waitForPort, which has no other
+    // way to notice that no process was ever started.
     host.addActivity('✗ Could not create the log folder — check write permissions under your home directory')
     void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${logDir.dir}. Check write permissions.`)
+    host.onLaunchFailed()
     return
   }
   // Each start gets a fresh server log (dsh.clearServerLogOnStart, default on)
@@ -171,48 +123,63 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
 
   const hideConsole = vscode.workspace.getConfiguration('dsh').get<boolean>('hideConsole') ?? true
 
-  if (process.platform === 'win32' && hideConsole) {
-    spawnHiddenViaPowerShell(cmd, args, cwd, host, env)
+  // The tailer follows the log file; start it before the child can write.
+  startLogTail(host.logTail)
+
+  let logFd: number
+  try {
+    logFd = fs.openSync(serverLogFile(), 'a')
+  } catch (error) {
+    host.addActivity(`✗ Could not open the server log for writing — ${error instanceof Error ? error.message : String(error)}`)
+    host.onLaunchFailed()
     return
   }
 
-  const child = spawn(cmd, args, {
-    cwd,
-    shell,
-    windowsHide: hideConsole,
-    detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: env ? { ...process.env, ...env } : undefined,
-  })
+  let child: ChildProcess
+  try {
+    child = spawn(cmd, args, {
+      cwd,
+      windowsHide: hideConsole,
+      // POSIX: detached makes the child a group leader so Stop can signal the
+      // whole tree. On Windows it must stay off: `detached` sets
+      // DETACHED_PROCESS, which drops the console entirely (and makes
+      // windowsHide's CREATE_NO_WINDOW be ignored), so dsh's own bash/pwsh
+      // would each get a *visible* window — the opposite of the point.
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', logFd, logFd],
+      env: env ? { ...process.env, ...env } : undefined,
+    })
+  } catch (error) {
+    // spawn throws synchronously for a few inputs (notably `.cmd`/`.bat`);
+    // report it rather than letting it unwind the caller's start flow.
+    fs.closeSync(logFd)
+    host.addActivity(`✗ Could not start ${cmd} — ${error instanceof Error ? error.message : String(error)}`)
+    host.onLaunchFailed()
+    return
+  } finally {
+    // The child holds its own duplicate; ours is only needed to create it.
+    try { fs.closeSync(logFd) } catch { /* already closed above */ }
+  }
+
   child.unref()
   trackedChild = child
-  // Mirror the hidden-console path so waitForPort's fail-fast (which checks
-  // trackedPid) also covers a directly-spawned child that exits immediately.
+  // The real pid, taken from Node rather than parsed out of a launcher's
+  // stdout — and undefined (not a placeholder) when the OS refused the spawn,
+  // which is what waitForPort's fail-fast reads.
   trackedPid = child.pid
 
-  let outBuffer = ''
-  child.stdout?.on('data', (chunk: Buffer) => {
-    outBuffer += chunk.toString()
-    const lines = outBuffer.split(/\r?\n/)
-    outBuffer = lines.pop() ?? ''
-    for (const line of lines) host.appendOutput(line)
-  })
-  child.stdout?.on('error', () => {})
-  let errBuffer = ''
-  child.stderr?.on('data', (chunk: Buffer) => {
-    errBuffer += chunk.toString()
-    const lines = errBuffer.split(/\r?\n/)
-    errBuffer = lines.pop() ?? ''
-    for (const line of lines) host.appendOutput(line)
-  })
-  child.stderr?.on('error', () => {})
-
   child.once('error', (error) => {
-    trackedChild = undefined
+    // Do not clear trackedChild here: 'close' always follows and owns the
+    // cleanup, so its fail-fast below can still observe the child. Clearing
+    // early made the close guard dead code and left a dead spawn spinning in
+    // waitForPort forever.
     void vscode.window.showErrorMessage(`DeepSeek Harness: failed to start (${error.message}).`)
   })
-  child.once('exit', () => {
-    trackedChild = undefined
+  child.once('close', () => {
+    if (trackedChild === child) trackedChild = undefined
+    // No pid means the OS never started it (e.g. ENOENT). waitForPort's own
+    // fail-fast cannot fire on `pid === undefined`, so fail the start here.
+    if (trackedPid === undefined && host.isStarting()) host.onLaunchFailed()
   })
 }
 
@@ -237,7 +204,7 @@ export function spawnSource(repoPath: string, cfg: { port: number; nodePath: str
   const webArgs = buildWebArgs(cfg, version)
   host.setStartBusyId(host.addActivity(`▶ Start: ${node} --import tsx/esm apps/cli/src/bin.ts ${webArgs.join(' ')}`, true))
   const env = cfg.sourceDebug ? { NODE_DEBUG: 'module' } : undefined
-  spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, host, false, env)
+  spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, host, env)
 }
 
 /** pkg mode: run the managed dsh via `pnpm exec dsh web` (pnpm sets up the module path). */
@@ -250,20 +217,22 @@ export function spawnPkg(cfg: { port: number }, pnpmCmd: string, version: string
   // pnpm exec 默认会在依赖状态不一致时自动重跑 pnpm install——那次重装撞上
   // 网络/元数据问题时，会把本可正常运行的已装 dsh 挡在启动之外。
   const execArgs = ['--config.verify-deps-before-run=false', 'exec', 'dsh', ...webArgs]
-  if (process.platform === 'win32') {
-    // pnpm is a .cmd shim: drive it through cmd with the arguments array, so
-    // Windows quoting keeps fallback shim paths (possibly containing spaces)
-    // intact in both the hidden-console and the visible-console spawn paths.
-    spawnServer('cmd', ['/c', quoteCmdArg(pnpmCmd), ...execArgs], installDir, host, false)
-  } else {
-    spawnServer(pnpmCmd, execArgs, installDir, host, false)
+  // On Windows `pnpm` is a `.cmd` shim, which Node refuses to spawn directly, so
+  // run the Node script that shim wraps (see resolveCommand).
+  const resolved = resolveCommand(pnpmCmd)
+  if (resolved === undefined) {
+    host.addActivity(`✗ ${pnpmCmd} is a Windows batch shim whose Node entry could not be resolved — install pnpm with npm and try again`)
+    void vscode.window.showErrorMessage(`DeepSeek Harness: ${pnpmCmd} cannot be launched safely. Install pnpm with npm and try again.`)
+    host.onLaunchFailed()
+    return
   }
+  spawnServer(resolved.file, [...resolved.args, ...execArgs], installDir, host)
 }
 
 /**
- * Kill one process. On Windows this kills the whole tree: the tracked pid is
- * cmd.exe, and the node child that `cmd /c` blocks on would otherwise survive
- * and finish starting.
+ * Kill one process. On Windows the whole tree is killed: the tracked pid is the
+ * server's own Node process, and the tool subprocesses it spawned (bash, pwsh,
+ * pnpm) are its descendants — `/T` takes them with it.
  *
  * `taskkill` answers in the system code page (GBK on a Chinese Windows), so its
  * stderr is decoded explicitly — reading `error.message` would yield the

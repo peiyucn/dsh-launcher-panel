@@ -1,5 +1,6 @@
 /**
- * Subprocess primitives: run a command, read its output, and quote arguments.
+ * Subprocess primitives: run a command, read its output, and resolve Windows
+ * shims.
  *
  * Output is captured as bytes and decoded here rather than by Node, because
  * Windows console tools answer in the console code page instead of UTF-8.
@@ -7,6 +8,8 @@
  * @module proc
  */
 
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { execFile } from 'node:child_process'
 
 /** The outcome of a {@link runFile} call. */
@@ -105,12 +108,68 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Quote a single token for cmd.exe (only when it contains special characters). */
-export function quoteCmdArg(arg: string): string {
-  return /[\s"&|<>^]/.test(arg) ? `"${arg}"` : arg
+/**
+ * How to invoke a command that may be a Windows batch shim.
+ *
+ * npm installs a CLI on Windows as a `.cmd` wrapper around a Node script,
+ * because `cmd.exe` will not run a `.js` from `PATH`. Two things follow, and
+ * both are easy to get wrong:
+ *
+ * - Node's `spawn` **refuses** to run a `.cmd`/`.bat` (`EINVAL`), a deliberate
+ *   guard against the argument-injection class CVE-2024-27980 describes.
+ * - The usual workaround — `shell: true`, or building a `cmd /c "…"` line — puts
+ *   the arguments through cmd's parser, where a quote in a value can end the
+ *   command and start another one.
+ *
+ * A shim is only a wrapper, so the wrapper is read and its target is run with
+ * the current Node: same program, no shell, and the arguments stay arguments.
+ *
+ * @param command - a resolved pnpm path (`…\pnpm.cmd`) or any executable.
+ * @returns the executable and leading arguments to use, or undefined when the
+ *   command is a batch file whose target could not be determined — the caller
+ *   must then report rather than spawn something that cannot work.
+ */
+export function resolveCommand(command: string): { file: string; args: string[] } | undefined {
+  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(command)) return { file: command, args: [] }
+  let text: string
+  try {
+    text = fs.readFileSync(command, 'utf8')
+  } catch {
+    return undefined
+  }
+  // npm writes a line of the shape `"…\node.exe" "%dp0%\node_modules\…\entry.js" %*`.
+  // Take the last quoted token ending in a script extension, so a shim that also
+  // quotes its interpreter still resolves to the script.
+  const quoted = [...text.matchAll(/"([^"\r\n]*\.(?:mjs|cjs|js))"/gi)]
+  const target = quoted[quoted.length - 1]?.[1]
+  if (target === undefined) return undefined
+  const expanded = target.replace(/%dp0%/gi, path.dirname(command))
+  if (!fs.existsSync(expanded)) return undefined
+  return { file: process.execPath, args: [expanded] }
 }
 
-/** Escape a value for a PowerShell single-quoted string literal ('' doubles a quote). */
-export function psQuote(value: string): string {
-  return value.replace(/'/g, "''")
+/**
+ * Run a command, transparently resolving a Windows batch shim first.
+ *
+ * This is the shell-free equivalent of the old `cmd /c <shim> …` calls: the
+ * shim's Node target is executed directly, so a path containing spaces works
+ * and no argument can be reinterpreted as a second command.
+ *
+ * @param command - pnpm (possibly a `.cmd` shim) or any executable.
+ * @param args - arguments, passed as an array.
+ * @param timeoutMs - the bound for the whole call; 0 or less disables it.
+ * @returns the same shape as {@link runFile}, with a resolution failure reported
+ *   as `ok: false` rather than thrown.
+ */
+export function runResolved(command: string, args: string[], timeoutMs = 0): Promise<RunFileResult> {
+  const resolved = resolveCommand(command)
+  if (resolved === undefined) {
+    return Promise.resolve({
+      ok: false,
+      stdout: '',
+      stderr: '',
+      error: `${command} is a Windows batch shim whose Node entry could not be resolved`,
+    })
+  }
+  return runFile(resolved.file, [...resolved.args, ...args], timeoutMs)
 }
