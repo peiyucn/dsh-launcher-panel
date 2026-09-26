@@ -5,7 +5,7 @@ import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
 import { describeDshUpdate } from './versions.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, withBusy, type ServerStatus } from './server.ts'
+import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, beginUpdateCheck, endUpdateCheck, withBusy, type ServerStatus } from './server.ts'
 import { PANEL_CSS } from './webview/panel-styles.ts'
 import { panelBody } from './webview/panel-body.ts'
 import { panelScript } from './webview/panel-script.ts'
@@ -104,13 +104,14 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         await runDshUpdate()
         break
       case 'refreshRequirements':
-        // The busy spinner and the `checking` flag (which greys the button)
-        // must both be released even when the check throws — an unwound
-        // setCheckingUpdates(true) leaves Check updates disabled for the rest
-        // of the session.
-        await withBusy('↻ Checking for updates…', async () => {
-          setCheckingUpdates(true)
-          try {
+        // The spinner and the `checking` flag (which greys the button) must be
+        // released even when the check throws, and must stay set for the whole
+        // handler: `clearRequirementsCaches` runs a check of its own, so an
+        // inner release would re-enable the button while this one still runs.
+        // The counter in server.ts makes nesting safe; this pair only brackets.
+        beginUpdateCheck()
+        try {
+          await withBusy('↻ Checking for updates…', async () => {
             await this.refresh()
             await clearRequirementsCaches()
             const st = await currentStatus()
@@ -119,10 +120,10 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
                 ? 'ℹ dsh is not installed yet — use Install & Start'
                 : describeDshUpdate(st.update),
             )
-          } finally {
-            setCheckingUpdates(false)
-          }
-        })
+          })
+        } finally {
+          endUpdateCheck()
+        }
         break
       case 'setMode':
         if (message.value === 'pnpm' || message.value === 'source') {

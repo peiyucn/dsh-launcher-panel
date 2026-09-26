@@ -159,12 +159,7 @@ let nodeState: ConditionState = 'unknown'
 let dshState: ConditionState = 'unknown'
 /** The server lifecycle phase; `starting` for the panel derives from it. */
 let serverPhase: ServerPhase = 'stopped'
-let checkingUpdates = false
 
-/** Current in-flight check state (panel fallback reads it instead of assuming false). */
-export function isCheckingUpdates(): boolean {
-  return checkingUpdates
-}
 
 /** The terminal layer's view of this module. */
 const terminalHost: TerminalHost = { addActivity }
@@ -586,7 +581,7 @@ export async function currentStatus(): Promise<ServerStatus> {
     starting: serverPhase === 'starting',
     installing: serverPhase === 'installing',
     stopping: serverPhase === 'stopping',
-    checking: checkingUpdates,
+    checking: isCheckingUpdates(),
     updating: isUpdating(),
     url: displayUrl(cfg.port),
     dsh: dshState,
@@ -608,22 +603,49 @@ export async function currentStatus(): Promise<ServerStatus> {
   }
 }
 
+/**
+ * How many update checks are in flight.
+ *
+ * A counter, not a flag: the panel's Check-updates handler brackets a call to
+ * {@link clearRequirementsCaches}, which runs a check of its own. With a
+ * boolean, the inner check's completion cleared the flag while the outer one was
+ * still running — so the button re-enabled early and a second check could start
+ * on top of the first. Counting makes "still checking" mean exactly that.
+ */
+let checksInFlight = 0
+
 /** Force the next refresh to re-probe node/dsh and re-check for dsh updates. */
 export async function clearRequirementsCaches(): Promise<void> {
   detectionCache = undefined
   updateCache = undefined
-  checkingUpdates = true
+  checksInFlight++
   try {
     const update = await checkDshUpdateStatus(updateHost)
     updateCache = { update, at: Date.now() }
   } finally {
-    checkingUpdates = false
+    checksInFlight--
   }
 }
 
-/** Mark the update check in-flight before the first refresh, so the button stays grey. */
-export function setCheckingUpdates(value: boolean): void {
-  checkingUpdates = value
+/**
+ * Note that an outer update check is starting/finishing.
+ *
+ * Used by the panel, which shows a spinner across the whole handler (a refresh
+ * plus {@link clearRequirementsCaches}); the counter keeps that window honoured
+ * without the inner check ending it early.
+ */
+export function beginUpdateCheck(): void {
+  checksInFlight++
+}
+
+/** Counterpart to {@link beginUpdateCheck}. */
+export function endUpdateCheck(): void {
+  checksInFlight = Math.max(0, checksInFlight - 1)
+}
+
+/** Whether an update check is in flight (drives the Check updates button). */
+export function isCheckingUpdates(): boolean {
+  return checksInFlight > 0
 }
 
 /** The URL to open for the user, carrying this run's token when it has one. */
