@@ -5,7 +5,7 @@ import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
 import { describeDshUpdate } from './versions.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, finishBusy, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, type ServerStatus } from './server.ts'
+import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, setCheckingUpdates, withBusy, type ServerStatus } from './server.ts'
 import { PANEL_CSS } from './webview/panel-styles.ts'
 import { panelBody } from './webview/panel-body.ts'
 import { panelScript } from './webview/panel-script.ts'
@@ -75,7 +75,24 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
 </html>`
   }
 
+  /**
+   * Webview message entry point. A failing command must never escape into
+   * VS Code's message pipeline (an unhandled rejection there is invisible), and
+   * the trailing refresh has to happen even then — otherwise one bad click
+   * freezes the dashboard on stale data.
+   */
   private async onMessage(message: { command?: string; value?: string }): Promise<void> {
+    try {
+      await this.handleMessage(message)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      dbg(`webview command "${message.command}" failed: ${msg}`)
+      addActivity(`✗ Command failed (${message.command}): ${msg}`)
+    }
+    await this.refresh()
+  }
+
+  private async handleMessage(message: { command?: string; value?: string }): Promise<void> {
     switch (message.command) {
       case 'start':
         await actionStart()
@@ -87,19 +104,25 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         await runDshUpdate()
         break
       case 'refreshRequirements':
-        const checkBusyId = addActivity('↻ Checking for updates…', true)
-        setCheckingUpdates(true)
-        await this.refresh()
-        await clearRequirementsCaches()
-        {
-          const st = await currentStatus()
-          addActivity(
-            !st.dshVersion
-              ? 'ℹ dsh is not installed yet — use Install & Start'
-              : describeDshUpdate(st.update),
-          )
-        }
-        finishBusy(checkBusyId)
+        // The busy spinner and the `checking` flag (which greys the button)
+        // must both be released even when the check throws — an unwound
+        // setCheckingUpdates(true) leaves Check updates disabled for the rest
+        // of the session.
+        await withBusy('↻ Checking for updates…', async () => {
+          setCheckingUpdates(true)
+          try {
+            await this.refresh()
+            await clearRequirementsCaches()
+            const st = await currentStatus()
+            addActivity(
+              !st.dshVersion
+                ? 'ℹ dsh is not installed yet — use Install & Start'
+                : describeDshUpdate(st.update),
+            )
+          } finally {
+            setCheckingUpdates(false)
+          }
+        })
         break
       case 'setMode':
         if (message.value === 'pnpm' || message.value === 'source') {
@@ -138,14 +161,12 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         }
         break
       case 'balance':
-        const balanceBusyId = addActivity('↻ Querying DeepSeek balance…', true)
-        await fetchDshBalance()
-        {
+        await withBusy('↻ Querying DeepSeek balance…', async () => {
+          await fetchDshBalance()
           const b = getDshBalance()
           if (b?.balance) addActivity(`✓ Balance: ${b.balance.total} ${b.balance.currency}`)
           else addActivity(`⚠ Balance: ${b?.error ?? 'no balance data'}`)
-        }
-        finishBusy(balanceBusyId)
+        })
         break
       case 'setBrowser':
         if (message.value) await actionSetBrowser(message.value)
@@ -169,7 +190,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       default:
         break
     }
-    await this.refresh()
   }
 
   private startTimer(): void {
