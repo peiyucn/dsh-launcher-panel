@@ -54,8 +54,6 @@ import {
   type InstallHost,
 } from './server/install.ts'
 import {
-} from './env.ts'
-import {
   DETECTION_CACHE_TTL_MS,
   HTTP_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
@@ -81,6 +79,7 @@ import {
   fileSizeSafe,
   finishBusy,
   outputLineCount,
+  resetRunCounters,
   serverLogFile,
 } from './server/activity.ts'
 
@@ -208,6 +207,7 @@ const processHost: ProcessHost = {
   setDshState: (state) => { dshState = state },
   setStartBusyId: (id) => { startBusyId = id },
   clearWebToken: () => { clearWebToken() },
+  resetRunCounters,
   isStarting: () => serverPhase === 'starting',
   onLaunchFailed: () => {
     setServerPhase('stopped')
@@ -286,7 +286,9 @@ function detectConfig(cfg: DshConfig): DetectConfig {
 
 
 // The activity feed and the two log files live in server/activity.ts; the panel
-// and the extension read them through this module's re-exports.
+// and the extension read them through this module's re-exports. The process
+// layer needs resetRunCounters, so it is imported here as well (the host wires
+// it to the spawn path).
 export { clearConsole, getActivity, setLogPath, dbg, addActivity, finishBusy, type ActivityEntry } from './server/activity.ts'
 
 
@@ -383,8 +385,6 @@ function exclusive(task: () => Promise<boolean>): Promise<boolean> {
   })
   return busy
 }
-
-/** Whether a checkout has its dependencies installed (`tsx` is the source-launch hook). */
 
 /** Make sure the server is running (no re-entrancy guard). */
 async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
@@ -619,17 +619,17 @@ export function setCheckingUpdates(value: boolean): void {
   checkingUpdates = value
 }
 
+/** The URL to open for the user, carrying this run's token when it has one. */
+export function uiUrl(cfg: DshConfig = readConfig()): string {
+  return uiUrlForPort(cfg.port)
+}
+
 /**
  * Update dsh to the newest version this mode tracks.
  *
  * A thin wrapper: the flow itself lives in server/update.ts, which owns the
  * in-flight guard and the rule that an update may only run while stopped.
  */
-/** The URL to open for the user, carrying this run's token when it has one. */
-export function uiUrl(cfg: DshConfig = readConfig()): string {
-  return uiUrlForPort(cfg.port)
-}
-
 export function runDshUpdate(): Promise<void> {
   return runDshUpdateInner(updateHost)
 }

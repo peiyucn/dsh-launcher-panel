@@ -36,6 +36,13 @@ export interface ProcessHost {
   setStartBusyId: (id: number) => void
   /** Drop the cached web token: each run mints its own. */
   clearWebToken: () => void
+  /**
+   * Zero the per-run output counters. Must run when a spawn begins: the
+   * silent-exit diagnosis reads "0 lines seen" to mean "the child died without
+   * printing anything", so counters that survive into the next run suppress
+   * that diagnosis for every later failure.
+   */
+  resetRunCounters: () => void
   /** The phase is 'starting' while a spawn is being supervised. */
   isStarting: () => boolean
   /** The start failed before a process id was ever reported. */
@@ -54,17 +61,6 @@ let trackedPid: number | undefined
 /** The pid of the process serving the web UI, when one was reported. */
 export function getTrackedPid(): number | undefined {
   return trackedPid
-}
-
-/** The spawned child handle, when the launcher still owns one. */
-export function getTrackedChild(): ChildProcess | undefined {
-  return trackedChild
-}
-
-/** Forget both handles (a stop has killed them, or they exited on their own). */
-export function clearTracked(): void {
-  trackedChild = undefined
-  trackedPid = undefined
 }
 
 /** Move the tracked child/pid out of the registry for one teardown pass. */
@@ -153,6 +149,10 @@ function spawnHiddenViaPowerShell(cmd: string, args: string[], cwd: string | und
 export function spawnServer(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, shell = false, env?: Record<string, string>): void {
   trackedPid = undefined
   host.clearWebToken()
+  // Counters are per run: the silent-exit diagnosis treats "0 lines" as "died
+  // without printing anything", so they must restart here (v0.2.12 did this
+  // inline; the extraction dropped it once already — see the host field).
+  host.resetRunCounters()
   const logDir = ensureLogDir()
   if (!logDir.ok) {
     // Failing here used to escape as an unhandled rejection from the Start

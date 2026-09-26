@@ -23,6 +23,7 @@ import {
   setLogPath,
 } from '../src/server/activity.ts'
 import { ACTIVITY_MAX_LINES, MODULE_PROGRESS_EVERY } from '../src/timing.ts'
+import { silentExitHint } from '../src/env.ts'
 
 test('the activity feed is bounded and keeps the newest entries', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-activity-'))
@@ -128,4 +129,78 @@ test('addActivity writes to the client log file', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('the silent-exit diagnosis depends on a per-run line count', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-silent-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+    resetRunCounters()
+
+    // A run that printed nothing is exactly the case the hint exists for.
+    assert.equal(outputLineCount(), 0)
+    const hint = silentExitHint({
+      dshVersion: '0.1.7',
+      nodeVersion: '24.0.0',
+      supportsImportMetaMain: false,
+      outputLines: outputLineCount(),
+    })
+    assert.ok(hint !== undefined, 'a silent exit must be explained')
+    assert.match(hint, /import\.meta\.main/)
+
+    // Any output from the run suppresses it — the guard is not always-on.
+    displayLine('the server printed something')
+    assert.equal(silentExitHint({
+      dshVersion: '0.1.7',
+      nodeVersion: '24.0.0',
+      supportsImportMetaMain: false,
+      outputLines: outputLineCount(),
+    }), undefined)
+
+    // The consequence of NOT resetting between runs: the count stays non-zero,
+    // so every later silent exit is misread as "it printed something" and goes
+    // unexplained. This is the state the missing spawnServer call produced.
+    resetRunCounters()
+    displayLine('run 1 output')
+    const leaked = outputLineCount()
+    assert.equal(leaked, 1)
+    assert.equal(silentExitHint({
+      dshVersion: '0.1.7',
+      nodeVersion: '24.0.0',
+      supportsImportMetaMain: false,
+      outputLines: leaked, // what run 2 would see if the counter survived
+    }), undefined, 'a leaked counter silences the diagnosis — hence the reset')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * The reset above is a side effect that must happen when a server is spawned,
+ * and `spawnServer` imports `vscode`, so it cannot be executed from a test.
+ *
+ * That gap is how the regression got in: extraction moved `spawnServer` into
+ * `server/process.ts` and dropped the counters reset it used to do inline. A
+ * behavioural test cannot observe it, so this asserts the call site itself —
+ * scoped to the function body, not the file, so a call moved elsewhere fails.
+ */
+test('spawnServer resets the per-run counters before every spawn', () => {
+  const source = readFileSync(new URL('../src/server/process.ts', import.meta.url), 'utf8')
+  const start = source.indexOf('export function spawnServer(')
+  assert.notEqual(start, -1, 'spawnServer must exist in server/process.ts')
+
+  // Walk braces to isolate the body, so a call from a neighbouring function
+  // cannot satisfy this assertion.
+  let depth = 0
+  let end = start
+  for (let i = source.indexOf('{', start); i < source.length; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') { depth--; if (depth === 0) { end = i; break } }
+  }
+  const body = source.slice(start, end)
+  assert.match(body, /host\.resetRunCounters\(\)/,
+    'spawnServer must zero the per-run counters (server/process.ts)')
+  // The companion bookkeeping must stay with it.
+  assert.match(body, /host\.clearWebToken\(\)/)
 })
