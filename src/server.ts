@@ -289,7 +289,7 @@ function detectConfig(cfg: DshConfig): DetectConfig {
 // and the extension read them through this module's re-exports. The process
 // layer needs resetRunCounters, so it is imported here as well (the host wires
 // it to the spawn path).
-export { clearConsole, getActivity, setLogPath, dbg, addActivity, finishBusy, type ActivityEntry } from './server/activity.ts'
+export { clearConsole, getActivity, setLogPath, dbg, addActivity, finishBusy, withBusy, type ActivityEntry } from './server/activity.ts'
 
 
 // The Node version check and the silent-exit diagnosis live in
@@ -321,53 +321,59 @@ export function stopLogTail(): void {
 }
 
 
-/** Poll the port until it opens, the spawned process dies, or the user stops. */
+/**
+ * Poll the port until it opens, the spawned process dies, or the user stops.
+ *
+ * The `▶ Start:` spinner is created by the spawn functions (server/process.ts)
+ * and released here, since this is what decides the start's outcome. The
+ * try/finally is what makes that release reliable: a throwing HTTP probe would
+ * otherwise leave the spinner turning for the rest of the session.
+ */
 async function waitForPort(cfg: DshConfig, version: string): Promise<boolean> {
   const startedAt = Date.now()
-  // No hard timeout: the first start of a new dsh version installs many
-  // packages and can take several minutes. The fail-fast below still reports
-  // a dead spawn, and Stop stays available from the panel.
-  while (true) {
-    await sleep(PORT_POLL_INTERVAL_MS)
-    // The user pressed Stop while starting: bail out quietly (Stop already
-    // reported its own outcome). Stop's kill request returns immediately, so
-    // by the time this wakes the phase is often already back at 'stopped' —
-    // checking only 'stopping' would miss it and spin forever (or report a
-    // running server nobody wants). Any phase other than 'starting' means the
-    // start was interrupted.
-    if (serverPhase !== 'starting') {
-      finishBusy(startBusyId)
-      return false
-    }
-    // The port binds before the web app finishes booting; wait for an HTTP
-    // response so the browser doesn't open onto a blank page. resolveWebUrl
-    // handles both dsh ≥ 0.1.2-alpha.1 (token URL) and older versions (plain
-    // URL) by probing whichever actually answers 2xx.
-    if ((await resolveWebUrl(cfg.port, HTTP_PROBE_TIMEOUT_MS)) !== undefined) {
-      // Stop can complete while the HTTP probe is in flight (it takes up to
-      // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
-      // server back to 'running'.
-      if (serverPhase !== 'starting') {
+  try {
+    // No hard timeout: the first start of a new dsh version installs many
+    // packages and can take several minutes. The fail-fast below still reports
+    // a dead spawn, and Stop stays available from the panel.
+    while (true) {
+      await sleep(PORT_POLL_INTERVAL_MS)
+      // The user pressed Stop while starting: bail out quietly (Stop already
+      // reported its own outcome). Stop's kill request returns immediately, so
+      // by the time this wakes the phase is often already back at 'stopped' —
+      // checking only 'stopping' would miss it and spin forever (or report a
+      // running server nobody wants). Any phase other than 'starting' means the
+      // start was interrupted.
+      if (serverPhase !== 'starting') return false
+      // The port binds before the web app finishes booting; wait for an HTTP
+      // response so the browser doesn't open onto a blank page. resolveWebUrl
+      // handles both dsh ≥ 0.1.2-alpha.1 (token URL) and older versions (plain
+      // URL) by probing whichever actually answers 2xx.
+      if ((await resolveWebUrl(cfg.port, HTTP_PROBE_TIMEOUT_MS)) !== undefined) {
+        // Stop can complete while the HTTP probe is in flight (it takes up to
+        // HTTP_PROBE_TIMEOUT_MS): re-check the phase before flipping a stopped
+        // server back to 'running'.
+        if (serverPhase !== 'starting') return false
+        setServerPhase('running')
+        const secs = Math.round((Date.now() - startedAt) / 1000)
+        const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
+        addActivity(`✓ Server started ${displayUrl(cfg.port)} in ${dur}`)
+        return true
+      }
+      // Fail fast when the spawned process already exited (e.g. port already in use).
+      const pid = getTrackedPid()
+      if (pid !== undefined && !isProcessAlive(pid)) {
+        setServerPhase('stopped')
+        addActivity('✗ Server exited before opening the port (see the log above)')
+        // Stop the spinner before the diagnosis: it runs a Node capability
+        // probe that can take a moment, and nothing is going to start now.
         finishBusy(startBusyId)
+        await reportSilentExitInner(nodeCheckHost, version)
         return false
       }
-      setServerPhase('running')
-      const secs = Math.round((Date.now() - startedAt) / 1000)
-      const dur = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60}s` : `${secs}s`
-      addActivity(`✓ Server started ${displayUrl(cfg.port)} in ${dur}`)
-      finishBusy(startBusyId)
-      return true
     }
-    // Fail fast when the spawned process already exited (e.g. port already in use).
-    const pid = getTrackedPid()
-    if (pid !== undefined && !isProcessAlive(pid)) {
-      setServerPhase('stopped')
-      addActivity('✗ Server exited before opening the port (see the log above)')
-      finishBusy(startBusyId)
-      // The diagnosis runs a Node capability probe; the spinner is already off.
-      await reportSilentExitInner(nodeCheckHost, version)
-      return false
-    }
+  } finally {
+    // Idempotent: the fail-fast path above already cleared it.
+    finishBusy(startBusyId)
   }
 }
 

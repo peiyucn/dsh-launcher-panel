@@ -152,6 +152,24 @@ export function finishBusy(id: number): void {
 }
 
 /**
+ * Run `task` with a spinner in the feed, clearing it whether the task succeeds
+ * or throws.
+ *
+ * Every caller of addActivity(…, true) has to pair it with finishBusy, and a
+ * throw between the two leaves the spinner turning for the rest of the session
+ * (the feed has no reaper). Wrapping the pair means the release cannot be
+ * forgotten on a failure path.
+ */
+export async function withBusy<T>(label: string, task: () => Promise<T>): Promise<T> {
+  const id = addActivity(label, true)
+  try {
+    return await task()
+  } finally {
+    finishBusy(id)
+  }
+}
+
+/**
  * Clear the console log: the in-memory feed and the persisted files.
  *
  * A locked server log is reported into the feed rather than thrown: the running

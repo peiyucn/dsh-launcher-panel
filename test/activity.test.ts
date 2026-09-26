@@ -21,6 +21,7 @@ import {
   resetRunCounters,
   scanLogForToken,
   setLogPath,
+  withBusy,
 } from '../src/server/activity.ts'
 import { ACTIVITY_MAX_LINES, MODULE_PROGRESS_EVERY } from '../src/timing.ts'
 import { silentExitHint } from '../src/env.ts'
@@ -126,6 +127,41 @@ test('addActivity writes to the client log file', () => {
     addActivity('a marker line')
     const written = readFileSync(join(dir, 'client.log'), 'utf8')
     assert.ok(written.includes('a marker line'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * `withBusy` exists because every `addActivity(…, true)` must be paired with
+ * `finishBusy`, and a throw in between used to leave the spinner turning for
+ * the rest of the session (the feed has no reaper).
+ */
+test('withBusy clears its spinner when the task throws', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-withbusy-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+
+    const value = await withBusy('↻ doing a thing…', async () => 42)
+    assert.equal(value, 42, 'the task result is passed through')
+    assert.equal(getActivity().filter((e) => e.busy).length, 0)
+
+    await assert.rejects(
+      withBusy('↻ failing thing…', async () => { throw new Error('boom') }),
+      /boom/,
+    )
+    // The point of the helper: the spinner is gone even on the throw path.
+    assert.equal(getActivity().filter((e) => e.busy).length, 0,
+      'a failing task must not leave a spinner running')
+
+    // Two concurrent busy operations each clear only their own entry.
+    const slow = withBusy('↻ one…', () => new Promise((resolve) => setTimeout(() => resolve('a'), 20)))
+    const fast = withBusy('↻ two…', async () => 'b')
+    assert.equal(await fast, 'b')
+    assert.equal(getActivity().filter((e) => e.busy).length, 1, 'the other spinner is untouched')
+    assert.equal(await slow, 'a')
+    assert.equal(getActivity().filter((e) => e.busy).length, 0)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
