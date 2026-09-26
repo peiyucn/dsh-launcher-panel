@@ -17,7 +17,7 @@
 // degrades to "unknown" by design (see pricing.ts).
 //
 // Run: npm run build:holidays
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -93,6 +93,23 @@ for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) results.push(await fetchY
 
 const ok = results.filter((r) => r.state === 'ok')
 if (ok.length === 0) throw new Error('no year could be fetched — refusing to write an empty table')
+
+// Refuse to *shrink* the table. A year that was covered before and now comes back
+// as "pending" is far more likely to be a source problem than an announcement
+// being withdrawn — and writing the smaller table would silently drop a year the
+// extension already handled, turning its off-peak days back into "Peak?".
+// Adding a year is the normal, expected direction; losing one is not.
+const existing = readFileSync(OUT, 'utf8')
+const existingYears = [...existing.matchAll(/^  (\d{4}): \[$/gm)].map((m) => Number(m[1]))
+const fetchedYears = new Set(ok.map((r) => r.year))
+const lost = existingYears.filter((y) => !fetchedYears.has(y))
+if (lost.length > 0) {
+  throw new Error(
+    `refusing to drop ${lost.join(', ')} — those years are in the current table but came back ` +
+    'empty/unavailable this run. Check the source; if the change is genuinely intended, edit the ' +
+    `table by hand and rerun. (Existing: ${existingYears.join(', ')}; fetched: ${[...fetchedYears].join(', ')})`,
+  )
+}
 
 const lines = [
   '/**',
