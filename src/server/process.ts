@@ -94,8 +94,13 @@ export function takeTracked(): { child: ChildProcess | undefined; pid: number | 
  * window hidden while still giving the child a console for its own tool
  * subprocesses to inherit; `stdio` points straight at the log file, which is
  * what the tailer streams into the dashboard.
+ *
+ * @returns whether a process was actually started. The caller must not wait for
+ *   a port when this is false: nothing was spawned, so no port will ever open,
+ *   and `waitForPort` has no other way to tell "not started yet" from "never
+ *   will be" — it would poll until the user pressed Stop.
  */
-export function spawnServer(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, env?: Record<string, string>): void {
+export function spawnServer(cmd: string, args: string[], cwd: string | undefined, host: ProcessHost, env?: Record<string, string>): boolean {
   trackedPid = undefined
   host.clearWebToken()
   // Counters are per run: the silent-exit diagnosis treats "0 lines" as "died
@@ -105,13 +110,11 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
   const logDir = ensureLogDir()
   if (!logDir.ok) {
     // Failing here used to escape as an unhandled rejection from the Start
-    // command; report it and abort the spawn instead. Reporting through the
-    // return value also lets the caller skip waitForPort, which has no other
-    // way to notice that no process was ever started.
+    // command; report it and abort the spawn instead.
     host.addActivity('✗ Could not create the log folder — check write permissions under your home directory')
     void vscode.window.showErrorMessage(`DeepSeek Harness: could not create ${logDir.dir}. Check write permissions.`)
     host.onLaunchFailed()
-    return
+    return false
   }
   // Each start gets a fresh server log (dsh.clearServerLogOnStart, default on)
   // — otherwise output from every previous run accumulates (NODE_DEBUG=module
@@ -132,7 +135,7 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
   } catch (error) {
     host.addActivity(`✗ Could not open the server log for writing — ${error instanceof Error ? error.message : String(error)}`)
     host.onLaunchFailed()
-    return
+    return false
   }
 
   let child: ChildProcess
@@ -155,7 +158,7 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
     fs.closeSync(logFd)
     host.addActivity(`✗ Could not start ${cmd} — ${error instanceof Error ? error.message : String(error)}`)
     host.onLaunchFailed()
-    return
+    return false
   } finally {
     // The child holds its own duplicate; ours is only needed to create it.
     try { fs.closeSync(logFd) } catch { /* already closed above */ }
@@ -181,6 +184,7 @@ export function spawnServer(cmd: string, args: string[], cwd: string | undefined
     // fail-fast cannot fire on `pid === undefined`, so fail the start here.
     if (trackedPid === undefined && host.isStarting()) host.onLaunchFailed()
   })
+  return true
 }
 
 /**
@@ -196,7 +200,7 @@ export function buildWebArgs(cfg: { port: number }, version: string): string[] {
 }
 
 /** Source mode: run a checkout via `node --import tsx/esm apps/cli/src/bin.ts web`. */
-export function spawnSource(repoPath: string, cfg: { port: number; nodePath: string; sourceDebug: boolean }, version: string, host: ProcessHost): void {
+export function spawnSource(repoPath: string, cfg: { port: number; nodePath: string; sourceDebug: boolean }, version: string, host: ProcessHost): boolean {
   const node = cfg.nodePath || 'node'
   host.setDshState('ok')
   host.addActivity('✓ dsh detected (source run)')
@@ -204,11 +208,11 @@ export function spawnSource(repoPath: string, cfg: { port: number; nodePath: str
   const webArgs = buildWebArgs(cfg, version)
   host.setStartBusyId(host.addActivity(`▶ Start: ${node} --import tsx/esm apps/cli/src/bin.ts ${webArgs.join(' ')}`, true))
   const env = cfg.sourceDebug ? { NODE_DEBUG: 'module' } : undefined
-  spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, host, env)
+  return spawnServer(node, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...webArgs], repoPath, host, env)
 }
 
 /** pkg mode: run the managed dsh via `pnpm exec dsh web` (pnpm sets up the module path). */
-export function spawnPkg(cfg: { port: number }, pnpmCmd: string, version: string, installDir: string, host: ProcessHost): void {
+export function spawnPkg(cfg: { port: number }, pnpmCmd: string, version: string, installDir: string, host: ProcessHost): boolean {
   host.setDshState('ok')
   host.addActivity('✓ dsh detected (pkg run)')
   const webArgs = buildWebArgs(cfg, version)
@@ -224,9 +228,9 @@ export function spawnPkg(cfg: { port: number }, pnpmCmd: string, version: string
     host.addActivity(`✗ ${pnpmCmd} is a Windows batch shim whose Node entry could not be resolved — install pnpm with npm and try again`)
     void vscode.window.showErrorMessage(`DeepSeek Harness: ${pnpmCmd} cannot be launched safely. Install pnpm with npm and try again.`)
     host.onLaunchFailed()
-    return
+    return false
   }
-  spawnServer(resolved.file, [...resolved.args, ...execArgs], installDir, host)
+  return spawnServer(resolved.file, [...resolved.args, ...execArgs], installDir, host)
 }
 
 /**

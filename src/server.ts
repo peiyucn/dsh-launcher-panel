@@ -445,7 +445,9 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
     // dshVersion 在 source 模式是规整过的 git describe 输出（如 v0.1.2-rc.1-99-g76fda72），
     // buildWebArgs 需要干净的语义化版本号来比较 --no-open。
     const runVersion = versionFromDescribe(dshVersion) ?? dshVersion
-    spawnSourceInner(checkout.path, cfg, runVersion, processHost)
+    // Nothing spawned → no port will ever open; waiting would poll until the
+    // user pressed Stop. The failure is already reported by spawnServer.
+    if (!spawnSourceInner(checkout.path, cfg, runVersion, processHost)) return false
     return waitForPort(cfg, runVersion)
   }
 
@@ -457,7 +459,8 @@ async function ensureRunningUnlocked(cfg: DshConfig): Promise<boolean> {
   // The install may have run while the user pressed Stop; honour that request
   // instead of starting a server nobody is waiting for.
   if (serverPhase !== 'starting') return false
-  spawnPkgInner(cfg, pnpmCmd.command, version, pkgInstallDir(cfg), processHost)
+  // Same as the source path: a spawn that never happened must not be waited on.
+  if (!spawnPkgInner(cfg, pnpmCmd.command, version, pkgInstallDir(cfg), processHost)) return false
   return waitForPort(cfg, version)
 }
 

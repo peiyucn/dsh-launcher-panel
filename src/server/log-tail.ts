@@ -43,13 +43,19 @@ function logSize(file: string): number {
 /**
  * Stream the server log file into the dashboard activity feed as it grows.
  * Calling this while a tail is running restarts it.
+ *
+ * Never throws. `fs.watch` rejects a path that does not exist at that instant,
+ * and the file can vanish between creating it and watching it (the Clear button
+ * deletes the log). Letting that escape would abort the caller's *spawn* — the
+ * log tailer is a convenience, not a precondition for starting a server — so a
+ * failed watch degrades to polling, which covers the same appends.
  */
 export function startLogTail(host: LogTailHost): void {
   stopLogTail(host)
   buffer = ''
   try {
     // Ensure the log file exists before watching it, otherwise fs.watch dies
-    // on ENOENT and never recovers when cmd later creates the file.
+    // on ENOENT and never recovers when the file is created later.
     fs.closeSync(fs.openSync(host.serverLogFile(), 'a'))
     // Stream only output written after this point (the file is appended to).
     offset = logSize(host.serverLogFile())
@@ -78,9 +84,15 @@ export function startLogTail(host: LogTailHost): void {
     }
   }
   pump()
-  watcher = fs.watch(host.serverLogFile(), () => pump())
-  watcher.on('error', () => {})
-  // fs.watch can miss appends on Windows; poll as a reliable fallback.
+  try {
+    watcher = fs.watch(host.serverLogFile(), () => pump())
+    watcher.on('error', () => {})
+  } catch {
+    // Raced with a delete; the poll below still picks up later appends.
+    watcher = undefined
+  }
+  // fs.watch can miss appends on Windows; poll as a reliable fallback — and the
+  // only watch when the watcher could not be created.
   timer = setInterval(() => pump(), LOG_TAIL_POLL_MS)
 }
 
