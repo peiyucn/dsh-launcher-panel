@@ -97,6 +97,28 @@ export function isDshInstallDirUsable(dir: string): boolean {
   return installedDshVersion(dir) !== undefined
 }
 
+/**
+ * Whether the launcher may write this directory's `package.json`.
+ *
+ * `isDshInstallDirUsable` answers "is this directory a sensible install target"
+ * — a different, weaker question: it accepts a folder that merely *contains* a
+ * dsh install, which is exactly what `dsh.pkgPath` normally points at. Such a
+ * folder can still carry a package.json the user owns, and replacing it would
+ * destroy their file. Ownership is only ever one of:
+ *
+ * - no manifest at all (nothing of the user's to lose),
+ * - the launcher's own manifest, recognised by its name, or
+ * - unreadable/corrupt → not ours → never touched.
+ */
+export function installManifestRepairable(dir: string): boolean {
+  const manifestPath = path.join(dir, 'package.json')
+  if (!fs.existsSync(manifestPath)) return true
+  const pkg = readJson<{ name?: string }>(manifestPath)
+  // readJson returns undefined for a missing *or* unparsable file; both mean the
+  // ownership cannot be confirmed, and an unconfirmed file is left alone.
+  return pkg?.name === DSH_INSTALL_MANIFEST_NAME
+}
+
 /** The scripts block of a checkout's root package.json, or undefined when unreadable. */
 function checkoutScripts(checkout: string): Record<string, string> | undefined {
   return readJson<{ scripts?: Record<string, string> }>(path.join(checkout, 'package.json'))?.scripts

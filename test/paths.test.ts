@@ -21,6 +21,7 @@ import {
   dshBaseDir,
   installedDshVersion,
   isDshCheckout,
+  installManifestRepairable,
   isDshInstallDirUsable,
   maskPath,
   resolveDshHome,
@@ -97,6 +98,62 @@ test('isDshInstallDirUsable accepts absent, empty and launcher-owned dirs only',
     mkdirSync(dataOnly, { recursive: true })
     writeFileSync(join(dataOnly, 'note.txt'), 'x')
     assert.equal(isDshInstallDirUsable(dataOnly), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+/**
+ * The distinction that let the Update path destroy a user's file: a folder can
+ * be a *usable* install target (it already holds a dsh install — which is what
+ * `dsh.pkgPath` normally points at) while its package.json belongs to the user.
+ * Usable must not imply writable.
+ */
+test('a usable install dir can still have a package.json the launcher must not touch', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-ownership-'))
+  try {
+    const dir = join(root, 'user-project-with-dsh')
+    // The user's own project, which happens to have dsh installed inside it.
+    mkdirSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh'), { recursive: true })
+    writeFileSync(
+      join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.7-rc.2' }),
+    )
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'my-web-app',
+      version: '3.1.4',
+      scripts: { build: 'vite build' },
+      dependencies: { express: '^4.21.0' },
+    }))
+
+    // Both halves of the trap, asserted together: the folder passes the weaker
+    // "usable" test (so the install proceeds) and fails the ownership test (so
+    // the manifest write must be refused).
+    assert.equal(isDshInstallDirUsable(dir), true, 'the install itself may proceed')
+    assert.equal(installManifestRepairable(dir), false, 'but its package.json must not be replaced')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('installManifestRepairable accepts only absent or launcher-owned manifests', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-manifest-'))
+  try {
+    assert.equal(installManifestRepairable(join(root, 'absent')), true)
+    const owned = join(root, 'owned')
+    mkdirSync(owned, { recursive: true })
+    writeFileSync(join(owned, 'package.json'), JSON.stringify({ name: DSH_INSTALL_MANIFEST_NAME, private: true }))
+    assert.equal(installManifestRepairable(owned), true)
+    const foreign = join(root, 'foreign')
+    mkdirSync(foreign, { recursive: true })
+    writeFileSync(join(foreign, 'package.json'), JSON.stringify({ name: 'my-project' }))
+    assert.equal(installManifestRepairable(foreign), false)
+    // Unparsable: ownership cannot be confirmed, so it is left alone rather than
+    // guessed at.
+    const corrupt = join(root, 'corrupt')
+    mkdirSync(corrupt, { recursive: true })
+    writeFileSync(join(corrupt, 'package.json'), '{ not json')
+    assert.equal(installManifestRepairable(corrupt), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -18,7 +18,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { DSH_INSTALL_MANIFEST_NAME, dshBaseDir, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath } from '../paths.ts'
+import { DSH_INSTALL_MANIFEST_NAME, dshBaseDir, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath } from '../paths.ts'
 import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
 import { runResolved } from '../proc.ts'
@@ -123,27 +123,16 @@ export async function latestDshVersion(
 }
 
 /**
- * Whether the install dir's manifest may be written by the launcher: only when
- * it is absent (nothing of the user's to destroy) or carries the launcher's own
- * manifest name. A foreign package.json (pkgPath pointing at a user project) —
- * or an unreadable one whose ownership cannot be confirmed — is never touched.
+ * Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version.
+ *
+ * Refuses to touch a `package.json` the launcher does not own, so this is safe
+ * to call from any entry point (first install, Start's repair, Update). The
+ * guard lives here rather than at each call site because a call site can be
+ * added — or, as happened, bypassed — without one, and the damage (a user's
+ * manifest replaced by ours) is silent and irreversible.
+ *
+ * @returns true when the launcher's manifest is in place afterwards.
  */
-export function installManifestRepairable(dir: string): boolean {
-  const manifestPath = path.join(dir, 'package.json')
-  if (!fs.existsSync(manifestPath)) {
-    // 没有 manifest 就没有用户文件可毁。
-    return true
-  }
-  try {
-    const pkg = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { name?: string }
-    return pkg?.name === DSH_INSTALL_MANIFEST_NAME
-  } catch {
-    // 存在但读不了/损坏：归属无法确认，宁可不动（可能是用户自己的损坏文件）。
-    return false
-  }
-}
-
-/** Write the launcher-owned install manifest pinning @deepseek-ai/dsh to a version. */
 export function writeInstallManifest(version: string, dir: string): boolean {
   try {
     fs.mkdirSync(dir, { recursive: true })
@@ -167,14 +156,21 @@ export function writeInstallManifest(version: string, dir: string): boolean {
 export async function ensureDshInstalled(
   version: string, pnpmCmd: string, allowBuild: boolean, dir: string, host: InstallHost,
 ): Promise<boolean> {
-  // Refuse to install into a folder that holds other files: writing the
-  // pinned manifest there would destroy the user's package.json.
+  // Two independent reasons to refuse, and they need different advice:
+  //  - the folder holds something the launcher must not overwrite, or
+  //  - it is ours but the write failed (permissions).
   if (!isDshInstallDirUsable(dir)) {
     host.addActivity(`✗ ${maskPath(dir)} is not empty — install into an empty or dedicated folder instead`)
     void vscode.window.showErrorMessage(`DeepSeek Harness: ${maskPath(dir)} is not empty. Choose an empty or dedicated folder for the dsh install.`)
     return false
   }
-  if (!writeInstallManifest(version, dir)) {
+  // `writeInstallManifest` re-checks ownership of an existing package.json: a
+  // folder can be "usable" (it already contains a dsh install, which is what
+  // pkgPath normally points at) while still holding the *user's* manifest. Never
+  // replace that — the install itself does not need the manifest rewritten.
+  if (!installManifestRepairable(dir)) {
+    host.addActivity(`ℹ ${maskPath(dir)} already contains a dsh install with its own package.json — leaving that file untouched`)
+  } else if (!writeInstallManifest(version, dir)) {
     host.addActivity('✗ could not write the dsh install manifest — check write permissions')
     return false
   }
@@ -210,11 +206,11 @@ export async function preparePkgStart(
   if (installed !== undefined) {
     // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
     // 顺手修复历史残局（失败的安装尝试可能留下 manifest 与已装版本不一致的状态）——
-    // 但只在 manifest 是 launcher 所写（或缺失）时才写回：pkgPath 若指向自带
-    // package.json 的用户项目，绝不能覆盖人家的 manifest。写失败不阻断启动
-    // （spawnPkg 已禁用 verify-deps-before-run，pnpm 不会自动重装）。
-    if (installManifestRepairable(dir) && !writeInstallManifest(installed, dir)) {
-      host.dbg('could not repair the install manifest; continuing with the installed dsh')
+    // writeInstallManifest 内部已确认 manifest 归属，所以 pkgPath 指向用户项目时
+    // 不会覆盖人家的 manifest。写失败不阻断启动（spawnPkg 已禁用
+    // verify-deps-before-run，pnpm 不会自动重装）。
+    if (!writeInstallManifest(installed, dir)) {
+      host.dbg('install manifest not rewritten (absent ownership or write failure); continuing with the installed dsh')
     }
     host.setDshVersion(installed)
     return installed
