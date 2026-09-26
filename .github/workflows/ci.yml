@@ -34,7 +34,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run tests (JUnit report)
-        run: npm test -- --test-reporter=junit --test-reporter-destination=test-report.xml
+        # Node stops parsing its own options at the first positional argument, so
+        # the reporter flags must come BEFORE the test-file pattern. With them
+        # after, they were read as extra file patterns: the run still passed and
+        # printed normal output, but no report was written, and the upload step
+        # below silently skipped (`if: always()` + a missing path is a warning,
+        # not a failure). Keep the spec reporter on stdout so the log stays
+        # readable.
+        run: node --test --test-isolation=none --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-report.xml "test/*.test.ts"
+      - name: Verify the report was written
+        # Fail loudly rather than uploading nothing: a missing artifact should
+        # not be indistinguishable from a green run.
+        run: test -s test-report.xml || (echo "test-report.xml missing or empty" && exit 1)
       - name: Upload test report
         uses: actions/upload-artifact@v7
         if: always()

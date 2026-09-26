@@ -2,6 +2,7 @@ node_modules/
 out/
 *.vsix
 releases/
+test-report.xml
 
 # OS
 .DS_Store

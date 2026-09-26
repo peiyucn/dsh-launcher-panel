@@ -12,3 +12,4 @@ scripts/**
 releases/**
 resources/dsh-launcher-panel.png
 test/**
+test-report.xml
