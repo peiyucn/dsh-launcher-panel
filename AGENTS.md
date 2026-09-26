@@ -73,7 +73,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 ## GitHub 与网络
 
-* 一律 `gh` CLI（已登录 peiyucn，token 含 repo + workflow）
+* 一律 `gh` CLI——不手拼 git URL、不写明文凭据；仓库 <https://github.com/peiyucn/dsh-launcher-panel>
 
 ## 项目专属章节
 
