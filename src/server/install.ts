@@ -34,8 +34,12 @@ import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from '../pnpm.ts'
 export interface InstallHost {
   /** Report progress/failure into the panel feed; returns the entry id. */
   addActivity: (line: string, isBusy?: boolean) => number
-  /** Clear one busy entry by id. */
-  finishBusy: (id: number) => void
+  /**
+   * Run `task` behind a spinner, clearing it whether the task succeeds or
+   * throws. Preferred over pairing addActivity(…, true) with finishBusy: a
+   * throw between the two leaves the spinner turning for the session.
+   */
+  withBusy: <T>(label: string, task: () => Promise<T>) => Promise<T>
   /** Run a long command in a visible terminal (setup/install steps). */
   runInTerminal: (title: string, command: string, args: string[], env?: Record<string, string>) => Promise<boolean>
   /** Wrap a step so the panel shows the `installing` phase for its duration. */
@@ -192,9 +196,7 @@ export async function preparePkgStart(
   }
   // 首次安装：解析通道版本 → 选安装目录 → 安装。注册表查询可能耗时数秒，
   // 展示进度避免慢网络下看起来像 Start 卡死。
-  const resolvingId = host.addActivity('ℹ Resolving the dsh channel version…', true)
-  const resolved = await latestDshVersion(cfg.npmChannel, host.dbg, pnpmCmd)
-  host.finishBusy(resolvingId)
+  const resolved = await host.withBusy('ℹ Resolving the dsh channel version…', () => latestDshVersion(cfg.npmChannel, host.dbg, pnpmCmd))
   if ('error' in resolved) {
     host.setDshState('missing')
     host.addActivity(`✗ dsh is not installed and the registry is unreachable (${resolved.error}) — check your network and try again`)

@@ -80,6 +80,7 @@ import {
   outputLineCount,
   resetRunCounters,
   serverLogFile,
+  withBusy,
 } from './server/activity.ts'
 
 // Re-export DeepSeek status/balance for the panel (kept in ds.ts so this
@@ -173,7 +174,7 @@ const terminalHost: TerminalHost = { addActivity }
  */
 const installHost: InstallHost = {
   addActivity,
-  finishBusy,
+  withBusy,
   runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
   runInstalling: (task) => runInstalling(task),
   setDshVersion: (version) => { dshVersion = version },
@@ -231,7 +232,7 @@ const updateHost: UpdateHost = {
   readConfig,
   findSourceCheckout: () => findSourceCheckout(readConfig()),
   addActivity,
-  finishBusy,
+  withBusy,
   runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
   dbg,
   isStopped: () => serverPhase === 'stopped',

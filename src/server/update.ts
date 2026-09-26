@@ -39,8 +39,12 @@ export interface UpdateHost {
   findSourceCheckout: () => string | undefined
   /** Report progress/failure into the panel feed; returns the entry id. */
   addActivity: (line: string, isBusy?: boolean) => number
-  /** Clear one busy entry by id. */
-  finishBusy: (id: number) => void
+  /**
+   * Run `task` behind a spinner, clearing it whether the task succeeds or
+   * throws. Preferred over pairing addActivity(…, true) with finishBusy: a
+   * throw between the two leaves the spinner turning for the session.
+   */
+  withBusy: <T>(label: string, task: () => Promise<T>) => Promise<T>
   /** Run a long command in a visible terminal. */
   runInTerminal: (title: string, command: string, args: string[], env?: Record<string, string>) => Promise<boolean>
   /** Diagnostic line to the log file only. */
@@ -182,9 +186,10 @@ async function runDshUpdateInner(host: UpdateHost): Promise<void> {
   // fetch timeout and its own progress note. Everything before it — the tag
   // listing and the containment probe — can take seconds too, so re-check here.
   if (!mayProceed(host)) return
-  const fetchingId = host.addActivity(`↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`, true)
-  const fetchResult = await runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS)
-  host.finishBusy(fetchingId)
+  const fetchResult = await host.withBusy(
+    `↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`,
+    () => runFile('git', ['-C', checkout, 'fetch', 'origin', 'tag', tag], GIT_FETCH_TIMEOUT_MS),
+  )
   if (!fetchResult.ok) {
     const cause = await explainGitFailure(checkout)
     host.addActivity(`↑ Update failed — ${cause ?? fetchResult.error ?? `could not fetch ${tag}`}`)
