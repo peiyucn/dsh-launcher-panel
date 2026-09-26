@@ -31,11 +31,6 @@ let timer: ReturnType<typeof setInterval> | undefined
 let offset = 0
 let buffer = ''
 
-/** Whether a tail is currently running. */
-export function isTailing(): boolean {
-  return timer !== undefined || watcher !== undefined
-}
-
 /** The log file's size in bytes, 0 when it is absent or unreadable. */
 function logSize(file: string): number {
   try {
