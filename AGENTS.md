@@ -83,5 +83,6 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 * **VS Code 版本门走清单**：`engines.vscode`（当前 `^1.85.0`）是声明式门，VS Code 在激活前自行判定；用到新 API 时必须同步抬它
 * **dsh 版本差异降级不崩**：只按公开契约读写 dsh 的 CLI 输出与配置目录（`migrateLegacyDshConfig` 迁移旧配置键、启动时探测 Node 能力并给诊断）；不认的字段 / 输出走降级路径
-* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常。**当前出入**：`src/panel.ts` 的 `onDidReceiveMessage` → `onMessage` 无整体兜底（switch，仅个别分支有局部 try/catch）——待修
+* **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调）内部兜住异常。`src/panel.ts` 的 `onDidReceiveMessage` → `onMessage` 已加整体兜底：命令失败记一条 `✗ Command failed (…)` 进活动流，末尾 refresh 照常执行，面板不会因一次失败停在旧数据
+* **busy 必须成对收尾**：`addActivity(…, true)` 要用 `withBusy(label, task)` 包住，不手写 addActivity/finishBusy 这对调用——抛错路径会漏收尾，spinner 会转到会话结束（活动流没有回收器）
 * **模块顶层不依赖易变导出**：不 import VS Code 内部模块
