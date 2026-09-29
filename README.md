@@ -55,6 +55,10 @@ Settings → search "dsh":
 * Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `server.log` (server output), next to the managed package/source dirs. Both are clickable in the panel. Those dirs live directly under your home directory (`%USERPROFILE%` on Windows).
 * The 🐳 artwork (activity bar icon and status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0), rendered as a monochrome silhouette — see NOTICE.
 
+## Known limitations
+
+* **Voice input does not work in the built-in browser.** If you enable dsh's voice input plugin, recording in VS Code's built-in browser fails with *Unable to decode audio data* when you stop, so no text is inserted; the microphone itself works (the level meter reacts while you speak). This is a limitation of the built-in browser's audio decoding, not of this extension or of dsh's speech recognition — reproduced on VS Code 1.139.1 (Windows x64), where the same dsh dictates fine in the system browser. Set `dsh.browser` to `external` until this is fixed upstream.
+
 ## Environment
 
 * **Node.js** — 22.x (22.19 or later) or >= 24 (the 23.x line is not supported)

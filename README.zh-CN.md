@@ -55,6 +55,10 @@
 * 日志文件：`~/.dsh-launcher-panel/logs/client.log`（启动器活动）与 `server.log`（服务端输出），与自管的 package/source 目录并列，面板中都可点击打开。这些目录直接位于用户主目录下（Windows 为 `%USERPROFILE%`）。
 * 🐳 图形（活动栏图标与状态栏图标字体）为 Twemoji 的喷水鲸鱼（Twitter, Inc.，CC-BY 4.0），以单色剪影呈现，详见 NOTICE。
 
+## 已知限制
+
+* **内置浏览器里语音输入不可用。** 若启用了 dsh 的语音输入插件，在 VS Code 内置浏览器中录音后点停止会报 *Unable to decode audio data*，文字插不进输入框；麦克风本身是好的（说话时电平波形正常跳动）。这是内置浏览器的音频解码限制，与本扩展和 dsh 的语音识别都无关——已在 VS Code 1.139.1（Windows x64）复现，同一份 dsh 在系统浏览器里语音输入正常。上游修好之前，可把 `dsh.browser` 设为 `external` 绕开。
+
 ## 环境
 
 * **Node.js** — 22.x（22.19 及以上）或 >= 24（不支持 23.x）
