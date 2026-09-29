@@ -107,14 +107,21 @@ export async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string):
  * Resolve the published @deepseek-ai/dsh version for a channel. The failure
  * carries its reason (`pnpm view` stderr / a timeout) so the panel can say why
  * instead of a blanket "could not resolve the latest dsh version".
+ *
+ * ⚠️ When `pnpmCmd` is omitted the command is resolved here rather than
+ * defaulting to the bare name `pnpm`: on Windows that name cannot be spawned
+ * (`ENOENT` — Node does not expand PATHEXT) and would silently report every
+ * update check as failed. See `pickPnpmFromPath`.
  */
 export async function latestDshVersion(
   channel: NpmChannel,
   dbg: (line: string) => void,
-  pnpmCmd = 'pnpm',
+  pnpmCmd?: string,
 ): Promise<{ version: string } | { error: string }> {
   const spec = npmSpecForChannel(channel)
-  const result = await runResolved(pnpmCmd, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
+  const command = pnpmCmd ?? await findPnpm()
+  if (command === undefined) return { error: 'pnpm was not found on PATH' }
+  const result = await runResolved(command, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
   if (!result.ok) {
     // Keep the failure visible for diagnosis: registry outages and cmd
     // quoting problems both surface here as "unreachable" to the user.
