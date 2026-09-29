@@ -4,7 +4,7 @@
 > `AGENTS.md` 只引用本文、不复述内容，避免指令文件膨胀。
 > 本文是开发文档：不进 README / CHANGELOG，也不进 VSIX。
 
-最后复查：2026-09-23（dsh `v0.1.7-alpha.2`）
+最后复查：2026-09-30（dsh `v0.2.0-rc.2`）
 
 ## 一、定位：控制台，不是启动器
 
@@ -65,38 +65,56 @@ C 的现状基线：官方 ACP 是**明确仅面向自动化**的，决策记录
 * **A 触发** → 控制台价值消失：退役，或降级为纯个人自用、不再发布。
 * **B / C 触发** → 先判断官方是否覆盖「控制台」那一半：覆盖则退役；不覆盖则砍掉入口部分（Start / 浏览器选择），保留控制台部分。
 
-## 四、现状基线（2026-09-23 实测）
+## 四、现状基线（2026-09-30 实测）
 
 以下结论只代表该日状态，复现命令见第五节。
 
 | 检查 | 结果 |
 |---|---|
 | npm `@deepseek-ai/dsh-desktop` | 404（包 `private: true`） |
-| GitHub Release `dsh-v0.1.7-alpha.2` 的 assets | 空 |
-| `https://download.deepseek.com/dsh-desk/**`（feeds 与 bin 各目标） | 全部 **404** |
-| `https://download.deepseek.com/` 根 | 200，但内容是 DeepSeek 消费端 App 下载页（iOS / Android），无 DSH desktop 条目 |
+| GitHub Release `dsh-v0.2.0-rc.2` 的 assets | 空（制品走 CDN，不发 Release asset） |
+| `https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml` | **200** —— 内容为 `0.2.0-rc.2` 的 win-x64 exe（289 313 640 B，`releaseDate: 2026-09-29T10:35:27Z`） |
+| 同上 `feeds/mac-arm64/nightly-mac.yml` | **200** |
+| 同上 `feeds/win-x64/stable.yml` | **404** —— 尚无 stable 通道（与 dsh 自身的 npm 通道状态一致） |
+| `https://www.deepseek.com/harness/` | **200**，有公开的「**下载桌面端**」入口，直链 `https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe` 与 `…-macos-arm64.dmg`（两者均 200） |
 | DSH 仓库 `packages/`、`apps/` 下带 `engines.vscode` 的包 | 无 |
 | DSH 仓库的 `@types/vscode` / `vsce` 依赖 | 无（`vscode` 仅出现在 `@vscode/ripgrep` 依赖与 `packages/host/open-in-app` 的编辑器目录） |
 
-结论：**桌面端工程上已就绪，但未通过公开渠道发布**；官方尚无 VS Code 侧动作。
+结论：**桌面端已通过公开渠道发布**（0.2.0-rc.2 同日上线，nightly 通道有制品、stable 通道未开）。
+
+**但这不触发退役判据 A**：`apps/desktop-host/src/index.ts:22` 仍把 `installAnchor` 写死在
+`runtimeDir/node_modules/@deepseek-ai/dsh/package.json`（即应用自带的整棵 dsh 树），
+启动参数仍是 `['--no-open', '--port', '19387']`（`:30`），**没有任何"指向外部 dsh 安装 / 选择
+版本或通道"的入口**。`0.2.0-rc.2` 新增的 `apps/desktop/src/command-installation.ts` /
+`command-management.ts` 做的是另一件事：把**随包自带的**那个 launcher 以 symlink 方式装进
+PATH 并留 receipt 以便卸载 —— 它服务的是"命令行里也能用 dsh"，不是"让用户选 dsh"。
+故「官方客户端把版本与构建权收走」这一条依然成立，本扩展的控制台定位不变。
+官方亦尚无 VS Code 侧动作（判据 B / C 未触发）。
 
 ## 五、复查方式
 
 `$DSH_SRC` = 本扩展自管的 dsh 检出（source 模式默认 `%USERPROFILE%\.dsh-launcher-panel\source`）。
 
 ```powershell
-# A：桌面端是否放开外部 dsh 安装（看 profile 装载与启动参数）
+# A：桌面端是否放开外部 dsh 安装（看 profile 装载与启动参数；还要确认没有"选版本/选通道"入口）
 Select-String -Path "$DSH_SRC\apps\desktop-host\src\index.ts" -Pattern 'loadProfileDirectory|installAnchor|--port'
+Select-String -Path "$DSH_SRC\apps\desktop\src\*.ts" -Pattern 'externalInstall|customInstall|chooseVersion|selectChannel|releaseChannel|dshPath'
+# ↑ 第二条**无输出**才算 A 未触发
 
 # B：是否出现 VS Code 扩展脚手架（无输出 = 尚未出现）
 Get-ChildItem -Recurse -Filter package.json -Path "$DSH_SRC\packages","$DSH_SRC\apps" -Depth 2 |
   ForEach-Object { $j = Get-Content $_.FullName -Raw | ConvertFrom-Json
     if ($j.engines.vscode -or $j.name -match 'vscode') { $j.name } }
 
-# 发布渠道是否已上线（200 = 官方客户端已公开分发）
+# 发布渠道是否已上线（200 = 官方客户端已公开分发；stable.yml 仍未开时是 404，属预期）
 foreach ($u in 'https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml',
-               'https://download.deepseek.com/dsh-desk/feeds/mac-arm64/nightly-mac.yml') {
+               'https://download.deepseek.com/dsh-desk/feeds/mac-arm64/nightly-mac.yml',
+               'https://download.deepseek.com/dsh-desk/feeds/win-x64/stable.yml') {
   "$((Invoke-WebRequest $u -Method Head -SkipHttpErrorCheck).StatusCode)  $u" }
+
+# 公开下载页是否仍在分发（含具体直链）
+$page = (Invoke-WebRequest 'https://www.deepseek.com/harness/').Content
+[regex]::Matches($page, 'https://download\.deepseek\.com/desktop/[^"]+') | ForEach-Object { $_.Value } | Select-Object -Unique
 ```
 
 复查节奏：跟随 dsh 的通道切换（alpha / rc / stable 变动）各跑一次，或至少每季度一次。
