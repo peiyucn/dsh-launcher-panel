@@ -16,9 +16,8 @@ export interface PanelBodyValues {
 
 /** The dashboard body markup, with the footer version filled in. */
 export function panelBody(values: PanelBodyValues): string {
-  return `  <div class="loading-overlay" id="loadingOverlay">
+  return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>
-    <div class="loading-text">Loading…</div>
   </div>
   <div class="card">
     <div class="status">

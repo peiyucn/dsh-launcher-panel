@@ -45,8 +45,6 @@ export const PANEL_CSS = `
     --lap-success-bg: rgba(34, 197, 94, 0.12);
     --lap-warning: #F59E0B;
     --lap-info: #316DCA;
-    /* dsh 官方 ongoing 点阵色（design-platform.css 静态色板 deepseek-450；明暗主题同值）。 */
-    --lap-ongoing: #5686FE;
     background: var(--lap-bg);
     color: var(--lap-fg);
   }
@@ -79,10 +77,13 @@ export const PANEL_CSS = `
   /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
      几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
      stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方
-     StateDot 的 ongoing 默认值 14px。配色用面板自己的 --lap-ongoing。
+     StateDot 的 ongoing 默认值 14px。
+     ⚠️ 配色走**中性档** --lap-fg2：官方 .spinner 用的是 --dsw-alias-label-tertiary（中性灰），
+     既不是主色也没有彩色；面板这两档主题的 fg2 就是同一档（浅 #61666B / 深 #81868C）。
+     这里此前用一个自造的蓝色 --lap-ongoing（#5686FE），那是**更老的官方点阵色**，已删。
      ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix），官方早已改成圆弧 spinner。 */
   .dot.matrix { background: none; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
-  .state-spinner { display: inline-block; width: var(--spinner-size, 14px); height: var(--spinner-size, 14px); color: var(--lap-ongoing); flex: none; vertical-align: -1.5px; }
+  .state-spinner { display: inline-block; width: var(--spinner-size, 14px); height: var(--spinner-size, 14px); color: var(--lap-fg2); flex: none; vertical-align: -1.5px; }
   .state-spinner-motion { transform-origin: center; animation: lap-spinner-spin 1.5s linear infinite; }
   .state-spinner-track, .state-spinner-arc { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   .state-spinner-track { opacity: .25; }
@@ -138,10 +139,9 @@ export const PANEL_CSS = `
   .icon-btn:hover { color: var(--lap-accent); }
   .icon-btn.spinning { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--lap-bg); z-index: 10; transition: opacity .2s ease; }
+  .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--lap-bg); z-index: 10; transition: opacity .2s ease; }
   .loading-overlay.hidden { opacity: 0; pointer-events: none; }
   .loading-spinner { --spinner-size: 28px; }
-  .loading-text { color: var(--lap-fg2); font-size: 12px; }
   .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
   .mini-btn:hover { background: var(--lap-hover); }
   .ds-header { display: flex; align-items: center; gap: 6px; }
