@@ -76,19 +76,28 @@ export const PANEL_CSS = `
   .status { display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
-  /* dsh 官方 ongoing 指示器（StateDot matrix）：3×3 外环 8 个 2px 方块，1s 平键帧
-     顺时针追逐（无过渡）。--matrix-size 决定渲染尺寸（默认同官方 10px）。 */
-  .dot.matrix { background: none; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; }
-  .dot-matrix { display: inline-block; width: var(--matrix-size, 10px); height: var(--matrix-size, 10px); color: var(--lap-ongoing); flex: none; vertical-align: -1.5px; }
-  .dot-matrix .cell { fill: currentColor; opacity: .15; animation: lap-dot-chase 1s infinite; }
-  @keyframes lap-dot-chase {
-    0%, 12.4% { opacity: 1; }
-    12.5%, 24.9% { opacity: .6; }
-    25%, 37.4% { opacity: .35; }
-    37.5%, 100% { opacity: .15; }
+  /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
+     几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
+     stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方
+     StateDot 的 ongoing 默认值 14px。配色用面板自己的 --lap-ongoing。
+     ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix），官方早已改成圆弧 spinner。 */
+  .dot.matrix { background: none; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
+  .state-spinner { display: inline-block; width: var(--spinner-size, 14px); height: var(--spinner-size, 14px); color: var(--lap-ongoing); flex: none; vertical-align: -1.5px; }
+  .state-spinner-motion { transform-origin: center; animation: lap-spinner-spin 1.5s linear infinite; }
+  .state-spinner-track, .state-spinner-arc { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .state-spinner-track { opacity: .25; }
+  .state-spinner-arc { stroke-dasharray: 12 150; animation: lap-spinner-dash 1.5s ease-in-out infinite; }
+  @keyframes lap-spinner-spin { to { transform: rotate(360deg); } }
+  @keyframes lap-spinner-dash {
+    0% { stroke-dasharray: 12 150; stroke-dashoffset: 0; }
+    50% { stroke-dasharray: 24 150; stroke-dashoffset: -6; }
+    100% { stroke-dasharray: 12 150; stroke-dashoffset: 0; }
   }
-  /* 减少动态偏好：点阵停在静态中间亮度，不再追逐。 */
-  @media (prefers-reduced-motion: reduce) { .dot-matrix .cell { animation: none; opacity: .7; } }
+  /* 减少动态偏好：停在弧的静态形态（与官方一致，不再旋转/呼吸）。 */
+  @media (prefers-reduced-motion: reduce) {
+    .state-spinner-motion, .state-spinner-arc { animation: none; }
+    .state-spinner-arc { stroke-dasharray: 18 150; stroke-dashoffset: -3; }
+  }
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
@@ -131,7 +140,7 @@ export const PANEL_CSS = `
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--lap-bg); z-index: 10; transition: opacity .2s ease; }
   .loading-overlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-matrix { --matrix-size: 28px; }
+  .loading-spinner { --spinner-size: 28px; }
   .loading-text { color: var(--lap-fg2); font-size: 12px; }
   .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
   .mini-btn:hover { background: var(--lap-hover); }

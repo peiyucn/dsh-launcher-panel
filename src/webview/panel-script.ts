@@ -27,17 +27,18 @@ export function panelScript(values: PanelScriptValues): string {
     vscode.postMessage({ command: 'ready' })
     const LOADING_TIMEOUT_MS = 6000
     const ELAPSED_INTERVAL_MS = 1000
-    // dsh 官方 ongoing 点阵（StateDot matrix）：外环 8 格，顺时针逐格变亮；
-    // 每格负延时 = (序号 - 格数) × 相位步长，挂载瞬间即处于追逐中。
-    const DOT_MATRIX_CELLS = [[0, 0], [4, 0], [8, 0], [8, 4], [8, 8], [4, 8], [0, 8], [0, 4]]
-    const DOT_MATRIX_PHASE_STEP_MS = 125
-    const DOT_MATRIX = '<svg class="dot-matrix" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true">'
-      + DOT_MATRIX_CELLS.map(function (c, i) {
-        return '<rect class="cell" x="' + c[0] + '" y="' + c[1] + '" width="2" height="2" style="animation-delay:'
-          + ((i - DOT_MATRIX_CELLS.length) * DOT_MATRIX_PHASE_STEP_MS) + 'ms"></rect>'
-      }).join('')
-      + '</svg>'
-    document.getElementById('loadingMatrix').innerHTML = DOT_MATRIX
+    // dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
+    // 几何 / 时长 / 减动效兜底逐字照 StateDot.module.css（1.5s 匀速旋转 + arc 的
+    // stroke-dasharray 呼吸，两者同相），上色用面板自己的 --lap-ongoing；class 与
+    // keyframes 在 panel-styles.ts。
+    // ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix 分支），官方早在
+    // 4937343a5e 就换成了圆弧 spinner，本次跟进 —— 面板与两个插件面板同时统一。
+    const SPINNER_SVG = '<svg class="state-spinner" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<g class="state-spinner-motion">'
+      + '<circle class="state-spinner-track" cx="12" cy="12" r="9.5"></circle>'
+      + '<circle class="state-spinner-arc" cx="12" cy="12" r="9.5"></circle>'
+      + '</g></svg>'
+    document.getElementById('loadingSpinner').innerHTML = SPINNER_SVG
     let gotUpdate = false
     setTimeout(() => {
       if (!gotUpdate) {
@@ -352,7 +353,7 @@ export function panelScript(values: PanelScriptValues): string {
       const on = state === 'working'
       if (on === (dot.dataset.matrix === '1')) return
       dot.dataset.matrix = on ? '1' : ''
-      dot.innerHTML = on ? DOT_MATRIX : ''
+      dot.innerHTML = on ? SPINNER_SVG : ''
     }
     function startElapsed() {
       if (elapsedTimer) return false
@@ -383,10 +384,10 @@ export function panelScript(values: PanelScriptValues): string {
       let logHtml = entries.map((e) => {
         const txt = esc(e.text)
         if (!e.busy) return txt
-        // Swap the leading icon (the char right after the timestamp) for the dsh dot matrix.
+        // Swap the leading icon (the char right after the timestamp) for the dsh spinner.
         const close = txt.indexOf('] ')
         if (close === -1) return txt
-        return txt.slice(0, close + 2) + DOT_MATRIX + txt.slice(close + 3)
+        return txt.slice(0, close + 2) + SPINNER_SVG + txt.slice(close + 3)
       }).join(newline)
       log.innerHTML = logHtml || '(no activity yet)'
       if (hasNew) log.scrollTop = log.scrollHeight
