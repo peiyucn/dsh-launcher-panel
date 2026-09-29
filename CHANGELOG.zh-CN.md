@@ -4,6 +4,13 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.14]
+
+- pkg 模式的「Start」恢复可用：面板把 `pnpm` 解析成了**裸名字**并直接 spawn，而 Windows 上跑不起来——Node 的 `spawn` 不展开 `PATHEXT`，只认真正的 `.exe`。于是 Start 瞬间失败，只留一句「no process id was reported」且 server log 是空的。现在 `pnpm` 会被解析成**可启动的路径**：有真 `.exe` 就用它，否则把 `.cmd` shim 解成它所包装的 Node 入口。
+- pkg 模式的「检查更新」又能读到 registry 的结果了——它此前是同一个裸名字问题，永远返回失败。
+- 加载覆盖层只剩一个转圈：下面那句「Loading…」去掉了（文案保留为可访问名称，读屏器仍会念）。
+- 转圈改成中性灰，不再是蓝色（对齐 dsh 自己的 `StateDot` 配色）。
+
 ## [0.2.13]
 
 - 源码模式的「检查更新」不再下载任何东西——只列发布 tag 并比对 commit，所以检出落后多少都很快。

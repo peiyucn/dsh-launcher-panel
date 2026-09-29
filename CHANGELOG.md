@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.14]
+
+- Starting in pkg mode works again. The launcher resolved `pnpm` to the bare name and spawned that directly, which Windows cannot run — Node's `spawn` does not expand `PATHEXT`, so it only ever finds a real `.exe`. Start therefore failed instantly, leaving just "no process id was reported" with an empty server log. `pnpm` is now resolved to a **launchable path**: a real `.exe` when there is one, otherwise the `.cmd` shim unwrapped to the Node entry it wraps.
+- "Check updates" in pkg mode reads the registry again — it had the same bare-name problem and so always came back as a failure.
+- The loading overlay is just the spinner: the "Loading…" line under it is gone (it stays as the accessible name, so screen readers still announce it).
+- The spinner is neutral grey instead of blue, matching dsh's own `StateDot` colour.
+
 ## [0.2.13]
 
 - Checking for updates in source mode no longer downloads anything — it lists the release tags and compares commits, so it stays fast however far behind the checkout is.
