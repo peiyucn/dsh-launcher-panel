@@ -65,10 +65,15 @@ test('pickPnpmFromPath returns the first match untouched on POSIX', () => {
   assert.equal(pickPnpmFromPath([], 'darwin'), undefined)
 })
 
+/**
+ * ⚠️ 这条**不能**断言「本机一定装了解析得出来的 pnpm」——CI 的 ubuntu runner 上没有 pnpm，
+ * 那样写会把一次真实发布挡在门外（v0.2.14 首次打 tag 时就这样红过，见 test/pnpm.test.ts 首版）。
+ * 它要钉的是**形状**：只要解析成功，结果就绝不能是裸名字（裸名字正是 ENOENT 那个成因）。
+ * 解析不到时跳过 —— 那是"这台机器没装 pnpm"，不是回归。
+ */
 test('findPnpm never answers with a bare name (that is the ENOENT shape)', async () => {
   const found = await findPnpm()
-  // 本机装有 pnpm ⇒ 必须解析出**可启动的路径**，而不是光秃秃的 'pnpm'
-  assert.ok(found !== undefined, 'expected pnpm to resolve on this machine')
+  if (found === undefined) return // 本机没装 pnpm：与这条契约无关
   assert.notEqual(found, 'pnpm')
   if (process.platform === 'win32') {
     assert.match(found, /\.(exe|cmd|bat)$/i, `expected a launchable Windows path, got ${found}`)
