@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.15]
+
+- No user-visible changes: this release only bumps development-time dependencies that are not shipped inside the extension, to clear Dependabot alerts.
+
 ## [0.2.14]
 
 - Starting in pkg mode works again. The launcher resolved `pnpm` to the bare name and spawned that directly, which Windows cannot run — Node's `spawn` does not expand `PATHEXT`, so it only ever finds a real `.exe`. Start therefore failed instantly, leaving just "no process id was reported" with an empty server log. `pnpm` is now resolved to a **launchable path**: a real `.exe` when there is one, otherwise the `.cmd` shim unwrapped to the Node entry it wraps.

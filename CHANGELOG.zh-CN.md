@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.15]
+
+- 无用户可感知的变化：本版只升级了不进扩展产物的开发期依赖，用于清掉 Dependabot 告警。
+
 ## [0.2.14]
 
 - pkg 模式的「Start」恢复可用：面板把 `pnpm` 解析成了**裸名字**并直接 spawn，而 Windows 上跑不起来——Node 的 `spawn` 不展开 `PATHEXT`，只认真正的 `.exe`。于是 Start 瞬间失败，只留一句「no process id was reported」且 server log 是空的。现在 `pnpm` 会被解析成**可启动的路径**：有真 `.exe` 就用它，否则把 `.cmd` shim 解成它所包装的 Node 入口。
