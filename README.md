@@ -24,7 +24,7 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 
 ## Usage
 
-Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: Open Web UI / Open Dashboard / Stop / Open Settings.
+Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: its top line summarizes the current run (state, mode, dsh version and, while running, the web address), followed by Open Web UI / Open Dashboard / Stop / Open Settings.
 
 ## Settings
 

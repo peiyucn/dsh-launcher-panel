@@ -24,7 +24,7 @@
 
 ## 使用方法
 
-点击活动栏中的 🐳DSH WebUI 小鲸鱼图标，然后点击 **Start**。状态栏的鲸鱼图标反映启动器状态（运行中为蓝底白字、启动中喷水跳动）——点击它可弹出快捷菜单：Open Web UI / Open Dashboard / Stop / Open Settings。
+点击活动栏中的 🐳DSH WebUI 小鲸鱼图标，然后点击 **Start**。状态栏的鲸鱼图标反映启动器状态（运行中为蓝底白字、启动中喷水跳动）——点击它可弹出快捷菜单：顶部一行显示当前运行信息（状态、模式、dsh 版本，运行中还有 Web 地址），下面是 Open Web UI / Open Dashboard / Stop / Open Settings。
 
 ## 设置
 

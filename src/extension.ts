@@ -5,7 +5,7 @@ import { DshPanelProvider } from './panel.ts'
 import { dshBaseDir } from './paths.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
 import { checkNodeOnce, currentStatus, dbg, migrateLegacyDshConfig, registerConfigWatcher, setLogPath, stopLogTail } from './server.ts'
-import { buildStatusMenuItems, type StatusMenuAction } from './statusMenu.ts'
+import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
 // Running state paints its own background + foreground as theme colors
@@ -18,6 +18,9 @@ const RUNNING_FOREGROUND_COLOR = 'dsh.statusBar.runningForeground'
 const STATUS_TEXT = '$(dsh-whale)'
 const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
 const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
+
+/** A quick-pick row; only the action rows carry an action. */
+type MenuPick = vscode.QuickPickItem & { action?: StatusMenuAction }
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -115,16 +118,23 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar,
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
     vscode.commands.registerCommand('dsh.statusMenu', async () => {
-      const items = buildStatusMenuItems(await currentStatus()).map((item) => ({
-        label: item.label,
-        iconPath: new vscode.ThemeIcon(item.icon),
-        action: item.action,
-      }))
+      const status = await currentStatus()
+      // The first row is a read-only summary of the current run. It is a
+      // separator item on purpose: separators cannot be picked, so clicking the
+      // summary never closes the menu without doing anything.
+      const items: MenuPick[] = [
+        { label: buildStatusMenuSummary(status), kind: vscode.QuickPickItemKind.Separator },
+        ...buildStatusMenuItems(status).map((item) => ({
+          label: item.label,
+          iconPath: new vscode.ThemeIcon(item.icon),
+          action: item.action,
+        })),
+      ]
       const picked = await vscode.window.showQuickPick(items, {
         title: '🐳 DSH',
         placeHolder: 'DeepSeek Harness — choose an action',
       })
-      if (picked) await runMenuAction(picked.action)
+      if (picked?.action) await runMenuAction(picked.action)
     }),
     vscode.commands.registerCommand('dsh.start', () => actionStart()),
     vscode.commands.registerCommand('dsh.stop', () => actionStop()),

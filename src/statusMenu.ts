@@ -9,6 +9,16 @@ export interface StatusMenuItem {
   action: StatusMenuAction
 }
 
+/**
+ * What the status-bar menu may read to summarize the current run. A Pick, not
+ * the whole ServerStatus, so the menu cannot start depending on state it has no
+ * business reading.
+ */
+export type MenuStatus = Pick<
+  ServerStatus,
+  'running' | 'starting' | 'installing' | 'stopping' | 'updating' | 'dshVersion' | 'mode' | 'url'
+>
+
 const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Settings', icon: 'settings-gear', action: 'settings' }
 
 /**
@@ -43,4 +53,29 @@ export function buildStatusMenuItems(
   }
   items.push(OPEN_SETTINGS)
   return items
+}
+
+/** The lifecycle state, worded the same way the panel reports it. */
+function stateWord(status: MenuStatus): string {
+  if (status.running) return 'Running'
+  if (status.starting) return 'Starting'
+  if (status.installing) return 'Installing'
+  if (status.updating) return 'Updating'
+  if (status.stopping) return 'Stopping'
+  return 'Stopped'
+}
+
+/**
+ * One-line summary of the current run, shown as the header of the status-bar
+ * quick pick. It answers "what is it doing?" before the actions ask "what
+ * next?", so the menu is useful without opening the Dashboard. The endpoint is
+ * only shown while the server is up — otherwise it would read like a claim.
+ */
+export function buildStatusMenuSummary(status: MenuStatus): string {
+  const parts = [stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode']
+  parts.push(status.dshVersion ? `dsh v${status.dshVersion}` : 'dsh version unknown')
+  // displayUrl() always yields "http://127.0.0.1:<port>"; the scheme is noise in
+  // a one-line summary.
+  if (status.running) parts.push(status.url.replace(/^https?:\/\//, ''))
+  return parts.join(' · ')
 }
