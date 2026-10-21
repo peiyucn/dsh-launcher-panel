@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseDsStatus, readCredentialFromFile, readDefaultModel } from '../src/ds.ts'
+import { dsComponentLabel, parseDsStatus, readCredentialFromFile, readDefaultModel } from '../src/ds.ts'
 
 function withTempFile(content: string, fn: (file: string) => unknown): unknown {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-test-'))
@@ -72,6 +72,45 @@ test('readCredentialFromFile ignores commented-out keys', () => {
   assert.equal(v, 'sk-active')
   const onlyCommented = withTempFile('# DEEPSEEK_API_KEY: sk-commented\n', (f) => readCredentialFromFile('DEEPSEEK_API_KEY', f))
   assert.equal(onlyCommented, undefined)
+})
+
+test('dsComponentLabel keeps the service name when only the Chinese half has an ASCII acronym', () => {
+  // Live status-page names: toEnglish drops the parenthetical and leaves "API",
+  // so both search and fetch used to show up as "api".
+  assert.equal(dsComponentLabel('搜索API服务(Search API Service)'), 'search')
+  assert.equal(dsComponentLabel('抓取API服务(Fetch API Service)'), 'fetch')
+  // The model services keep the Chinese half's English and ignore the generic
+  // "(API Service)" parenthetical.
+  assert.equal(dsComponentLabel('DeepSeek V4 Pro API服务(API Service)'), 'deepseek-v4-pro')
+  assert.equal(dsComponentLabel('DeepSeek V4.1 Flash API服务(API Service)'), 'deepseek-v4.1-flash')
+  // English-only names go through the same tail stripping.
+  assert.equal(dsComponentLabel('Search API Service'), 'search')
+  assert.equal(dsComponentLabel('DeepSeek V3 Chat API'), 'deepseek-v3-chat')
+})
+
+test('parseDsStatus lists the new search and fetch API services distinctly', () => {
+  const json = {
+    data: {
+      page: {
+        components: [
+          { component_id: '1', name: 'DeepSeek V4 Pro API服务(API Service)', order_id: 1 },
+          { component_id: '2', name: 'DeepSeek V4.1 Flash API服务(API Service)', order_id: 2 },
+          { component_id: '3', name: '对话服务(Chatservice)', order_id: 1 },
+          { component_id: '4', name: '搜索服务(Search Service)', order_id: 3 },
+          { component_id: '5', name: '搜索API服务(Search API Service)', order_id: 3 },
+          { component_id: '6', name: '抓取API服务(Fetch API Service)', order_id: 4 },
+        ],
+      },
+      active_changes: [],
+    },
+  }
+  const st = parseDsStatus(json)
+  // Chat Service modes are still skipped; the two API services are distinct.
+  assert.deepEqual(
+    st.components.map((c) => c.name),
+    ['deepseek-v4-pro', 'deepseek-v4.1-flash', 'search', 'fetch'],
+  )
+  assert.equal(st.state, 'ok')
 })
 
 test('parseDsStatus maps components, incidents and worst severity', () => {

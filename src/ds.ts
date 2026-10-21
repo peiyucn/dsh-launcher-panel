@@ -84,6 +84,39 @@ async function fetchDsStatus(): Promise<DsStatus> {
   return { state: 'unknown', components: [], incidents: [] }
 }
 
+/** Words that say "this is an API service" but not which service it is. */
+const GENERIC_LABEL_WORDS = new Set(['api', 'service', 'services'])
+
+function isGenericLabel(text: string): boolean {
+  return text
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => GENERIC_LABEL_WORDS.has(word))
+}
+
+/**
+ * The name shown for one component in the status card.
+ *
+ * Status-page components read "中文(English)" and `toEnglish` drops the
+ * parenthetical, so a name whose Chinese half carries the only ASCII acronym
+ * ("搜索API服务(Search API Service)") collapses to "api" — two such services
+ * become indistinguishable. Take the parenthetical's English whenever the text
+ * outside it is generic, then show what the service is: the model name for
+ * "deepseek vN model api", else the name without its "API Service" tail
+ * ("search api service" → "search").
+ */
+export function dsComponentLabel(componentName: string): string {
+  const outside = toEnglish(componentName)
+  const parenthetical = /[（(]([^）)]*)[）)]/.exec(componentName)?.[1]
+  const parentheticalEnglish = parenthetical ? toEnglish(parenthetical) : ''
+  const base = isGenericLabel(outside) && !isGenericLabel(parentheticalEnglish) ? parentheticalEnglish : outside
+  const lower = base.toLowerCase()
+  const model = /^deepseek\s+(v[\d.]+)\s+(\S+)\s+api$/.exec(lower)
+  if (model) return `deepseek-${model[1]}-${model[2]}`
+  return lower.replace(/\s+(api\s+)?(service|services)$/, '').replace(/\s+api$/, '').trim() || 'api'
+}
+
 export function parseDsStatus(json: any): DsStatus {
   try {
     const page = json?.data?.page ?? {}
@@ -95,8 +128,7 @@ export function parseDsStatus(json: any): DsStatus {
       const rawName = toEnglish(String(c?.name ?? '')).toLowerCase()
       // Only API services are monitored (skip Chat Service modes).
       if (!id || !/api/i.test(rawName)) continue
-      // Show just the model name: strip the trailing " api" suffix.
-      const name = rawName.replace(/^deepseek\s+(v\d+)\s+(\S+)\s+api$/, 'deepseek-$1-$2').replace(/\s+api$/, '')
+      const name = dsComponentLabel(String(c?.name ?? ''))
       statusById.set(id, 'operational')
       raw.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
     }
