@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.2.16]
+
+- The "DeepSeek API Status" card now names each API service recognizably: DeepSeek's new Search and Fetch API services appear as `search` and `fetch` instead of two identical `api` rows, and model services use one consistent form (`deepseek-v4-pro`, `deepseek-v4.1-flash`).
+
 ## [0.2.15]
 
 - No user-visible changes: this release only bumps development-time dependencies that are not shipped inside the extension, to clear Dependabot alerts.
