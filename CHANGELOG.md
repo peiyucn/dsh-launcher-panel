@@ -7,6 +7,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 ## [0.2.16]
 
 - The "DeepSeek API Status" card now names each API service recognizably: DeepSeek's new Search and Fetch API services appear as `search` and `fetch` instead of two identical `api` rows, and model services use one consistent form (`deepseek-v4-pro`, `deepseek-v4.1-flash`).
+- The status bar whale's menu now opens with a one-line summary of the current run — state, run mode, dsh version and, while the server is up, its web address — above the actions.
 
 ## [0.2.15]
 
