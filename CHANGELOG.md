@@ -4,27 +4,27 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
-## [0.2.17]
+## [0.2.17] - 2026-10-22
 
 - No user-visible changes: this release only bumps a development-time dependency that is not shipped inside the extension, to clear Dependabot alerts.
 
-## [0.2.16]
+## [0.2.16] - 2026-10-21
 
 - The "DeepSeek API Status" card now names each API service recognizably: DeepSeek's new Search and Fetch API services appear as `search` and `fetch` instead of two identical `api` rows, and model services use one consistent form (`deepseek-v4-pro`, `deepseek-v4.1-flash`).
 - The status bar whale's menu now opens with a one-line summary of the current run — state, run mode, dsh version and, while the server is up, its web address — above the actions.
 
-## [0.2.15]
+## [0.2.15] - 2026-10-02
 
 - No user-visible changes: this release only bumps development-time dependencies that are not shipped inside the extension, to clear Dependabot alerts.
 
-## [0.2.14]
+## [0.2.14] - 2026-09-30
 
 - Starting in pkg mode works again. The launcher resolved `pnpm` to the bare name and spawned that directly, which Windows cannot run — Node's `spawn` does not expand `PATHEXT`, so it only ever finds a real `.exe`. Start therefore failed instantly, leaving just "no process id was reported" with an empty server log. `pnpm` is now resolved to a **launchable path**: a real `.exe` when there is one, otherwise the `.cmd` shim unwrapped to the Node entry it wraps.
 - "Check updates" in pkg mode reads the registry again — it had the same bare-name problem and so always came back as a failure.
 - The loading overlay is just the spinner: the "Loading…" line under it is gone (it stays as the accessible name, so screen readers still announce it).
 - The spinner is neutral grey instead of blue, matching dsh's own `StateDot` colour.
 
-## [0.2.13]
+## [0.2.13] - 2026-09-27
 
 - Checking for updates in source mode no longer downloads anything — it lists the release tags and compares commits, so it stays fast however far behind the checkout is.
 - Update checks and source-mode updates report what they are doing: a failure says why instead of a bare "Update check failed", a slow GitHub or npm answer no longer counts as a timeout, and the release-tag fetch is announced before it starts.
@@ -36,16 +36,16 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Spinners no longer turn forever: a "checking" or "loading" row that threw before finishing used to keep its spinner running until VS Code was reloaded.
 - Chinese public holidays are off-peak in full, following the updated rule (previously only weekends were, so a holiday on a weekday showed as Peak). The 2026 calendar ships with the extension.
 
-## [0.2.12]
+## [0.2.12] - 2026-09-13
 
 - The Dashboard's run-mode switch (pkg / src) is now a pair of ordinary pill buttons instead of two round icon buttons: the selected mode is filled with the accent colour, matching the rest of the panel's buttons.
 - The dsh version is written the same way everywhere in the panel, as `v<version>`: in source mode the version row no longer carries the `dsh-` prefix (it shows `v0.1.2-rc.1` or `v0.1.2-rc.1-99-g76fda72`, matching pkg mode), and the Update button and activity log read `v<version>` too.
 
-## [0.2.11]
+## [0.2.11] - 2026-09-12
 
 - No user-visible changes: this release only updates build-time dependencies. The extension behaves exactly as 0.2.10.
 
-## [0.2.10]
+## [0.2.10] - 2026-09-10
 
 - The Dashboard's loading animation is now DeepSeek Harness's own dot-matrix style: the status dot while starting, installing or stopping, the in-progress mark in the console, and the panel's opening loading state.
 - Check updates / Update now recognises a stable dsh release that follows the same version's release candidate (0.1.5 after 0.1.5-rc.1) instead of reporting dsh as up to date.
@@ -53,20 +53,20 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Source mode on macOS/Linux needs a C toolchain (current dsh builds a native helper); the README's Environment section says so.
 - The README no longer claims that dsh's minimal mode does not work on Windows — current dsh supports it.
 
-## [0.2.9]
+## [0.2.9] - 2026-09-04
 
 - The DeepSeek API status card and balance query no longer stop working after dsh rewrites its credential store: the API key is found again even when the default model is switched away from DeepSeek.
 
-## [0.2.8]
+## [0.2.8] - 2026-09-04
 
 - Start no longer overwrites a foreign package.json: when `dsh.pkgPath` points at a folder of your own that has dsh installed, the launcher leaves its manifest alone (it only ever writes its own install manifest).
 
-## [0.2.7]
+## [0.2.7] - 2026-09-04
 
 - pkg mode starts the installed dsh as-is: the channel (`dsh.npmChannel`) only decides what to install on first run and what the Update button targets — switching channels no longer reinstalls or downgrades at Start, and starting works offline.
 - Start no longer stalls on a background reinstall that could fail on registry issues and block a working install.
 
-## [0.2.6]
+## [0.2.6] - 2026-09-03
 
 - Source mode shows an honest version: `git describe` output (e.g. `dsh-v0.1.2-rc.1` or `dsh-v0.1.2-rc.1-99-g76fda72`) instead of the checkout manifest's version, which only changes when a release is cut.
 - Source-mode updates pin the newest official `dsh-v…` release tag (resolved straight from git: fetch that one tag, then a detached checkout) instead of `git pull` on master; the update check compares the checkout against that tag.
@@ -75,34 +75,34 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - `dsh.npmChannel` now accepts `alpha` (`latest` / `next` / `alpha`); it is an npm-only setting — source mode ignores it and always tracks the newest official release tag.
 - Settings are ordered by relevance in the Settings UI.
 
-## [0.2.5]
+## [0.2.5] - 2026-09-02
 
 - Release-audit fixes: Stop no longer force-kills whatever owns the port when a tracked server exists (avoids taking down unrelated apps); the dsh version row no longer flashes a placeholder during first-run installs; a failed status refresh no longer unlocks the Check-updates button early or mislabels Start as "Install & Start"; concurrent busy operations each clear only their own spinner.
 - The Browser dropdown now supports keyboard navigation (arrow keys / Home / End, Enter picks).
 - Error messages mask user paths consistently (install/clone progress keeps full paths so you can see where things land).
 
-## [0.2.4]
+## [0.2.4] - 2026-09-02
 
 - The Dashboard visual style now follows the official DSH design style.
 
-## [0.2.3]
+## [0.2.3] - 2026-09-01
 
 - Added the `dsh.autoOpenBrowser` setting (Settings UI, default on): when off, Start no longer opens a browser tab automatically — keep your existing tab (the official page shows a reconnect prompt after a restart). The Start button's "New Tab" click still opens one per `dsh.browser`.
 
-## [0.2.2]
+## [0.2.2] - 2026-08-29
 
 - The launcher follows dsh 0.1.2-alpha.1's one-time-token web URL without breaking older versions: it extracts the token from the server output and probes both URLs, preferring the plain URL when the running dsh serves it and falling back to the token URL when the plain one answers 401 (a valid token answers with a 303 cookie-minting redirect, which the probe stops at and the browser completes) — previously the panel stayed on Starting forever and the browser never opened; the token is only used to open the browser and never shown in the status bar or panel URL.
 - Source mode runs `pnpm run clean` before building (when the checkout provides the script): after a git pull upgrades a checkout to a version that removed packages, stale `lib/` leftovers no longer break the build with missing-export errors; the clean step is skipped for older checkouts without the script and a failed clean warns but does not block the build.
 - A failed update check is reported as failed instead of "up to date": when the registry lookup or `git fetch` cannot run (for example a network timeout), the panel console now says "Update check failed" rather than wrongly claiming dsh is current.
 
-## [0.2.1]
+## [0.2.1] - 2026-08-26
 
 - The status bar shows the whale icon only (no "DSH" text) and opens a quick-pick command menu on click: Open Web UI / Open Dashboard / Stop while running, Open Dashboard / Stop while starting or installing, Start & Open Web UI / Open Dashboard when stopped, plus Open Settings.
 - The whale artwork is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0 — see NOTICE) shown as a monochrome silhouette with the eye and a belly band punched through: consistent in the activity bar, the status bar icon font and the marketplace icon; the view title is plain "DSH WebUI" text.
 - While starting or installing, the spout above the whale pulses between two animation frames every 150 ms (replacing the braille dots).
 - Fixed: the status bar item no longer paints its text in the brand blue only — on themes with a blue status bar the text was invisible. When the server is running it now uses its own blue background with white foreground (theme colors `dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`, overridable per theme), keeping readable contrast on every theme.
 
-## [0.2.0]
+## [0.2.0] - 2026-08-23
 
 - Source mode: a freshly cloned checkout is set up (`pnpm install` + build) automatically — the extra "Setup now?" prompt right after the clone is gone (existing checkouts still ask before being set up).
 - Source mode builds the web UI with dsh's official client profile, so the top-left shows the same DeepSeek Harness brand as the packaged dsh instead of "DSH Local Build <commit>"; a checkout built before this change is rebuilt once automatically.
@@ -125,13 +125,13 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Fixed: source-mode setup counts as "starting"; Stop during setup is honoured; `--no-open` is decided from the exact version being run.
 - Tests are TypeScript (run via tsx against the source directly).
 
-## [0.1.5]
+## [0.1.5] - 2026-08-20
 
 - dsh ≥ rc.8 passes `--no-open`, keeping the panel's `dsh.browser` choice as the only opener (rc.8 opens the system browser on its own).
 - Added `dsh.channel` (`latest` / `next`) so npx can follow the prerelease channel — rc.8 is published to `next`; set it to `next` to run rc.8 via npx.
 - Update checks report network failures in the console instead of silently showing "no update".
 
-## [0.1.4] - 2026-08-18
+## [0.1.4] - 2026-08-19
 
 - Dashboard: both log files (launcher activity + server output) now appear as masked, clickable paths with their sizes, and the Clear button clears both.
 - Added a `debug on/off` pill next to the Console title (source mode only) that toggles `dsh.sourceDebug` (`NODE_DEBUG=module`); module-loading noise is filtered out of the console and shown as a periodic count, with full detail kept in the server log.
