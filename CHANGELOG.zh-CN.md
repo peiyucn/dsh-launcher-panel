@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.2.17]
+
+- 无用户可感知的变化：本版只升级了一个不进扩展产物的开发期依赖，以清除 Dependabot 告警。
+
 ## [0.2.16]
 
 - 「DeepSeek API 状态」卡里的每个 API 服务现在都能看出是什么：官方新增的搜索、抓取 API 服务分别显示 `search` / `fetch`（此前是两行一模一样的 `api`），模型服务也统一成同一写法（如 `deepseek-v4-pro`、`deepseek-v4.1-flash`）。
