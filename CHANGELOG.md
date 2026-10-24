@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
-## [Unreleased]
+## [0.3.0] - 2026-10-25
 
 - The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile, and the launcher assigns its Web UI port (`Default` keeps 3080). Tabs start/stop/open instances and can create, edit or delete them; deleting an instance never deletes DSH data. Existing single-instance settings migrate to a `Default` instance.
 - New setting `dsh.instanceBrand` (default on) shows the instance name under the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation.
