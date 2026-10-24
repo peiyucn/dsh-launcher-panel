@@ -6,16 +6,13 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [Unreleased]
 
-- The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile; the launcher assigns the Web UI port (`Default` keeps 3080, new instances get five-digit ports from `dsh.instancePortBase`). The panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit name/home/profile/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
-- The panel is now a stack of framed sections — Runtime, Instances, Console and DeepSeek API — with a borderless Settings area at the bottom. Runtime comes first. Start / New Tab / Stop live inside Instances, and the active instance tab is marked by its background instead of an underline. The Instances header shows `N instances · M running` plus the new-instance `+`; the tab strip holds only instances. Instances shows `home` and the package path; profile is only edited in the form. Section padding is tighter, and the panel no longer pins a fixed content height.
-- The DeepSeek section is collapsed by default and shows only its title and Peak/Off-peak. Expanding it reveals Model APIs and Other APIs in two columns with a short divider, plus the account balance. Runtime names the shared DSH install `deepseek harness`.
-- Settings has no frame or title; it holds Global Settings, the browser selector and node/launcher versions.
+- The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile; the launcher assigns the Web UI port (`Default` keeps 3080, new instances get five-digit ports from `dsh.instancePortBase`). The panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit name/home/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
 - New-instance/edit forms no longer show a Profile field (new instances use `web`). The home field follows `.dsh-{name}` as the name is typed until you edit it by hand.
-- The status-bar quick menu and activity-bar view are titled **DSH Launcher Panel** (the old `🐳 DSH` / DSH WebUI / DeepSeek Harness wording is gone); the stop item now reads **Stop DSH Web UI**.
-- New setting `dsh.instanceBrand` (default on) shows the instance name below the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation. Restart an instance to apply.
-- Start no longer flashes Installing when the shared dsh is already installed; the Installing state now appears only for an actual first-run install.
+- New setting `dsh.instanceBrand` (default on) shows the instance name below the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation.
 - Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
 - A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
+- Start no longer flashes Installing when the shared dsh is already installed; the Installing state now appears only for an actual first-run install.
+- The panel got a visual refresh: framed sections, a borderless Settings area, a collapsed DeepSeek section, and the DSH Launcher Panel naming.
 
 ## [0.2.17] - 2026-10-22
 
