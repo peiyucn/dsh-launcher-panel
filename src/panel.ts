@@ -9,11 +9,13 @@ import {
   actionStart,
   actionStop,
   actionUpdateDsh,
+  defaultInstanceHome,
   openUrl,
 } from './actions.ts'
 import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
 import { getInstanceManager } from './instance-manager.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
+import { describeDshUpdate } from './versions.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
 import {
   addActivity,
@@ -155,6 +157,12 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       case 'newInstance':
         await actionCreateInstance()
         break
+      case 'instanceForm':
+        await this.openInstanceForm(message.value ?? 'new')
+        break
+      case 'saveInstanceForm':
+        await this.saveInstanceForm(message.value)
+        break
       case 'selectInstance':
         if (manager && message.value) await manager.select(message.value)
         break
@@ -182,10 +190,12 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
           void vscode.window.showErrorMessage(`DSH update failed: ${error instanceof Error ? error.message : String(error)}`)
         }
         break
-      case 'refreshRequirements':
+      case 'refreshRequirements': {
+        const update = await manager?.checkUpdate(true)
+        addActivity(describeDshUpdate(update))
         await manager?.refresh()
-        addActivity('↻ Status refreshed')
         break
+      }
       case 'setMode':
         if (message.value === 'pnpm' || message.value === 'source') {
           if (manager?.anyActive()) {
@@ -212,8 +222,9 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         break
       case 'balance':
         await withBusy('↻ Querying DeepSeek balance…', async () => {
-          await fetchDshBalance()
-          const b = getDshBalance()
+          const home = manager?.activeInstance()?.home
+          await fetchDshBalance(home || undefined)
+          const b = getDshBalance(home || undefined)
           if (b?.balance) addActivity(`✓ Balance: ${b.balance.total} ${b.balance.currency}`)
           else addActivity(`⚠ Balance: ${b?.error ?? 'no balance data'}`)
         })
@@ -243,6 +254,93 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     }
   }
 
+  private postToWebview(message: unknown): void {
+    void this.view?.webview.postMessage(message)
+  }
+
+  /** Seed the in-panel create/edit modal. */
+  private async openInstanceForm(value: string): Promise<void> {
+    const manager = getInstanceManager()
+    if (!manager || !this.view) return
+    if (value === 'new') {
+      const name = `Instance ${manager.instances().length + 1}`
+      const port = await manager.suggestPort()
+      this.postToWebview({
+        type: 'instanceForm',
+        form: { mode: 'new', name, home: defaultInstanceHome(name), profile: 'web', port: port ?? 3080 },
+      })
+      return
+    }
+    const instance = manager.instance(value)
+    if (!instance) return
+    this.postToWebview({
+      type: 'instanceForm',
+      form: {
+        mode: 'edit',
+        id: instance.id,
+        name: instance.name,
+        home: manager.homeOf(instance),
+        profile: instance.profile,
+        port: instance.port,
+        autoOpenBrowser: instance.autoOpenBrowser,
+        browser: instance.browser,
+      },
+    })
+  }
+
+  /** Persist the modal's form and report validation errors back into it. */
+  private async saveInstanceForm(value: string | undefined): Promise<void> {
+    const manager = getInstanceManager()
+    if (!manager || !value) return
+    let payload: {
+      mode?: unknown
+      id?: unknown
+      name?: unknown
+      home?: unknown
+      profile?: unknown
+      port?: unknown
+      autoOpenBrowser?: unknown
+      browser?: unknown
+    }
+    try {
+      payload = JSON.parse(value) as typeof payload
+    } catch {
+      this.postToWebview({ type: 'instanceFormError', message: 'Malformed instance form' })
+      return
+    }
+    if (typeof payload.name !== 'string' || typeof payload.home !== 'string' || typeof payload.profile !== 'string' || typeof payload.port !== 'number') {
+      this.postToWebview({ type: 'instanceFormError', message: 'Name, home, profile and port are required' })
+      return
+    }
+    const autoOpenBrowser = typeof payload.autoOpenBrowser === 'boolean' ? payload.autoOpenBrowser : undefined
+    const browser: 'built-in' | 'external' | undefined =
+      payload.browser === 'built-in' || payload.browser === 'external' ? payload.browser : undefined
+    const input = {
+      name: payload.name,
+      home: payload.home,
+      profile: payload.profile,
+      port: payload.port,
+      autoOpenBrowser,
+      browser,
+    }
+    const result = payload.mode === 'edit' && typeof payload.id === 'string'
+      ? await manager.update(payload.id, input).catch((error) => {
+        this.postToWebview({ type: 'instanceFormError', message: error instanceof Error ? error.message : String(error) })
+        return undefined
+      })
+      : await manager.create(input).catch((error) => {
+        this.postToWebview({ type: 'instanceFormError', message: error instanceof Error ? error.message : String(error) })
+        return undefined
+      })
+    if (!result) return
+    const error = result.issues.find((issue) => issue.severity === 'error')
+    if (!result.instance || error) {
+      this.postToWebview({ type: 'instanceFormError', message: error?.message ?? 'Instance was not saved' })
+      return
+    }
+    this.postToWebview({ type: 'instanceFormSaved' })
+  }
+
   private startTimer(): void {
     this.stopTimer()
     this.timer = setInterval(() => void this.refresh(), STATUS_REFRESH_INTERVAL_MS)
@@ -268,9 +366,10 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       }
       const dashboard = await manager.dashboard()
       const activity = manager.activityFor(dashboard.activeId)
-      const showDs = hasDeepSeekModel()
+      const home = dashboard.active?.home
+      const showDs = home ? hasDeepSeekModel(home) : hasDeepSeekModel()
       const dsStatus = showDs ? await getDsStatus() : undefined
-      const balance = showDs ? getDshBalance() : undefined
+      const balance = showDs ? getDshBalance(home) : undefined
       const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
       await this.view.webview.postMessage({
         type: 'update',

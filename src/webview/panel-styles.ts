@@ -202,4 +202,14 @@ export const PANEL_CSS = `
   .port-input { width: 72px; height: 22px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-input, transparent); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 4px; }
   .port-input:disabled { opacity: .55; }
   .instance-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; }
-  .instance-tab .dot { width: 7px; height: 7px; margin: 0; flex: none; }`
+  .instance-tab .dot { width: 7px; height: 7px; margin: 0; flex: none; }
+  .instance-modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .45); }
+  .instance-modal[hidden] { display: none; }
+  .instance-modal-card { width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto; box-sizing: border-box; padding: 12px; border: 0.5px solid var(--lap-border); border-radius: 12px; background: var(--lap-menu); color: var(--lap-fg); box-shadow: 0 8px 28px rgba(0, 0, 0, .35); }
+  .instance-modal-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .instance-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 8px; font-size: 11px; color: var(--lap-fg2); }
+  .instance-field input, .instance-field select { height: 24px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 6px; }
+  .instance-field input:focus, .instance-field select:focus { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
+  .instance-modal-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; margin-bottom: 6px; word-break: break-word; }
+  .instance-modal-actions { display: flex; justify-content: flex-end; gap: 6px; }
+  .instance-modal-actions .primary { color: var(--lap-accent); border-color: var(--lap-accent); }`

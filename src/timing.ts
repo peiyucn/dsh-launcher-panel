@@ -27,6 +27,9 @@ export const DETECTION_CACHE_TTL_MS = 8_000
 /** How often the panel refreshes its status (drives the webview timer). */
 export const STATUS_REFRESH_INTERVAL_MS = 4_000
 
+/** How long a background dsh update check is reused before it asks again. */
+export const UPDATE_CHECK_TTL_MS = 5 * 60_000
+
 // --- Network, small answer (the round trip is the cost, not the payload) ---
 
 /** A registry lookup (`pnpm view`). Same reasoning as {@link GIT_REMOTE_TIMEOUT_MS}. */

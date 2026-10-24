@@ -20,7 +20,7 @@ import * as path from 'node:path'
 import { decodeChildOutput, isProcessAlive, resolveCommand, sleep } from '../proc.ts'
 import { extractWebToken } from '../env.ts'
 import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
-import { HTTP_PROBE_TIMEOUT_MS, PORT_POLL_INTERVAL_MS, STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../timing.ts'
+import { HTTP_PROBE_TIMEOUT_MS, LOG_TAIL_POLL_MS, PORT_POLL_INTERVAL_MS, STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../timing.ts'
 import { httpOk, isPortOpen, tokenAccepted } from './probes.ts'
 import { findPortOwner, killPid } from './process.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../paths.ts'
@@ -86,6 +86,9 @@ const LOG_READ_BYTES = 256 * 1024
 
 /** The console keeps this many server-log lines. */
 const LOG_TAIL_LINES = 200
+
+/** The live buffer keeps this many lines before dropping the oldest. */
+const LOG_BUFFER_LINES = 500
 
 /** Build a DshConfig view for one instance: shared settings + its port. */
 function runtimeConfig(instance: DshInstance): DshConfig {
@@ -172,6 +175,12 @@ export class InstanceRuntime {
   private url = ''
   private startPromise: Promise<boolean> | undefined
   private stopPromise: Promise<boolean> | undefined
+  private logBuffer = ''
+  private logOffset = 0
+  private logLinesCache: string[] = []
+  private logTimer: ReturnType<typeof setInterval> | undefined
+  private logWatcher: fs.FSWatcher | undefined
+  private logSourcePath = ''
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -226,6 +235,7 @@ export class InstanceRuntime {
     this.url = url
     this.error = ''
     this.setState('running')
+    this.startLogPump()
     return true
   }
 
@@ -338,6 +348,7 @@ export class InstanceRuntime {
     } finally {
       try { fs.closeSync(logFd) } catch { /* child owns the duplicate */ }
     }
+    this.startLogPump()
     return true
   }
 
@@ -432,6 +443,7 @@ export class InstanceRuntime {
     }
     this.setState('stopping')
     this.killTracked()
+    this.stopLogPump()
     if (killUntracked) {
       const owner = await findPortOwner(this.instance.port)
       if (owner !== undefined && owner !== process.pid) killPid(owner, this.host.dbg)
@@ -472,27 +484,124 @@ export class InstanceRuntime {
       await this.adopt(this.instance.port)
     } else if (!open && this.state === 'running') {
       this.url = ''
+      this.stopLogPump()
       this.setState('stopped')
+    } else if (open && this.state === 'running' && this.logTimer === undefined) {
+      this.startLogPump()
+    }
+  }
+
+  /** The log currently backing the console: own file, or the legacy file for an adopted default run. */
+  private logSource(): string {
+    if (this.instance.home === '' && this.isAdopted()) {
+      try {
+        if (fs.statSync(this.logPath).size > 0) return this.logPath
+      } catch {
+        // own log not created yet
+      }
+      try {
+        fs.statSync(this.legacyLogPath)
+        return this.legacyLogPath
+      } catch {
+        // no legacy run
+      }
+    }
+    return this.logPath
+  }
+
+  /** Start (or restart) the per-instance live log pump into the bounded buffer. */
+  private startLogPump(): void {
+    this.stopLogPump()
+    this.logSourcePath = this.logSource()
+    this.logBuffer = ''
+    this.logLinesCache = []
+    try {
+      const stat = fs.statSync(this.logSourcePath)
+      this.logOffset = Math.max(0, stat.size - LOG_READ_BYTES)
+    } catch {
+      this.logOffset = 0
+    }
+    this.pumpLog()
+    try {
+      this.logWatcher = fs.watch(this.logSourcePath, () => this.pumpLog())
+      this.logWatcher.on('error', () => {})
+    } catch {
+      this.logWatcher = undefined
+    }
+    this.logTimer = setInterval(() => this.pumpLog(), LOG_TAIL_POLL_MS)
+  }
+
+  private stopLogPump(): void {
+    if (this.logTimer) {
+      clearInterval(this.logTimer)
+      this.logTimer = undefined
+    }
+    this.logWatcher?.close()
+    this.logWatcher = undefined
+  }
+
+  /** Read appended bytes into the bounded line buffer. */
+  private pumpLog(): void {
+    const source = this.logSource()
+    if (source !== this.logSourcePath) {
+      this.logSourcePath = source
+      this.logOffset = 0
+      this.logBuffer = ''
+      this.logLinesCache = []
+    }
+    let size: number
+    try {
+      size = fs.statSync(source).size
+    } catch {
+      return
+    }
+    if (size < this.logOffset) this.logOffset = 0
+    if (size <= this.logOffset) return
+    let fd: number | undefined
+    try {
+      fd = fs.openSync(source, 'r')
+      const buffer = Buffer.alloc(size - this.logOffset)
+      const read = fs.readSync(fd, buffer, 0, buffer.length, this.logOffset)
+      this.logOffset += read
+      this.logBuffer += buffer.subarray(0, read).toString('utf8')
+      const lines = this.logBuffer.split(/\r?\n/)
+      this.logBuffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (line.length === 0) continue
+        this.logLinesCache.push(line)
+        if (this.logLinesCache.length > LOG_BUFFER_LINES) this.logLinesCache.splice(0, this.logLinesCache.length - LOG_BUFFER_LINES)
+      }
+    } catch {
+      // File may be locked mid-write; retry on the next change/poll.
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd)
     }
   }
 
   /** Recent server output for the console. */
   logLines(maxLines = LOG_TAIL_LINES): string[] {
-    const own = readLogTail(this.logPath, maxLines)
-    if (own.length > 0) return own
-    // The default instance may be an adopted pre-multi-instance run whose
-    // output lives in the legacy single-server log.
-    return this.instance.home === '' ? readLogTail(this.legacyLogPath, maxLines) : own
+    if (this.logLinesCache.length === 0) return readLogTail(this.logSource(), maxLines)
+    return this.logLinesCache.slice(-maxLines)
   }
 
   /** Truncate the instance server log (Clear). */
   clearLog(): void {
+    this.stopLogPump()
     try {
       fs.mkdirSync(path.dirname(this.logPath), { recursive: true })
       fs.writeFileSync(this.logPath, '')
     } catch {
       // best effort; a running server may hold the file
     }
+    this.logLinesCache = []
+    this.logBuffer = ''
+    this.logOffset = 0
+    if (this.state === 'running' || this.state === 'starting') this.startLogPump()
+  }
+
+  /** Stop timers/watchers without touching the DSH process. */
+  dispose(): void {
+    this.stopLogPump()
   }
 
   status(): InstanceRuntimeStatus {

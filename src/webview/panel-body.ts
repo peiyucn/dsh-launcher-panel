@@ -116,5 +116,41 @@ export function panelBody(values: PanelBodyValues): string {
     <span class="plugin-version" id="nodeVersionFooter">node —</span>
     <span class="plugin-version">·</span>
     <span class="plugin-version" id="pluginVersion">dsh-launcher-panel v${values.version}</span>
+  </div>
+  <div class="instance-modal" id="instanceModal" hidden>
+    <div class="instance-modal-card" role="dialog" aria-modal="true" aria-labelledby="instanceModalTitle">
+      <div class="instance-modal-title" id="instanceModalTitle">New instance</div>
+      <label class="instance-field">Name
+        <input id="instanceFormName" autocomplete="off">
+      </label>
+      <label class="instance-field">DSH_HOME
+        <input id="instanceFormHome" autocomplete="off">
+      </label>
+      <label class="instance-field">Profile
+        <input id="instanceFormProfile" autocomplete="off">
+      </label>
+      <label class="instance-field">Port
+        <input id="instanceFormPort" type="number" min="1" max="65535">
+      </label>
+      <label class="instance-field">Auto-open
+        <select id="instanceFormAuto">
+          <option value="global">Use global default</option>
+          <option value="true">Always auto-open</option>
+          <option value="false">Never auto-open</option>
+        </select>
+      </label>
+      <label class="instance-field">Browser
+        <select id="instanceFormBrowser">
+          <option value="global">Use global default</option>
+          <option value="built-in">Built-in</option>
+          <option value="external">External</option>
+        </select>
+      </label>
+      <div class="instance-modal-error" id="instanceFormError"></div>
+      <div class="instance-modal-actions">
+        <button type="button" class="mini-btn" id="instanceFormCancel">Cancel</button>
+        <button type="button" class="mini-btn primary" id="instanceFormSave">Create</button>
+      </div>
+    </div>
   </div>`
 }

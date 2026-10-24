@@ -19,12 +19,15 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 * **Start / Stop** — installs dsh into a launcher-managed location on first run, then runs it and opens the web UI once it is ready.
 * **Source run** — clones deepseek-harness into a managed location and runs it (`dsh.srcPath` overrides the location; an existing checkout there is reused). Installs deps and builds when they are missing, stale, or the checkout moved past its last build; the build runs `pnpm run clean` first and uses dsh's official profile so the web UI carries the same branding as the packaged dsh.
 * **Dashboard panel** — server status, a live console (log files are clickable), DeepSeek's official API status with Peak / Off-peak pricing (weekends and Chinese public holidays bill at off-peak), and your account balance.
-* **DSH Update** — the ⟳ button checks for a new version and reveals Update when there is one (pkg reinstalls the channel's latest; source checks out the newest official `dsh-v…` tag, never upstream master). The check only lists tags and compares commits, so it downloads nothing; the actual source update fetches that tag first and can take a while on a checkout that is far behind.
+* **Multiple instances** — each instance owns a DSH home (`DSH_HOME`), a profile inside it, and a Web UI port. The panel shows one tab per instance plus a `+` tab to create another; each tab can start/stop/open that instance, edit its port inline, edit name/home/profile/browser settings, and delete it (stop first; the DSH data is never deleted). All instances share one dsh install and the global `dsh.runMode`.
+* **DSH Update** — the ⟳ button checks for a new version and reveals Update when there is one (pkg reinstalls the channel's latest; source checks out the newest official `dsh-v…` tag, never upstream master). The check only lists tags and compares commits, so it downloads nothing; the actual source update fetches that tag first and can take a while on a checkout that is far behind. All instances must be stopped for an update.
 * **Browser choice** — built-in or system browser.
 
 ## Usage
 
 Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: its top line summarizes the current run (state, mode, dsh version and, while running, the web address), followed by Open Web UI / Open Dashboard / Stop / Open Settings.
+
+The panel's tab strip is the instance list. `+` opens the create form; each instance tab's Start/Stop/Open acts on that instance. Edit changes its name, home, profile, port, auto-open and browser overrides; Delete removes the instance from the launcher only. Creating an instance does not install or start anything by itself — the first Start creates the home/profile as needed.
 
 ## Settings
 
@@ -32,32 +35,39 @@ Settings → search "dsh":
 
 | Key | Default | Description |
 |---|---|---|
-| dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx |
+| dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx. Shared by every instance; stop all instances before switching. |
 | dsh.npmChannel | latest | npm dist-tag pkg mode installs from, and what the Update button targets: `latest`, `next` (rc), or `alpha`. An installed dsh always starts as-is — the channel never downgrades or auto-upgrades it. Source mode ignores this and tracks the newest official `dsh-v…` tag instead. |
 | dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. Empty uses a managed default. |
 | dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. Empty clones automatically. |
 | dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH |
-| dsh.port | 3080 | Web UI port |
-| dsh.autoOpenBrowser | true | Open the browser automatically after Start. Turn off to keep your current tab; the Start button's "New Tab" click still opens one per `dsh.browser`. |
-| dsh.browser | built-in | `built-in` uses VS Code's Simple Browser (falling back to the system browser if unavailable); `external` opens the system browser |
+| dsh.port | 3080 | Legacy single-instance port. Read once to create the `Default` instance; use the instance's own port in `dsh.instances` afterwards. |
+| dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; ports are unique. Machine-local, not synced. |
+| dsh.activeInstance | empty | Id of the active instance; empty falls back to the first instance. |
+| dsh.autoOpenBrowser | true | Default for instances that do not set their own override. Turn off to keep your current tab; the Start button's "New Tab" click still opens one. |
+| dsh.browser | built-in | Default browser for instances that do not set their own override. `built-in` uses VS Code's Simple Browser (falling back to the system browser if unavailable); `external` opens the system browser |
 | dsh.hideConsole | true | Hide the console window on Windows (also keeps dsh's own tool subprocesses from flashing one) |
-| dsh.clearServerLogOnStart | true | Clear the server log at each launch, so it holds only the current run |
+| dsh.clearServerLogOnStart | true | Clear each instance's server log at launch, so it holds only the current run |
 | dsh.sourceDebug | false | Print module-loading progress in source mode (`NODE_DEBUG=module`). Very verbose: the console shows a periodic count, the full detail goes to the server log. |
 
 ## Notes
 
 * pkg mode installs dsh with pnpm (the tool the dsh repo itself uses) and runs it directly. `npx` is not offered: npm's peer resolver can hang indefinitely on dsh's dependency graph. The first install records where it went in `dsh.pkgPath` / `dsh.srcPath`, so it shows up in Settings and stays pinned.
-* The panel's mode pill uses short labels: `pkg` = the pnpm mode, `src` = the source mode. When `dsh.srcPath` does not point at an existing checkout, the launcher asks where to clone.
-* The panel shows where dsh lives (`package` or `source`) and the `data` (`~/.dsh`) locations; the dsh row carries Update and Check updates.
-* Start and Stop are idempotent: Start probes the port first and does not start twice.
-* Closing VS Code does not stop the server. Stop it from the panel or the command palette.
-* The API Status card supports DeepSeek only, and appears only when a DeepSeek model is configured in dsh.
-* Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `server.log` (server output), next to the managed package/source dirs. Both are clickable in the panel. Those dirs live directly under your home directory (`%USERPROFILE%` on Windows).
+* The panel's mode pill uses short labels: `pkg` = the pnpm mode, `src` = the source mode. The mode is global: every instance runs the same shared dsh tree, and switching it requires stopping all instances.
+* Each instance is a runtime coordinate only: a `DSH_HOME`, a profile inside it, and a port. Its model/provider/preset/credential configuration lives in that home's profile and is not managed by the launcher. Two instances may point at the same home, but only one can run at a time (DSH's sessions/workspaces/credentials are shared); the panel shows a warning.
+* Delete removes the instance from `dsh.instances` only. It never deletes the home, sessions or workspaces; remove those yourself if you want them gone.
+* Start probes the instance's port first and adopts a server that is already running (for example after a VS Code reload), then opens its Web UI. Stop on an adopted server kills the process that owns the port.
+* The panel shows the active instance's home (`data`), profile and port; the dsh row is the shared install/version. Update checks/updates the one shared dsh install and requires all instances stopped.
+* Closing VS Code does not stop the servers. Stop them from the panel or the command palette.
+* The API Status card supports DeepSeek only, and appears only when the active instance's home has a DeepSeek model configured. Balance is queried with the active instance's credentials.
+* Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `~/.dsh-launcher-panel/logs/instances/<id>/server.log` per instance. The legacy single-instance `logs/server.log` is still read when the default instance adopts an old run. All are clickable in the panel. Those dirs live directly under your home directory (`%USERPROFILE%` on Windows).
 * The 🐳 artwork (activity bar icon and status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0), rendered as a monochrome silhouette — see NOTICE.
 
 ## Known limitations
 
 * **Voice input does not work in the built-in browser.** If you enable dsh's voice input plugin, recording in VS Code's built-in browser fails with *Unable to decode audio data* when you stop, so no text is inserted; the microphone itself works (the level meter reacts while you speak). This is a limitation of the built-in browser's audio decoding, not of this extension or of dsh's speech recognition — reproduced on VS Code 1.139.1 (Windows x64), where the same dsh dictates fine in the system browser. Set `dsh.browser` to `external` until this is fixed upstream.
+* **Instances share one dsh install and one run mode.** pkg/src is global, not per instance; switching it requires stopping every instance. Instance-specific data is only the home/profile/port.
+* **Editing an instance's home/profile only repoints it.** The launcher never moves or copies DSH data; do that yourself before starting the instance at the new location.
+* **The per-instance browser/auto-open overrides apply to Start and Open.** The footer browser selector still changes the global default.
 
 ## Environment
 

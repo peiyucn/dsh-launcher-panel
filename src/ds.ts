@@ -49,7 +49,7 @@ const FETCH_TIMEOUT_MS = 8_000
 const BALANCE_FETCH_TIMEOUT_MS = 10_000
 
 let dsStatusCache: { status: DsStatus; at: number } | undefined
-let balanceCache: { balance: DshBalance | null; error?: string; at: number } | undefined
+const balanceCache = new Map<string, { balance: DshBalance | null; error?: string; at: number }>()
 
 async function fetchJson(url: string, timeoutMs: number, headers: Record<string, string> = {}): Promise<unknown> {
   const controller = new AbortController()
@@ -205,17 +205,17 @@ export function readCredentialFromFile(name: string, file: string): string | und
  * wins, then `$DSH_HOME/.credentials.yaml` (the Models-page store), then the
  * invoking directory's `.env`, then `$DSH_HOME/.env`.
  */
-function readCredential(name: string): string | undefined {
+function readCredential(name: string, home = resolveDshHome()): string | undefined {
   if (process.env[name]) return process.env[name]
-  return readCredentialFromFile(name, path.join(resolveDshHome(), '.credentials.yaml'))
+  return readCredentialFromFile(name, path.join(home, '.credentials.yaml'))
     ?? readCredentialFromFile(name, path.join(process.cwd(), '.env'))
-    ?? readCredentialFromFile(name, path.join(resolveDshHome(), '.env'))
+    ?? readCredentialFromFile(name, path.join(home, '.env'))
 }
 
 /** Read the default Agent model selection from settings.yaml. */
-export function readDefaultModel(): { provider: string; model: string } | undefined {
+export function readDefaultModel(home = resolveDshHome()): { provider: string; model: string } | undefined {
   try {
-    const lines = fs.readFileSync(path.join(resolveDshHome(), 'settings.yaml'), 'utf8').split(/\r?\n/)
+    const lines = fs.readFileSync(path.join(home, 'settings.yaml'), 'utf8').split(/\r?\n/)
     let section = ''
     let provider = ''
     let model = ''
@@ -241,41 +241,41 @@ export function readDefaultModel(): { provider: string; model: string } | undefi
  * provider/model, or a DeepSeek API key is present. The panel shows the
  * DeepSeek API status card only when this is true.
  */
-export function hasDeepSeekModel(): boolean {
-  if (readCredential('DEEPSEEK_API_KEY')) return true
-  const sel = readDefaultModel()
+export function hasDeepSeekModel(home = resolveDshHome()): boolean {
+  if (readCredential('DEEPSEEK_API_KEY', home)) return true
+  const sel = readDefaultModel(home)
   return sel !== undefined && /deepseek/i.test(`${sel.provider} ${sel.model}`)
 }
 
-/** Query the DeepSeek account balance using the key configured in dsh. */
-export async function fetchDshBalance(): Promise<void> {
-  const key = readCredential('DEEPSEEK_API_KEY')
+/** Query the DeepSeek account balance using the key configured in one DSH home. */
+export async function fetchDshBalance(home = resolveDshHome()): Promise<void> {
+  const key = readCredential('DEEPSEEK_API_KEY', home)
+  const cacheKey = path.resolve(home)
   if (!key) {
-    balanceCache = { balance: null, error: 'No DeepSeek API key found in dsh', at: Date.now() }
+    balanceCache.set(cacheKey, { balance: null, error: 'No DeepSeek API key found in dsh', at: Date.now() })
     return
   }
   try {
     const json = (await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` })) as any
     const info = json?.balance_infos?.[0]
     if (info) {
-      balanceCache = {
+      balanceCache.set(cacheKey, {
         balance: { currency: String(info.currency ?? ''), total: String(info.total_balance ?? '') },
         at: Date.now(),
-      }
+      })
     } else {
-      balanceCache = { balance: null, error: 'No balance data returned', at: Date.now() }
+      balanceCache.set(cacheKey, { balance: null, error: 'No balance data returned', at: Date.now() })
     }
   } catch (e) {
     // undici 的 fetch 失败只给笼统的 "fetch failed"；真正原因（DNS 解析失败 /
     // 连接被拒 / TLS 握手失败）藏在 e.cause 里，带出来否则余额报错无法定位。
     const message = e instanceof Error ? e.message : String(e)
     const cause = e instanceof Error && e.cause instanceof Error ? e.cause.message : undefined
-    balanceCache = { balance: null, error: cause ? `${message} (${cause})` : message, at: Date.now() }
+    balanceCache.set(cacheKey, { balance: null, error: cause ? `${message} (${cause})` : message, at: Date.now() })
   }
 }
 
-/** Last fetched balance (undefined until the user clicks Balance). */
-export function getDshBalance(): { balance: DshBalance | null; error?: string } | undefined {
-  if (!balanceCache) return undefined
-  return { balance: balanceCache.balance, error: balanceCache.error }
+/** Last fetched balance for one home (undefined until the user clicks Balance). */
+export function getDshBalance(home = resolveDshHome()): { balance: DshBalance | null; error?: string } | undefined {
+  return balanceCache.get(path.resolve(home))
 }

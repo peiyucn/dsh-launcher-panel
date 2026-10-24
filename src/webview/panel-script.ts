@@ -42,6 +42,8 @@ export function panelScript(values: PanelScriptValues): string {
     let gotUpdate = false
     let instanceList = []
     let currentInstanceId = ''
+    let formMode = 'new'
+    let formId = ''
     setTimeout(() => {
       if (!gotUpdate) {
         const st = document.getElementById('statusText')
@@ -144,7 +146,7 @@ export function panelScript(values: PanelScriptValues): string {
       add.title = 'New instance'
       add.setAttribute('aria-label', 'New instance')
       add.textContent = '+'
-      add.addEventListener('click', () => vscode.postMessage({ command: 'newInstance' }))
+      add.addEventListener('click', () => vscode.postMessage({ command: 'instanceForm', value: 'new' }))
       host.appendChild(add)
     }
     function renderInstanceMeta(status) {
@@ -176,6 +178,46 @@ export function panelScript(values: PanelScriptValues): string {
       }
     }
 
+    function openInstanceForm(form) {
+      form = form || {}
+      formMode = form.mode === 'edit' ? 'edit' : 'new'
+      formId = form.id || ''
+      document.getElementById('instanceModalTitle').textContent = formMode === 'edit' ? 'Edit instance' : 'New instance'
+      document.getElementById('instanceFormName').value = form.name || ''
+      document.getElementById('instanceFormHome').value = form.home || ''
+      document.getElementById('instanceFormProfile').value = form.profile || 'web'
+      document.getElementById('instanceFormPort').value = form.port ? String(form.port) : ''
+      document.getElementById('instanceFormAuto').value = form.autoOpenBrowser === true ? 'true' : form.autoOpenBrowser === false ? 'false' : 'global'
+      document.getElementById('instanceFormBrowser').value = form.browser === 'built-in' || form.browser === 'external' ? form.browser : 'global'
+      document.getElementById('instanceFormError').textContent = ''
+      const save = document.getElementById('instanceFormSave')
+      save.disabled = false
+      save.textContent = formMode === 'edit' ? 'Save' : 'Create'
+      const modal = document.getElementById('instanceModal')
+      modal.hidden = false
+      document.getElementById('instanceFormName').focus()
+    }
+    function closeInstanceForm() {
+      document.getElementById('instanceModal').hidden = true
+    }
+    function saveInstanceForm() {
+      const name = document.getElementById('instanceFormName').value
+      const home = document.getElementById('instanceFormHome').value
+      const profile = document.getElementById('instanceFormProfile').value
+      const port = Number(document.getElementById('instanceFormPort').value)
+      const autoText = document.getElementById('instanceFormAuto').value
+      const browserText = document.getElementById('instanceFormBrowser').value
+      const autoOpenBrowser = autoText === 'true' ? true : autoText === 'false' ? false : undefined
+      const browser = browserText === 'built-in' || browserText === 'external' ? browserText : undefined
+      const save = document.getElementById('instanceFormSave')
+      save.disabled = true
+      document.getElementById('instanceFormError').textContent = ''
+      vscode.postMessage({
+        command: 'saveInstanceForm',
+        value: JSON.stringify({ mode: formMode, id: formId, name, home, profile, port, autoOpenBrowser, browser }),
+      })
+    }
+
     function renderRuntime(status) {
       status = status || {}
       const dshMissingText = status.dsh === 'missing' ? (status.mode === 'pnpm' ? 'pnpm not found' : 'not found') : '—'
@@ -190,10 +232,10 @@ export function panelScript(values: PanelScriptValues): string {
       if (upd && upd.hasUpdate) {
         updateBtn.style.display = ''
         updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
-        // Mirror the server-side guard: updating under a running/starting/
-        // stopping server can break it, and an update already in flight must
-        // not be started twice.
-        updateBtn.disabled = !!(status.running || status.starting || status.installing || status.stopping || status.updating)
+        // The update rewrites the one shared dsh tree, so it requires every
+        // instance stopped, not just the active one.
+        const anyActive = Array.isArray(instanceList) && instanceList.some((i) => i.running || i.starting || i.installing || i.stopping)
+        updateBtn.disabled = anyActive || !!(status.updating)
       } else {
         updateBtn.style.display = 'none'
       }
@@ -320,10 +362,18 @@ export function panelScript(values: PanelScriptValues): string {
       e.target.dataset.dirty = '1'
     })
     document.getElementById('editInstanceBtn').addEventListener('click', () => {
-      if (currentInstanceId) vscode.postMessage({ command: 'editInstance', value: currentInstanceId })
+      if (currentInstanceId) vscode.postMessage({ command: 'instanceForm', value: currentInstanceId })
     })
     document.getElementById('deleteInstanceBtn').addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'deleteInstance', value: currentInstanceId })
+    })
+    document.getElementById('instanceFormCancel').addEventListener('click', closeInstanceForm)
+    document.getElementById('instanceFormSave').addEventListener('click', saveInstanceForm)
+    document.getElementById('instanceModal').addEventListener('click', (e) => {
+      if (e.target.id === 'instanceModal') closeInstanceForm()
+    })
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('instanceModal').hidden) closeInstanceForm()
     })
     document.getElementById('updateBtn').addEventListener('click', () => {
       const btn = document.getElementById('updateBtn')
@@ -454,7 +504,15 @@ export function panelScript(values: PanelScriptValues): string {
 
     window.addEventListener('message', (e) => {
       const m = e.data
-      if (!m || m.type !== 'update') return
+      if (!m) return
+      if (m.type === 'instanceForm') { openInstanceForm(m.form); return }
+      if (m.type === 'instanceFormError') {
+        document.getElementById('instanceFormError').textContent = m.message || 'Instance was not saved'
+        document.getElementById('instanceFormSave').disabled = false
+        return
+      }
+      if (m.type === 'instanceFormSaved') { closeInstanceForm(); return }
+      if (m.type !== 'update') return
       gotUpdate = true
       document.getElementById('loadingOverlay').classList.add('hidden')
       if (refreshingBalance) {

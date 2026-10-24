@@ -57,9 +57,9 @@ import {
   writeInstances,
 } from './server/instance-store.ts'
 import { maskPath } from './paths.ts'
-import { DETECTION_CACHE_TTL_MS } from './timing.ts'
+import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from './timing.ts'
 import { versionFromDescribe } from './versions.ts'
-import { isUpdating, runDshUpdate } from './server.ts'
+import { checkDshUpdateStatus, isUpdating, runDshUpdate, type DshUpdate, type UpdateHost } from './server/update.ts'
 
 /** The dashboard snapshot the webview consumes. */
 export interface InstanceDashboard {
@@ -79,7 +79,7 @@ export interface InstanceDashboard {
     dshHomeShort: string
     nodeVersion: string
     mode: 'pnpm' | 'source'
-    update: undefined
+    update: DshUpdate | undefined
     consoleLogPath: string
     consoleLogPathShort: string
     serverLogPath: string
@@ -147,6 +147,9 @@ export class InstanceManager {
   private dshState: 'unknown' | 'ok' | 'missing' = 'unknown'
   private detectionAt = 0
   private logLineSeq = 0
+  private updateCache: { update: DshUpdate; at: number } | undefined
+  private checkPromise: Promise<DshUpdate | undefined> | undefined
+  private checkingUpdate = false
 
   constructor(private readonly context: Pick<vscode.ExtensionContext, 'globalState'>) {
     this.host = new ManagerHost(this)
@@ -232,11 +235,54 @@ export class InstanceManager {
         this.dshState = 'unknown'
       }
     }
+    // Keep the Update button honest without blocking a status refresh on the
+    // registry/tag lookup: a stale cache starts one background check.
+    if (!this.checkingUpdate && (!this.updateCache || now - this.updateCache.at > UPDATE_CHECK_TTL_MS)) {
+      void this.checkUpdate()
+    }
   }
 
   /** Drop the shared detection cache (after a mode/update change). */
   invalidateDetection(): void {
     this.detectionAt = 0
+  }
+
+  /** Check for a newer shared dsh; coalesced and cached for a few minutes. */
+  checkUpdate(force = false): Promise<DshUpdate | undefined> {
+    if (this.checkPromise) return this.checkPromise
+    if (!force && this.updateCache && Date.now() - this.updateCache.at < UPDATE_CHECK_TTL_MS) {
+      return Promise.resolve(this.updateCache.update)
+    }
+    this.checkingUpdate = true
+    this.checkPromise = checkDshUpdateStatus(this.updateHost())
+      .then((update) => {
+        this.updateCache = { update, at: Date.now() }
+        return update
+      })
+      .catch((error) => {
+        addActivity(`⚠ Update check failed: ${error instanceof Error ? error.message : String(error)}`)
+        return this.updateCache?.update
+      })
+      .finally(() => {
+        this.checkingUpdate = false
+        this.checkPromise = undefined
+      })
+    return this.checkPromise
+  }
+
+  private updateHost(): UpdateHost {
+    return {
+      readConfig: () => readConfig(),
+      findSourceCheckout: () => findSourceCheckout(readConfig()),
+      addActivity,
+      withBusy,
+      runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
+      dbg,
+      isStopped: () => !this.anyActive(),
+      invalidateUpdateCache: () => { this.updateCache = undefined },
+      installHost: this.installHost(),
+      checkoutHost: this.checkoutHost(),
+    }
   }
 
   /** Recently active instance server output plus the shared launcher feed. */
@@ -266,7 +312,7 @@ export class InstanceManager {
         starting: status?.starting ?? false,
         installing: status?.installing ?? false,
         stopping: status?.stopping ?? false,
-        checking: false,
+        checking: this.checkingUpdate,
         updating: isUpdating(),
         url: status?.url ?? '',
         dsh: this.dshState,
@@ -277,7 +323,7 @@ export class InstanceManager {
         dshHomeShort: maskPath(status?.home ?? ''),
         nodeVersion: '',
         mode: cfg.runMode,
-        update: undefined,
+        update: this.updateCache?.update,
         consoleLogPath: activityLogFile(),
         consoleLogPathShort: maskPath(activityLogFile()),
         serverLogPath: status?.logPath ?? '',
@@ -352,6 +398,7 @@ export class InstanceManager {
     if (runtime) {
       const status = runtime.status()
       if (status.running || status.starting || status.stopping || status.installing) return false
+      runtime.dispose()
       this.runtimes.delete(id)
     }
     this.settings.instances = this.settings.instances.filter((instance) => instance.id !== id)
@@ -464,9 +511,16 @@ export class InstanceManager {
   /** Update the shared dsh install; requires every instance stopped. */
   async updateDsh(): Promise<void> {
     if (this.anyActive()) throw new Error('Stop all instances before updating dsh')
-    await runDshUpdate()
+    await runDshUpdate(this.updateHost())
+    this.updateCache = undefined
     this.invalidateDetection()
     await this.refresh()
+    await this.checkUpdate(true)
+  }
+
+  /** Stop log pumps; running DSH processes are intentionally left alone. */
+  dispose(): void {
+    for (const runtime of this.runtimes.values()) runtime.dispose()
   }
 
   /** Clear the selected instance's console/log plus the shared activity feed. */

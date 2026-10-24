@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [Unreleased]
+
+- The launcher can manage multiple DSH instances. Each instance has its own DSH home, profile and port; the panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit the port inline, edit name/home/profile/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
+- Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
+- A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
+
 ## [0.2.17] - 2026-10-22
 
 - No user-visible changes: this release only bumps a development-time dependency that is not shipped inside the extension, to clear Dependabot alerts.

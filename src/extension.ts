@@ -155,7 +155,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // The servers are intentionally left running; Stop them from the panel or the
-  // DSH Launcher Panel: Stop command. The log tailer belongs to this host, so it
-  // stops with it (the servers keep writing their log files regardless).
+  // DSH Launcher Panel: Stop command. Log pumps belong to this host and stop with
+  // it; each server keeps writing its own log file regardless.
+  getInstanceManager()?.dispose()
   stopLogTail()
 }

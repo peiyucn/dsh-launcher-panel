@@ -5,9 +5,9 @@ import { normalizeBrowser, shouldOpenBrowser } from './env.ts'
 import { getInstanceManager } from './instance-manager.ts'
 import type { DshInstance, InstanceIssue } from './instances.ts'
 
-/** Open a URL per dsh.browser: built-in Simple Browser (with fallback) or external. */
-export async function openUrl(url: string): Promise<void> {
-  const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
+/** Open a URL per dsh.browser (or one instance's override). */
+export async function openUrl(url: string, browserOverride?: 'built-in' | 'external'): Promise<void> {
+  const browser = browserOverride ?? normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
   if (browser === 'external') {
     await vscode.env.openExternal(vscode.Uri.parse(url))
     return
@@ -53,7 +53,7 @@ export async function actionStart(id?: string): Promise<void> {
     if (now - lastOpenAt < OPEN_DEBOUNCE_MS) return
     lastOpenAt = now
     const url = manager.uiUrl(target)
-    if (url) await openUrl(url)
+    if (url) await openUrl(url, instance.browser)
   } finally {
     startInFlight = false
   }
@@ -76,7 +76,7 @@ export async function actionOpen(id?: string): Promise<void> {
   const target = id ?? manager.activeInstance()?.id
   if (!target) return
   const url = manager.uiUrl(target)
-  if (url) await openUrl(url)
+  if (url) await openUrl(url, manager.instance(target)?.browser)
 }
 
 /** Switch the active instance from a quick pick. */
@@ -103,6 +103,34 @@ export async function actionSelectInstance(): Promise<void> {
 
 function slug(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'instance'
+}
+
+/** Pick a per-instance auto-open override; undefined means "use the global setting". */
+async function pickAutoOpen(current?: boolean): Promise<{ value: boolean | undefined } | undefined> {
+  const items: Array<{ label: string; description?: string; value: boolean | undefined }> = [
+    { label: 'Use global default', value: undefined, description: current === undefined ? 'current' : undefined },
+    { label: 'Always auto-open', value: true, description: current === true ? 'current' : undefined },
+    { label: 'Never auto-open', value: false, description: current === false ? 'current' : undefined },
+  ]
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Auto-open browser',
+    placeHolder: 'Per-instance override (global default is used when unset)',
+  })
+  return picked ? { value: picked.value } : undefined
+}
+
+/** Pick a per-instance browser override; undefined means "use the global setting". */
+async function pickBrowser(current?: 'built-in' | 'external'): Promise<{ value: 'built-in' | 'external' | undefined } | undefined> {
+  const items: Array<{ label: string; description?: string; value: 'built-in' | 'external' | undefined }> = [
+    { label: 'Use global default', value: undefined, description: current === undefined ? 'current' : undefined },
+    { label: 'Built-in', value: 'built-in', description: current === 'built-in' ? 'current' : undefined },
+    { label: 'External', value: 'external', description: current === 'external' ? 'current' : undefined },
+  ]
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Browser',
+    placeHolder: 'Per-instance override (global default is used when unset)',
+  })
+  return picked ? { value: picked.value } : undefined
 }
 
 /** Create an instance through the panel's + tab (plain input boxes). */
@@ -148,7 +176,19 @@ export async function actionCreateInstance(): Promise<void> {
   })
   if (portText === undefined) return
 
-  const result = await manager.create({ name, home, profile, port: Number(portText) })
+  const autoOpen = await pickAutoOpen()
+  if (autoOpen === undefined) return
+  const browser = await pickBrowser()
+  if (browser === undefined) return
+
+  const result = await manager.create({
+    name,
+    home,
+    profile,
+    port: Number(portText),
+    autoOpenBrowser: autoOpen.value,
+    browser: browser.value,
+  })
   const error = firstError(result.issues)
   if (!result.instance || error) {
     void vscode.window.showErrorMessage(`DSH instance was not created: ${error ?? 'unknown error'}`)
@@ -186,13 +226,18 @@ export async function actionEditInstance(id?: string): Promise<void> {
   const portText = await vscode.window.showInputBox({ title: 'Edit instance', prompt: 'Web UI port', value: String(current.port) })
   if (portText === undefined) return
 
+  const autoOpen = await pickAutoOpen(current.autoOpenBrowser)
+  if (autoOpen === undefined) return
+  const browser = await pickBrowser(current.browser)
+  if (browser === undefined) return
+
   const result = await manager.update(target, {
     name,
     home,
     profile,
     port: Number(portText),
-    autoOpenBrowser: current.autoOpenBrowser,
-    browser: current.browser,
+    autoOpenBrowser: autoOpen.value,
+    browser: browser.value,
   })
   const error = firstError(result.issues)
   if (!result.instance || error) void vscode.window.showErrorMessage(`Instance was not updated: ${error ?? 'unknown error'}`)
