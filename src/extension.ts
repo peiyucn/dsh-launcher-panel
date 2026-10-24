@@ -130,7 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dsh.statusMenu', async () => {
       const dashboard = await manager.dashboard()
       const items: MenuPick[] = [
-        { label: buildStatusMenuSummary(dashboard.status), kind: vscode.QuickPickItemKind.Separator },
+        { label: buildStatusMenuSummary(dashboard.status, dashboard.active?.name), kind: vscode.QuickPickItemKind.Separator },
         ...buildStatusMenuItems(dashboard.status).map((item) => ({
           label: item.label,
           iconPath: new vscode.ThemeIcon(item.icon),
@@ -139,7 +139,7 @@ export function activate(context: vscode.ExtensionContext): void {
       ]
       const picked = await vscode.window.showQuickPick(items, {
         title: 'DSH Launcher Panel',
-        placeHolder: 'Choose an action',
+        placeHolder: dashboard.active?.name ? `${dashboard.active.name} — choose an action` : 'Choose an action',
       })
       if (picked?.action) await runMenuAction(picked.action)
     }),

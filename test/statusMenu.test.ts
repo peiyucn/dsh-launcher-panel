@@ -51,6 +51,13 @@ test('status menu summary reports state, mode, version and endpoint', () => {
   assert.equal(buildStatusMenuSummary(summaryBase), 'Stopped · pkg mode · dsh v0.1.2-alpha.1')
 })
 
+test('status menu summary can name the active instance', () => {
+  assert.equal(
+    buildStatusMenuSummary({ ...summaryBase, running: true }, 'Work'),
+    'Work · Running · pkg mode · dsh v0.1.2-alpha.1 · 127.0.0.1:3080',
+  )
+})
+
 test('status menu summary follows the in-flight states and the source mode', () => {
   assert.equal(buildStatusMenuSummary({ ...summaryBase, starting: true }), 'Starting · pkg mode · dsh v0.1.2-alpha.1')
   assert.equal(buildStatusMenuSummary({ ...summaryBase, installing: true }), 'Installing · pkg mode · dsh v0.1.2-alpha.1')

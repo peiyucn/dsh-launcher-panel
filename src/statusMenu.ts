@@ -71,8 +71,9 @@ function stateWord(status: MenuStatus): string {
  * next?", so the menu is useful without opening the Dashboard. The endpoint is
  * only shown while the server is up — otherwise it would read like a claim.
  */
-export function buildStatusMenuSummary(status: MenuStatus): string {
-  const parts = [stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode']
+export function buildStatusMenuSummary(status: MenuStatus, instanceName?: string): string {
+  const parts = instanceName ? [instanceName] : []
+  parts.push(stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode')
   parts.push(status.dshVersion ? `dsh v${status.dshVersion}` : 'dsh version unknown')
   // displayUrl() always yields "http://127.0.0.1:<port>"; the scheme is noise in
   // a one-line summary.
