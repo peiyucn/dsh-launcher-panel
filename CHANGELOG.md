@@ -6,7 +6,9 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [Unreleased]
 
-- The launcher can manage multiple DSH instances. Each instance has its own DSH home, profile and port; the panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit the port inline, edit name/home/profile/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
+- The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile; the launcher assigns the Web UI port (`Default` keeps 3080, new instances get five-digit ports from `dsh.instancePortBase`). The panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit name/home/profile/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
+- The instance card now contains its tabs, status, edit/delete actions and the grouped home/profile/package paths. The shared dsh version, `pkg`/`src` mode and Update controls moved to the footer, because they are not per-instance.
+- The DeepSeek status card uses compact component chips with the account balance on one line, so it takes less vertical space.
 - Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
 - A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
 

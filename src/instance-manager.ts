@@ -11,6 +11,7 @@
 import * as fs from 'node:fs'
 import * as net from 'node:net'
 import * as vscode from 'vscode'
+import { MIN_INSTANCE_PORT_BASE } from './env.ts'
 import {
   instanceHome,
   nextPort,
@@ -342,14 +343,18 @@ export class InstanceManager {
     }
   }
 
-  /** Suggest a free port not used by another instance. */
+  /** Suggest a free port not used by another instance (five-digit base + 1). */
   async suggestPort(): Promise<number | undefined> {
     const used = new Set(this.settings.instances.map((instance) => instance.port))
-    let candidate = nextPort(used)
+    const base = readConfig().instancePortBase
+    let candidate = nextPort(used, base + 1)
+    // A base at the very top of the range has no room for +1; wrap to the
+    // five-digit floor instead of reporting "no port".
+    if (candidate === undefined) candidate = nextPort(used, MIN_INSTANCE_PORT_BASE)
     while (candidate !== undefined) {
       if (await isPortFree(candidate)) return candidate
       used.add(candidate)
-      candidate = nextPort(used)
+      candidate = nextPort(used, candidate + 1)
     }
     return undefined
   }

@@ -13,6 +13,12 @@ import { DSH_CLI_ENTRY_GUARD_MIN_VERSION, dshVersionAtLeast } from './versions.t
 /** The port the web UI listens on when `dsh.port` is unset (mirrors package.json). */
 export const DEFAULT_PORT = 3080
 
+/** Base for launcher-assigned instance ports; new instances take base+1, base+2, … */
+export const DEFAULT_INSTANCE_PORT_BASE = 31000
+
+/** Five-digit floor for the instance port base. */
+export const MIN_INSTANCE_PORT_BASE = 10000
+
 /** Default browser mode; normalizeBrowser collapses any other value onto it. */
 export const DEFAULT_BROWSER = 'built-in'
 

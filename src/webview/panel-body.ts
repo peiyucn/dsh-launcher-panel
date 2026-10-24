@@ -19,17 +19,18 @@ export function panelBody(values: PanelBodyValues): string {
   return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>
   </div>
-  <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances"></div>
   <div class="card">
+    <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances"></div>
     <div class="status">
       <span class="dot" id="dot"></span>
       <div class="status-text">
         <span class="status-main" id="statusText">Checking…</span>
         <span class="status-sub" id="statusSub"></span>
       </div>
-      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode">
-        <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
-        <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
+      <div class="status-actions">
+        <span class="status-sep" aria-hidden="true"></span>
+        <button class="icon-btn" id="editInstanceBtn" title="Edit this instance's name, home, profile and browser settings" aria-label="Edit instance">✎</button>
+        <button class="icon-btn" id="deleteInstanceBtn" title="Remove this instance from the launcher; DSH data is kept" aria-label="Delete instance">🗑</button>
       </div>
     </div>
     <div class="instance-meta">
@@ -42,30 +43,11 @@ export function panelBody(values: PanelBodyValues): string {
         <span class="runtime-value runtime-data" id="instanceProfile">—</span>
       </div>
       <div class="runtime-row">
-        <span class="runtime-label">port</span>
-        <input class="port-input" id="instancePortInput" type="number" min="1" max="65535" aria-label="Instance port" title="Web UI port for this instance">
-        <button class="mini-btn" id="savePortBtn" title="Save this instance's Web UI port">Save port</button>
-      </div>
-      <div class="instance-actions">
-        <button class="mini-btn" id="editInstanceBtn" title="Edit this instance's name, home, profile, port and browser settings">Edit instance…</button>
-        <button class="mini-btn" id="deleteInstanceBtn" title="Remove this instance from the launcher; DSH data is kept">Delete instance</button>
-      </div>
-    </div>
-    <div class="instance-error" id="instanceError"></div>
-    <div class="runtime-section">
-      <div class="runtime-row">
-        <span class="runtime-label">dsh</span>
-        <span class="runtime-value" id="dshVersion">—</span>
-        <button class="mini-btn" id="updateBtn" title="Update dsh" style="display:none">Update</button>
-        <button class="icon-btn" id="refreshBtn" title="Check for dsh updates">⟳</button>
-      </div>
-    </div>
-    <div class="runtime-section">
-      <div class="runtime-row">
         <span class="runtime-label" id="runtimeLabel">package</span>
         <span class="runtime-path" id="runtimePath"></span>
       </div>
     </div>
+    <div class="instance-error" id="instanceError"></div>
   </div>
   <div class="buttons">
     <button id="startBtn" data-cmd="start" class="primary" title="Start dsh and open the browser (or open a new tab when already running)">▶ Start</button>
@@ -77,16 +59,12 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="ds-pricing" id="dsPricing" title=""></span>
       <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
     </div>
-    <div class="ds-body">
-      <div class="ds-status-col">
-        <div class="ds-components" id="dsComponents"></div>
-        <div class="ds-incidents" id="dsIncidents"></div>
-      </div>
-      <div class="ds-side-col">
-        <span class="ds-side-label">Account</span>
-        <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
-        <span class="balance-value" id="balanceValue"></span>
-      </div>
+    <div class="ds-components" id="dsComponents"></div>
+    <div class="ds-incidents" id="dsIncidents"></div>
+    <div class="ds-balance-row">
+      <span class="ds-balance-label">Account</span>
+      <span class="balance-value" id="balanceValue"></span>
+      <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
     </div>
   </div>
   <div class="console-header">
@@ -106,7 +84,7 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
   </div>
   <div class="footer">
-    <button class="icon-btn" id="settingsBtn" title="Open extension settings">⚙ Settings</button>
+    <button class="icon-btn" id="settingsBtn" title="Open the global extension settings">⚙ Global Settings</button>
     <div class="lap-select">
       <button type="button" class="lap-select-trigger" id="browserSelectBtn" aria-haspopup="listbox" aria-expanded="false" title="Browser">
         <span class="lap-select-label" id="browserSelectLabel">Built-in</span>
@@ -120,6 +98,14 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
   </div>
   <div class="version-row">
+    <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
+      <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
+      <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
+    </div>
+    <span class="plugin-version" id="dshVersion" title="Shared dsh install used by every instance">dsh —</span>
+    <button class="mini-btn" id="updateBtn" title="Update the shared dsh" style="display:none">Update</button>
+    <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
+    <span class="version-spacer"></span>
     <span class="plugin-version" id="nodeVersionFooter">node —</span>
     <span class="plugin-version">·</span>
     <span class="plugin-version" id="pluginVersion">dsh-launcher-panel v${values.version}</span>
@@ -135,9 +121,6 @@ export function panelBody(values: PanelBodyValues): string {
       </label>
       <label class="instance-field">Profile
         <input id="instanceFormProfile" autocomplete="off">
-      </label>
-      <label class="instance-field">Port
-        <input id="instanceFormPort" type="number" min="1" max="65535">
       </label>
       <label class="instance-field">Auto-open
         <select id="instanceFormAuto">

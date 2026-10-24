@@ -14,7 +14,14 @@
  */
 
 import * as vscode from 'vscode'
-import { DEFAULT_PORT, MAX_PORT, parseNpmChannel, type NpmChannel } from '../env.ts'
+import {
+  DEFAULT_INSTANCE_PORT_BASE,
+  DEFAULT_PORT,
+  MAX_PORT,
+  MIN_INSTANCE_PORT_BASE,
+  parseNpmChannel,
+  type NpmChannel,
+} from '../env.ts'
 
 type RunMode = 'pnpm' | 'source'
 
@@ -28,6 +35,8 @@ export interface DshConfig {
   pkgPath: string
   nodePath: string
   port: number
+  /** Five-digit base for ports assigned to new instances (base+1, base+2, …). */
+  instancePortBase: number
   /** Print module-loading progress in source mode (NODE_DEBUG=module). */
   sourceDebug: boolean
   /** Open the browser automatically after Start (dsh.autoOpenBrowser; explicit 'New Tab' clicks always open). */
@@ -53,6 +62,7 @@ export function readConfig(): DshConfig {
   // Clamp the port to the valid TCP range; an out-of-range value from Settings
   // Sync or manual edits would otherwise make every probe throw.
   const port = c.get<number>('port') ?? DEFAULT_PORT
+  const portBase = c.get<number>('instancePortBase') ?? DEFAULT_INSTANCE_PORT_BASE
   // 旧键名（dsh.mode / dsh.channel / dsh.path）兜底读取：migrateLegacyDshConfig
   // 激活时会把旧值搬进新键并清掉旧键，这里保证迁移跑完前的短暂窗口也不丢值。
   return {
@@ -62,6 +72,9 @@ export function readConfig(): DshConfig {
     pkgPath: c.get<string>('pkgPath') ?? '',
     nodePath: c.get<string>('nodePath') ?? '',
     port: Number.isInteger(port) && port > 0 && port <= MAX_PORT ? port : DEFAULT_PORT,
+    instancePortBase: Number.isInteger(portBase) && portBase >= MIN_INSTANCE_PORT_BASE && portBase <= MAX_PORT
+      ? portBase
+      : DEFAULT_INSTANCE_PORT_BASE,
     sourceDebug: c.get<boolean>('sourceDebug') ?? false,
     autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
     hideConsole: c.get<boolean>('hideConsole') ?? true,

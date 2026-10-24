@@ -184,17 +184,26 @@
           "order": 6,
           "type": "number",
           "default": 3080,
-          "description": "Legacy single-instance port. Read once to create the default instance in dsh.instances; use the instance's own port afterwards.",
+          "description": "Legacy single-instance port. Read once to create the default instance in dsh.instances; ports are otherwise assigned by the launcher.",
           "deprecationMessage": "Multi-instance management uses dsh.instances; dsh.port is only read once to migrate the default instance."
         },
-        "dsh.autoOpenBrowser": {
+        "dsh.instancePortBase": {
           "order": 7,
+          "type": "number",
+          "scope": "machine",
+          "default": 31000,
+          "minimum": 10000,
+          "maximum": 65535,
+          "description": "Five-digit starting point for auto-assigned instance ports. The first new instance gets base+1 (31001 by default), the next base+2, and so on. The migrated Default instance keeps port 3080; ports are not edited in the panel."
+        },
+        "dsh.autoOpenBrowser": {
+          "order": 8,
           "type": "boolean",
           "default": true,
           "description": "Automatically open the browser after dsh starts. Turn off to keep your current tab (the official page shows a reconnect prompt); the Start button's 'New Tab' click still opens one per dsh.browser."
         },
         "dsh.browser": {
-          "order": 8,
+          "order": 9,
           "type": "string",
           "enum": [
             "built-in",
@@ -204,25 +213,25 @@
           "description": "Which browser to open the UI in. 'built-in' uses VS Code's Simple Browser (falls back to external if disabled); 'external' opens the system browser."
         },
         "dsh.hideConsole": {
-          "order": 9,
+          "order": 10,
           "type": "boolean",
           "default": true,
           "description": "Run the DSH server in a hidden console so neither it nor the tool subprocesses (bash/pwsh) flash a cmd window. Turn off to show it for debugging."
         },
         "dsh.clearServerLogOnStart": {
-          "order": 10,
+          "order": 11,
           "type": "boolean",
           "default": true,
           "description": "Clear the server log file at the start of each launch so it only contains the current run."
         },
         "dsh.sourceDebug": {
-          "order": 11,
+          "order": 12,
           "type": "boolean",
           "default": false,
           "description": "In source mode, enable NODE_DEBUG=module to print module-loading progress (very verbose; the console shows a periodic count, full detail is in the server log)."
         },
         "dsh.instances": {
-          "order": 12,
+          "order": 13,
           "type": "array",
           "scope": "machine",
           "default": [],
@@ -277,7 +286,7 @@
           }
         },
         "dsh.activeInstance": {
-          "order": 13,
+          "order": 14,
           "type": "string",
           "scope": "machine",
           "default": "",

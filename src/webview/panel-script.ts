@@ -156,8 +156,6 @@ export function panelScript(values: PanelScriptValues): string {
       const busy = !!(status.running || status.starting || status.installing || status.stopping)
       const home = document.getElementById('instanceHome')
       const profile = document.getElementById('instanceProfile')
-      const input = document.getElementById('instancePortInput')
-      const save = document.getElementById('savePortBtn')
       const edit = document.getElementById('editInstanceBtn')
       const del = document.getElementById('deleteInstanceBtn')
       if (home) {
@@ -173,15 +171,6 @@ export function panelScript(values: PanelScriptValues): string {
         profile.title = profilePath ? 'Agent profile (tools, models, presets): ' + profilePath : ''
         profile.dataset.path = profilePath
       }
-      if (input) {
-        if (input.dataset.instanceId !== String(status.id || '')) {
-          input.dataset.instanceId = String(status.id || '')
-          input.dataset.dirty = ''
-        }
-        if (document.activeElement !== input && input.dataset.dirty !== '1') input.value = active ? String(status.port || '') : ''
-        input.disabled = !active || busy
-      }
-      if (save) save.disabled = !active || busy
       if (edit) edit.disabled = !active || busy
       if (del) del.disabled = !active || busy
       const err = document.getElementById('instanceError')
@@ -200,7 +189,6 @@ export function panelScript(values: PanelScriptValues): string {
       document.getElementById('instanceFormName').value = form.name || ''
       document.getElementById('instanceFormHome').value = form.home || ''
       document.getElementById('instanceFormProfile').value = form.profile || 'web'
-      document.getElementById('instanceFormPort').value = form.port ? String(form.port) : ''
       document.getElementById('instanceFormAuto').value = form.autoOpenBrowser === true ? 'true' : form.autoOpenBrowser === false ? 'false' : 'global'
       document.getElementById('instanceFormBrowser').value = form.browser === 'built-in' || form.browser === 'external' ? form.browser : 'global'
       document.getElementById('instanceFormError').textContent = ''
@@ -218,7 +206,6 @@ export function panelScript(values: PanelScriptValues): string {
       const name = document.getElementById('instanceFormName').value
       const home = document.getElementById('instanceFormHome').value
       const profile = document.getElementById('instanceFormProfile').value
-      const port = Number(document.getElementById('instanceFormPort').value)
       const autoText = document.getElementById('instanceFormAuto').value
       const browserText = document.getElementById('instanceFormBrowser').value
       const autoOpenBrowser = autoText === 'true' ? true : autoText === 'false' ? false : undefined
@@ -228,7 +215,7 @@ export function panelScript(values: PanelScriptValues): string {
       document.getElementById('instanceFormError').textContent = ''
       vscode.postMessage({
         command: 'saveInstanceForm',
-        value: JSON.stringify({ mode: formMode, id: formId, name, home, profile, port, autoOpenBrowser, browser }),
+        value: JSON.stringify({ mode: formMode, id: formId, name, home, profile, autoOpenBrowser, browser }),
       })
     }
 
@@ -238,8 +225,8 @@ export function panelScript(values: PanelScriptValues): string {
       // 服务端两种模式都给**裸版本号**（pkg = npm 版本号，source = git tag 去掉 dsh-v
       // 前缀，不在 tag 上时带 -N-gsha 后缀）；v 只在这里补一次，服务端别再补。
       document.getElementById('dshVersion').textContent = status.dshVersion
-        ? 'v' + status.dshVersion
-        : dshMissingText
+        ? 'dsh v' + status.dshVersion
+        : 'dsh ' + dshMissingText
 
       const upd = status.update
       const updateBtn = document.getElementById('updateBtn')
@@ -264,7 +251,7 @@ export function panelScript(values: PanelScriptValues): string {
       }
 
       // The row label follows the mode: package (published dsh) or source
-      // (checkout); data = ~/.dsh.
+      // (checkout). It is grouped with home/profile in the instance card.
       const runtimeLabel = document.getElementById('runtimeLabel')
       if (runtimeLabel) runtimeLabel.textContent = status.mode === 'source' ? 'source' : 'package'
       const runtimePath = document.getElementById('runtimePath')
@@ -361,16 +348,6 @@ export function panelScript(values: PanelScriptValues): string {
         if (b.dataset.cmd === 'start') b.disabled = true
         vscode.postMessage({ command: b.dataset.cmd, value: currentInstanceId })
       })
-    })
-    document.getElementById('savePortBtn').addEventListener('click', () => {
-      if (!currentInstanceId) return
-      const input = document.getElementById('instancePortInput')
-      const port = Number(input.value)
-      input.dataset.dirty = ''
-      vscode.postMessage({ command: 'savePort', value: JSON.stringify({ id: currentInstanceId, port }) })
-    })
-    document.getElementById('instancePortInput').addEventListener('input', (e) => {
-      e.target.dataset.dirty = '1'
     })
     document.getElementById('editInstanceBtn').addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'instanceForm', value: currentInstanceId })

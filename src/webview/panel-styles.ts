@@ -106,20 +106,20 @@ export const PANEL_CSS = `
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .status-main { font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
-  .mode-toggle { display: flex; flex-direction: row; margin-left: auto; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 14px; padding: 2px; gap: 2px; flex: none; }
+  .mode-toggle { display: flex; flex-direction: row; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 14px; padding: 2px; gap: 2px; flex: none; }
   /* 模式切换：普通药丸按钮（选中 = 主色实心 + 白字）。药丸半径取高的一半（22/2 = 11），
      与面板里 h28 + r14 的胶囊同一套比例；不再是圆形图标钮。 */
   .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 11px; height: 22px; min-width: 38px; padding: 0 9px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
   .mode-option:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
   .mode-option:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
-  .runtime-section { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .status-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+  .status-sep { width: 1px; height: 16px; background: var(--lap-border-soft); flex: none; margin: 0 3px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .runtime-label { flex: none; width: 52px; color: var(--lap-fg2); font-size: 10px; opacity: .65; }
   .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--lap-fg); }
   .runtime-path, .runtime-data { font-size: 11px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
   .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
-  .instance-actions { display: flex; justify-content: flex-end; gap: 6px; }
   .buttons { display: flex; gap: 8px; }
   /* 按钮：官方 Button 几何（h28 + r14 胶囊 + 超椭圆；无支持时退普通圆角）。 */
   button { height: 28px; border: none; border-radius: 14px; padding: 0 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
@@ -156,10 +156,10 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-components { display: flex; flex-direction: column; gap: 3px; }
-  .ds-comp { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-  .ds-comp-name { flex: 1; min-width: 0; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cdot { width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: #888; flex: none; }
+  .ds-components { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .ds-comp { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--lap-fg); background: var(--lap-surface); border-radius: 999px; padding: 2px 7px; }
+  .ds-comp-name { max-width: 140px; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cdot { width: 6px; height: 6px; margin: 0; border-radius: 50%; background: #888; flex: none; }
   .cdot.ok { background: var(--lap-success); }
   .cdot.degraded { background: var(--lap-warning); }
   .cdot.down { background: var(--lap-danger); }
@@ -167,13 +167,11 @@ export const PANEL_CSS = `
   .ds-incidents { display: flex; flex-direction: column; gap: 3px; }
   .ds-incident { font-size: 11px; color: var(--lap-danger); word-break: break-all; }
   .ds-empty { font-size: 11px; color: var(--lap-fg2); }
-  /* Status and account read as two columns so the card stays short. */
-  #dsCard { gap: 6px; padding: 10px 12px; }
-  .ds-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(92px, auto); gap: 10px; align-items: start; }
-  .ds-status-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .ds-side-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-left: 10px; border-left: 0.5px solid var(--lap-border-soft); min-width: 92px; }
-  .ds-side-label { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
-  .balance-value { color: var(--lap-fg); font-size: 11px; text-align: right; word-break: break-all; }
+  #dsCard { gap: 5px; padding: 10px 12px; }
+  .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .ds-balance-label { color: var(--lap-fg2); font-size: 10px; opacity: .65; }
+  .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
+  .ds-balance-row .balance-btn { flex: none; }
   .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
@@ -196,21 +194,20 @@ export const PANEL_CSS = `
   @supports (corner-shape: superellipse(1.5)) {
     button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .card, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
   }
-  .version-row { display: flex; justify-content: flex-end; gap: 8px; }
+  .version-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .version-spacer { flex: 1; min-width: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
-  /* Instance tabs sit directly on the card: the active tab's background is
-     the card background and its bottom border disappears into the card edge. */
-  .instance-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 1px 4px; margin-bottom: -11px; position: relative; z-index: 2; }
-  .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 26px; padding: 0 8px; border: 0.5px solid transparent; border-bottom: none; border-radius: 10px 10px 0 0; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; }
+  /* Tabs live inside the instance card, so there is no outside seam to align. */
+  .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 4px; margin: 0; border-bottom: 0.5px solid var(--lap-border-soft); }
+  .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; position: relative; }
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
-  .instance-tab[aria-selected='true'] { background: var(--lap-bg); border-color: var(--lap-border); border-bottom-color: var(--lap-bg); color: var(--lap-fg); font-weight: 600; position: relative; top: 1px; }
+  .instance-tab[aria-selected='true'] { background: var(--lap-hover); color: var(--lap-fg); font-weight: 600; }
+  .instance-tab[aria-selected='true']::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -4px; height: 2px; border-radius: 2px; background: var(--lap-accent); }
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .instance-tab-add { height: 26px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
+  .instance-tab-add { height: 24px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
   .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
-  .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; flex-direction: column; gap: 4px; }
-  .port-input { width: 72px; height: 22px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-input, transparent); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 4px; }
-  .port-input:disabled { opacity: .55; }
+  .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .instance-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; }
   .instance-error:empty { display: none; }
   .instance-tab .dot { width: 7px; height: 7px; margin: 0; flex: none; }

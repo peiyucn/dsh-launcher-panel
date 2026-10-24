@@ -4,7 +4,6 @@ import {
   actionCreateInstance,
   actionDeleteInstance,
   actionEditInstance,
-  actionSavePort,
   actionSetBrowser,
   actionStart,
   actionStop,
@@ -172,17 +171,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       case 'deleteInstance':
         await actionDeleteInstance(message.value)
         break
-      case 'savePort': {
-        if (!manager || !message.value) break
-        try {
-          const payload = JSON.parse(message.value) as { id?: unknown; port?: unknown }
-          if (typeof payload.id !== 'string' || typeof payload.port !== 'number') break
-          await actionSavePort(payload.id, payload.port)
-        } catch {
-          // malformed webview payload: ignore and refresh
-        }
-        break
-      }
       case 'updateDsh':
         try {
           await actionUpdateDsh()
@@ -264,10 +252,9 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     if (!manager || !this.view) return
     if (value === 'new') {
       const name = `Instance ${manager.instances().length + 1}`
-      const port = await manager.suggestPort()
       this.postToWebview({
         type: 'instanceForm',
-        form: { mode: 'new', name, home: defaultInstanceHome(name), profile: 'web', port: port ?? 3080 },
+        form: { mode: 'new', name, home: defaultInstanceHome(name), profile: 'web' },
       })
       return
     }
@@ -281,7 +268,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         name: instance.name,
         home: manager.homeOf(instance),
         profile: instance.profile,
-        port: instance.port,
         autoOpenBrowser: instance.autoOpenBrowser,
         browser: instance.browser,
       },
@@ -298,7 +284,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       name?: unknown
       home?: unknown
       profile?: unknown
-      port?: unknown
       autoOpenBrowser?: unknown
       browser?: unknown
     }
@@ -308,22 +293,41 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       this.postToWebview({ type: 'instanceFormError', message: 'Malformed instance form' })
       return
     }
-    if (typeof payload.name !== 'string' || typeof payload.home !== 'string' || typeof payload.profile !== 'string' || typeof payload.port !== 'number') {
-      this.postToWebview({ type: 'instanceFormError', message: 'Name, home, profile and port are required' })
+    if (typeof payload.name !== 'string' || typeof payload.home !== 'string' || typeof payload.profile !== 'string') {
+      this.postToWebview({ type: 'instanceFormError', message: 'Name, home and profile are required' })
       return
     }
     const autoOpenBrowser = typeof payload.autoOpenBrowser === 'boolean' ? payload.autoOpenBrowser : undefined
     const browser: 'built-in' | 'external' | undefined =
       payload.browser === 'built-in' || payload.browser === 'external' ? payload.browser : undefined
+
+    const editing = payload.mode === 'edit'
+    let port: number | undefined
+    if (editing) {
+      const current = typeof payload.id === 'string' ? manager.instance(payload.id) : undefined
+      if (!current) {
+        this.postToWebview({ type: 'instanceFormError', message: 'Instance was not found' })
+        return
+      }
+      // Ports are assigned by the launcher and are not edited from this form.
+      port = current.port
+    } else {
+      port = await manager.suggestPort()
+      if (port === undefined) {
+        this.postToWebview({ type: 'instanceFormError', message: 'No free Web UI port was found for the new instance' })
+        return
+      }
+    }
+
     const input = {
       name: payload.name,
       home: payload.home,
       profile: payload.profile,
-      port: payload.port,
+      port,
       autoOpenBrowser,
       browser,
     }
-    const result = payload.mode === 'edit' && typeof payload.id === 'string'
+    const result = editing && typeof payload.id === 'string'
       ? await manager.update(payload.id, input).catch((error) => {
         this.postToWebview({ type: 'instanceFormError', message: error instanceof Error ? error.message : String(error) })
         return undefined

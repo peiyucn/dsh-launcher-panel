@@ -165,16 +165,10 @@ export async function actionCreateInstance(): Promise<void> {
   if (profile === undefined) return
 
   const suggested = await manager.suggestPort()
-  const portText = await vscode.window.showInputBox({
-    title: 'New DSH instance',
-    prompt: 'Web UI port',
-    value: String(suggested ?? ''),
-    validateInput: (value) => {
-      const port = Number(value)
-      return Number.isInteger(port) && port >= 1 && port <= 65535 ? undefined : 'port must be 1–65535'
-    },
-  })
-  if (portText === undefined) return
+  if (suggested === undefined) {
+    void vscode.window.showErrorMessage('No free Web UI port was found for the new instance.')
+    return
+  }
 
   const autoOpen = await pickAutoOpen()
   if (autoOpen === undefined) return
@@ -185,7 +179,7 @@ export async function actionCreateInstance(): Promise<void> {
     name,
     home,
     profile,
-    port: Number(portText),
+    port: suggested,
     autoOpenBrowser: autoOpen.value,
     browser: browser.value,
   })
@@ -223,8 +217,6 @@ export async function actionEditInstance(id?: string): Promise<void> {
   if (home === undefined) return
   const profile = await vscode.window.showInputBox({ title: 'Edit instance', prompt: 'Profile name', value: current.profile })
   if (profile === undefined) return
-  const portText = await vscode.window.showInputBox({ title: 'Edit instance', prompt: 'Web UI port', value: String(current.port) })
-  if (portText === undefined) return
 
   const autoOpen = await pickAutoOpen(current.autoOpenBrowser)
   if (autoOpen === undefined) return
@@ -235,7 +227,7 @@ export async function actionEditInstance(id?: string): Promise<void> {
     name,
     home,
     profile,
-    port: Number(portText),
+    port: current.port,
     autoOpenBrowser: autoOpen.value,
     browser: browser.value,
   })
@@ -266,25 +258,6 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
   )
   if (picked !== 'Remove') return
   await manager.remove(target)
-}
-
-/** Inline port save from a tab. */
-export async function actionSavePort(id: string, port: number): Promise<void> {
-  const manager = getInstanceManager()
-  if (!manager) return
-  await manager.ready()
-  const current = manager.instance(id)
-  if (!current) return
-  const result = await manager.update(id, {
-    name: current.name,
-    home: current.home,
-    profile: current.profile,
-    port,
-    autoOpenBrowser: current.autoOpenBrowser,
-    browser: current.browser,
-  })
-  const error = firstError(result.issues)
-  if (error) void vscode.window.showErrorMessage(`Port was not saved: ${error}`)
 }
 
 /** Persist the browser choice (global; per-instance overrides are optional). */

@@ -75,8 +75,8 @@ interface DshInstance {
 
 - 实例对象**不包含** model、provider、preset、API key、权限、工作区、环境变量值。
 - `dsh.runMode`（pkg/src）是**全局**运行来源，不是实例字段：所有实例共用同一份 dsh 树，切换模式前必须停止全部实例。
-- `id` 不可编辑；`name`、`home`、`profile`、`port`、浏览器选项可编辑。
-- `home`、`profile`、`port` 的修改不移动、不复制任何数据，只改变下次启动指向。
+- `id` 不可编辑；`name`、`home`、`profile`、浏览器选项可编辑。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
+- `home`、`profile` 的修改不移动、不复制任何数据，只改变下次启动指向。
 - 实例对象可以安全地出现在 `settings.json` 里：没有秘密。
 
 ## 五、设置与迁移
@@ -87,6 +87,7 @@ interface DshInstance {
 |---|---|---|---|---|
 | `dsh.instances` | `DshInstance[]` | `machine` | `[]` | 实例列表；面板写入全局用户设置 |
 | `dsh.activeInstance` | `string` | `machine` | `''` | 活动实例 ID；空/无效时回退到第一个实例 |
+| `dsh.instancePortBase` | `number` | `machine` | `31000` | 新实例端口根；5 位，范围 10000–65535；新实例取 base+1、base+2…… |
 
 `dsh.instances` 的 schema 至少包含 `id`、`name`、`home`、`profile`、`port`，并允许 `autoOpenBrowser`、`browser`；`additionalProperties: false`，避免拼写错误静默进入配置。
 
@@ -104,7 +105,7 @@ interface DshInstance {
 
 ### 旧设置迁移
 
-- `dsh.port` 标记为 legacy，升级后不再作为新实例的端口来源。
+- `dsh.port` 标记为 legacy，升级后只用于合成 `Default`；新实例的端口来自 `dsh.instancePortBase`。
 - 首次激活时，如果尚未迁移过，且 `dsh.instances` 为空：
   - 用 `dsh.port`、`resolveDshHome()`、`profile: 'web'` 合成一个 `Default` 实例；
   - 写入 `dsh.instances`，设置 `dsh.activeInstance`；
@@ -137,11 +138,11 @@ interface DshInstance {
 - 第一个实例（迁移场景）默认 home 是 `~/.dsh`；新建实例默认 `~/.dsh-<slug>`（slug 由名称生成）。若该路径已存在，建议 `-2`、`-3`，或让用户显式选择「使用已有目录」。
 - 表单必须有「浏览…」选择已有目录；新建不存在的 home 走文本输入。
 - profile 下拉从 `<home>/profiles/*` 读取；home 变化时刷新。
-- 端口输入框旁提供「自动」按钮，重新计算建议端口。
+- 端口由 launcher 在创建时按 `dsh.instancePortBase` 自动分配；表单不显示端口输入框。
 
 ### 创建步骤
 
-1. **前端校验**：名称、home、profile、port 的基本格式；重复检查；给出内联错误。
+1. **前端校验**：名称、home、profile 的基本格式；重复检查；给出内联错误。端口不在表单里，由 launcher 分配。
 2. **后端复验**：不信任 webview，扩展侧重新跑全部校验。
 3. **准备 home**：
    - 路径不存在：创建目录（只创建目标目录，不递归删除任何东西）。
@@ -179,9 +180,9 @@ interface DshInstance {
 ### 编辑
 
 - `name`：随时可改；只影响显示。
-- `home`、`profile`、`port`：只在实例停止时可改；运行中先提示停止。
+- `home`、`profile`：只在实例停止时可改；运行中先提示停止。
 - 修改 home/profile **不移动、不复制**任何数据；表单必须显示这句警告。
-- 修改 port 后重新做唯一性和 bind 检查。
+- 端口由 launcher 分配，不在编辑表单里；改 home/profile 不触发端口重编。
 - 修改 home 后重新读取 profile 列表；如果新 home 下没有该 profile，提示创建或换一个。
 - `id` 不可改。
 - 如果改成的 home 正被另一个运行中实例使用，拒绝保存或要求先停另一个。
@@ -255,35 +256,34 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 
 ### 面板（v1：实例 tab）
 
-**替换范围**：现在顶部 Running/Stopped 的那张 `.card` + Start/Stop 按钮区，改成「tab 条 + 当前 tab 内容」。DeepSeek API 状态卡、Console/日志、页脚仍留在下方的全局区。
+**替换范围**：现在顶部 Running/Stopped 的那张 `.card` + Start/Stop 按钮区，改成「卡片内 tab 条 + 当前实例内容」。DeepSeek API 状态卡、Console/日志、页脚仍留在下方的全局区。
 
 ```text
-[ Default ● ][ Work ○ ][ + ]
 ┌────────────────────────────────────┐
-│ Work                       stopped │
-│ port 3081   profile web            │
-│ home C:\Users\...\.dsh-work        │
-│ [Start] [Open] [Edit] [Delete]     │
-│ Port [3081] [Save]  (stopped only) │
+│ [ Default ● ][ Work ○ ][ + ]        │  ← tabs inside the card
+│ Work                         ✎  🗑  │  ← edit/delete after the status
+│ home     C:\Users\...\.dsh-work    │
+│ profile  ...\.dsh-work/profiles/web│
+│ package  C:\...\package            │
 └────────────────────────────────────┘
-dsh v0.2.1 · package · [Update] [⟳]   ← shared runtime（全局）
+[Start] [Stop]
+footer: [pkg src] dsh v0.2.1 [Update] [⟳] · node · launcher   ← shared/global
 ```
 
-- **tab 条**：每个实例一个 tab，显示名称 + 状态点；`+` 是新建按钮，固定在右端，不是实例。只有一个内容面板；切换 tab 重渲染当前实例，不复制 N 份 DOM。
-- **状态点**：running 绿、starting/installing 动画、error 红、stopped 灰；与状态栏一致。
+- **tab 条**：在实例卡片内部，不再是外挂标签；每个实例一个 tab，显示名称 + 状态点；`+` 是新建按钮，固定在右端。只有一个内容面板；切换 tab 重渲染当前实例，不复制 N 份 DOM。
+- **状态点**：running 绿、starting/installing 动画、error 红、stopped 灰；与状态栏一致。卡片里不再重复一个状态点。
 - **tab tooltip**：名称、port、home、完整状态；名称过长省略。
 - **溢出**：单行横向滚动；`+` 不随滚动消失；当前 tab 自动滚入视野；后续可加溢出菜单。
 - **空列表**：只显示 `+` 和「New instance」提示；legacy 迁移后至少有一个 Default。
 - **`+`**：打开创建表单（modal）；成功后 append tab 并选中。
 - **tab 内容**：
   - 状态/URL；Start/Stop/Open。
-  - **Port 内联编辑**：`[3081] [Save]`；运行中禁用并提示先 Stop；保存前做唯一性 + bind 校验。
-  - **名称**可内联改；**home/profile** 通过 Edit 打开表单（运行中要求先 Stop；改 home/profile 不移动数据，必须显示警告）。
-  - **Delete**：运行中禁用/点击提示先 Stop；停止后确认删除；只移除列表，不删数据。
-  - 编辑/删除按钮放 tab 内容里，tab 条只负责选择。
-- **全局/共享信息**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在 tab 内容下方的 shared runtime 行；原 `data` 行改成每个 tab 的 home/profile/port。
+  - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
+  - **home/profile/package** 归为一组；**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
+  - 编辑表单只改名称、home、profile、auto-open、browser；改 home/profile 不移动数据，必须显示警告。
+- **全局/共享信息**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在**页脚**的 shared runtime 行，不再放进实例卡片；原 `data` 行改成每个 tab 的 home/profile。
 - **Console/日志**：跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
-- **DeepSeek API 状态**：全局；**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
+- **DeepSeek API 状态**：全局；组件用紧凑的胶囊排布，余额单独一行，不做左右分栏。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
 - **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。
 - **共享 home 警告**：在 tab 名旁显示警告标记，tooltip 说明「与 <name> 共用 DSH 数据，不能同时运行」。
@@ -414,7 +414,7 @@ dsh v0.2.1 · package · [Update] [⟳]   ← shared runtime（全局）
 5. 自定义 profile：从 `web` 模板创建；已存在时不覆盖。
 6. 端口冲突：配置重复、外部占用、启动时冲突，三种都报错。
 7. 共享 home：两个实例配置允许；同时启动第二个被拒绝。
-8. 编辑：运行中改 home/profile/port 要求先停；改 home 不移动数据。
+8. 编辑：运行中改 home/profile 要求先停；改 home 不移动数据；端口不通过面板编辑。
 9. 删除：运行中先停；只移除列表；home 仍在。
 10. 扩展重启：实例仍在运行 → 激活后接管，状态 running；Stop 正常。
 11. 更新：有实例运行时阻止；停止全部后更新；不自动重启。
@@ -471,5 +471,5 @@ dsh v0.2.1 · package · [Update] [⟳]   ← shared runtime（全局）
 | 8 | `dsh.start` / `dsh.stop` 在多实例下是否弹选择 | 作用域活动实例；快速选择提供其他实例 |
 | 9 | 是否支持 workspace 级实例 | v1 不支持；机器本地 |
 | 10 | 是否做实例复制/导入导出 | 后续；v1 只做新建/编辑/删除 |
-| 11 | 端口/名称内联改，home/profile 用 modal？ | 推荐：port/name 内联；home/profile 用 Edit modal，运行中先 Stop |
+| 11 | 端口/名称内联改，home/profile 用 modal？ | 已定：端口由 `dsh.instancePortBase` 自动分配、面板不编辑；名称/home/profile 用 Edit modal |
 | 12 | tab 顺序是否可拖拽 | v1 按 `dsh.instances` 顺序，不支持拖拽；后续 |
