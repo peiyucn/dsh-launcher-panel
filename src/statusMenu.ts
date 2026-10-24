@@ -19,12 +19,12 @@ export type MenuStatus = Pick<
   'running' | 'starting' | 'installing' | 'stopping' | 'updating' | 'dshVersion' | 'mode' | 'url'
 >
 
-const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Settings', icon: 'settings-gear', action: 'settings' }
+const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'settings-gear', action: 'settings' }
 
 /**
- * Contextual quick-pick menu for the status bar 🐳 DSH item: clicking the item
- * opens this menu (matching the behaviour of other status bar entries) instead
- * of starting the server directly.
+ * Contextual quick-pick menu for the status bar DSH Launcher Panel item:
+ * clicking the item opens this menu (matching the behaviour of other status bar
+ * entries) instead of starting the server directly.
  */
 export function buildStatusMenuItems(
   status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
@@ -34,12 +34,12 @@ export function buildStatusMenuItems(
     items = [
       { label: 'Open Web UI', icon: 'globe', action: 'open' },
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: 'Stop DeepSeek Harness', icon: 'debug-stop', action: 'stop' },
+      { label: 'Stop DSH Web UI', icon: 'debug-stop', action: 'stop' },
     ]
   } else if (status.starting || status.installing) {
     items = [
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: 'Stop DeepSeek Harness', icon: 'debug-stop', action: 'stop' },
+      { label: 'Stop DSH Web UI', icon: 'debug-stop', action: 'stop' },
     ]
   } else if (status.stopping || status.updating) {
     // An update rewrites the checkout / package tree; offering Start here would

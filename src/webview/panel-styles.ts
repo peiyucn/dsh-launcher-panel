@@ -13,19 +13,18 @@
  */
 
 export const PANEL_CSS = `
-  html, body { height: 100%; }
-  /* 滚动条等原生渲染跟随主题的关键声明。 */
+  /* Do not pin the document to the viewport: the panel grows with its content
+     and only scrolls when it genuinely exceeds the view. */
   body {
     color-scheme: light;
     font-family: var(--vscode-font-family);
     font-size: 12px;
-    padding: 10px;
+    padding: 8px;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     box-sizing: border-box;
-    overflow-y: auto;
     /* 官方 dsh 静态色板（design-platform.css）关键值；明暗主题跟随 VS Code 主题类。 */
     --lap-bg: #FFFFFF;
     --lap-fg: #0F1115;
@@ -70,11 +69,17 @@ export const PANEL_CSS = `
     --lap-info: #4D8BFE;
   }
   /* One framed region for every functional area: border, inner title, body. */
-  .section { border: 0.5px solid var(--lap-border); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .section { border: 0.5px solid var(--lap-border); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
   .section-title { font-size: 12px; font-weight: 600; color: var(--lap-fg); line-height: 16px; }
   .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
   .section-head > .mode-toggle { margin-left: auto; }
+  .section-toggle { width: 100%; height: auto; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .section-toggle:hover .section-title { color: var(--lap-accent); }
+  .section-chevron { margin-left: auto; color: var(--lap-fg2); font-size: 10px; transition: transform .12s; }
+  .section-toggle[aria-expanded='true'] .section-chevron { transform: rotate(90deg); }
+  .ds-body { display: flex; flex-direction: column; gap: 6px; }
+  .ds-body[hidden] { display: none; }
   .status { display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
@@ -122,6 +127,8 @@ export const PANEL_CSS = `
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .runtime-label { flex: none; width: 56px; color: var(--lap-fg2); font-size: 10px; }
   .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--lap-fg); }
+  .runtime-version-row { flex-wrap: wrap; }
+  .runtime-version-label { width: auto; }
   .runtime-path, .runtime-data { font-size: 10px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
   .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
   .instance-buttons { display: flex; gap: 8px; margin-top: 2px; }
@@ -134,7 +141,7 @@ export const PANEL_CSS = `
   button.secondary { background: transparent; color: var(--lap-fg); border: 0.5px solid var(--lap-border-soft); }
   button.secondary:hover { background: var(--lap-hover); }
   button.danger:hover { border-color: var(--lap-danger); color: var(--lap-danger); background: var(--lap-danger-bg); }
-  .console { height: 200px; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
+  .console { height: auto; min-height: 48px; max-height: 200px; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 10px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
   .log-files { display: flex; flex-direction: column; gap: 3px; }
   .log-file-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .log-size { color: var(--lap-fg2); font-size: 10px; flex: none; }
@@ -156,7 +163,8 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .ds-columns::after { content: ''; position: absolute; left: 50%; top: 50%; height: 18px; width: 0.5px; transform: translateY(-50%); background: var(--lap-border-soft); }
   .ds-column { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .ds-column-title { font-size: 10px; color: var(--lap-fg2); }
   .ds-components { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
@@ -175,6 +183,8 @@ export const PANEL_CSS = `
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
   .ds-balance-row .balance-btn { flex: none; }
+  .ds-balance-row .ds-open { margin-left: 0; }
+  .settings-area { display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */

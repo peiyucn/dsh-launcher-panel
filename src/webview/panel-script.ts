@@ -377,6 +377,16 @@ export function panelScript(values: PanelScriptValues): string {
       vscode.postMessage({ command: 'updateDsh' })
     })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
+    const dsToggle = document.getElementById('dsToggle')
+    const dsBody = document.getElementById('dsBody')
+    if (dsToggle && dsBody) {
+      const setDsOpen = (open) => {
+        dsToggle.setAttribute('aria-expanded', String(open))
+        dsBody.hidden = !open
+      }
+      dsToggle.addEventListener('click', () => setDsOpen(dsBody.hidden))
+      setDsOpen(false)
+    }
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))
     document.getElementById('debugToggle').addEventListener('click', () => vscode.postMessage({ command: 'toggleDebug' }))

@@ -138,8 +138,8 @@ export function activate(context: vscode.ExtensionContext): void {
         })),
       ]
       const picked = await vscode.window.showQuickPick(items, {
-        title: '🐳 DSH',
-        placeHolder: 'DeepSeek Harness — choose an action',
+        title: 'DSH Launcher Panel',
+        placeHolder: 'Choose an action',
       })
       if (picked?.action) await runMenuAction(picked.action)
     }),

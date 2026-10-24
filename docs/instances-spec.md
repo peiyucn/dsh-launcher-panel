@@ -256,9 +256,13 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 
 ### 面板（v1：实例 tab）
 
-**替换范围**：面板改为统一的带边框区块，每个区块有内标题：**Instances / Runtime / DeepSeek API / Console / Settings**。实例的 Start/Stop 放进 Instances 区。
+**替换范围**：面板改为统一的带边框区块，每个区块有内标题：**Runtime / Instances / Console / DeepSeek API**；Settings 是无边框竖排区。实例的 Start/Stop 放进 Instances 区。
 
 ```text
+┌ Runtime ───────────────────────────┐
+│ [pkg src]                          │
+│ deepseek harness  v0.2.1  [Update] [⟳]│
+└────────────────────────────────────┘
 ┌ Instances ─────────────────────────┐
 │ [ Default ● ][ Work ○ ][ + ]        │  ← active tab = background, no underline
 │ Work                         ✎  🗑  │  ← edit/delete after the status
@@ -267,27 +271,24 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 │ package  C:\...\package            │
 │ [ Start / New Tab ]        [ Stop ]│
 └────────────────────────────────────┘
-┌ Runtime ───────────────────────────┐
-│ [pkg src]                          │
-│ dsh  v0.2.1              [Update] [⟳]│
-└────────────────────────────────────┘
-┌ DeepSeek API ──────────────────────┐
-│ Model APIs        Other APIs       │
-│ ● deepseek-v4-pro ● search         │
-│ ● deepseek-v4.1   ● fetch          │
-│ Account  11845.53 CNY      [Balance]│
-└────────────────────────────────────┘
 ┌ Console ───────────────────────────┐
 │ [Clear] [debug off]                │
 │ log ...                            │
 └────────────────────────────────────┘
-┌ Settings ──────────────────────────┐
-│ [Global Settings]      [Browser]   │
-│ node · launcher                    │
+┌ DeepSeek API · Off-peak          ▸ ┐  ← collapsed by default
 └────────────────────────────────────┘
+  expanded:
+  Model APIs      │ Other APIs
+  ● deepseek...   │ ● search
+  ● deepseek...   │ ● fetch
+  Account ... [Balance] [↗]
+
+Settings (no frame)
+[Global Settings]              [Browser]
+node · launcher
 ```
 
-- **统一 section 规范**：0.5px 线框 + r16 + 12/14 padding；内标题 12px/600；label 10px fg2；值 11px fg；路径 10px 等宽 fg2；主按钮 12px、mini 按钮 10px。所有功能区共用同一套。
+- **统一 section 规范**：0.5px 线框 + r14 + 8/10 padding；内标题 12px/600；label 10px fg2；值 11px fg；路径 10px 等宽 fg2；主按钮 12px、mini 按钮 10px。所有功能区共用同一套。面板不再固定高度，console 也改为 auto + max-height。
 - **tab 条**：在 Instances 区内部；每个实例一个 tab，显示名称 + 状态点；`+` 是新建按钮，固定在右端。**选中态只用 tab 底色区分，不再加下划线/主色线。** 只有一个内容面板；切换 tab 重渲染当前实例，不复制 N 份 DOM。
 - **状态点**：running 绿、starting/installing 动画、error 红、stopped 灰；与状态栏一致。卡片里不再重复一个状态点。
 - **tab tooltip**：名称、port、home、完整状态；名称过长省略。
@@ -299,10 +300,10 @@ stopped ──start──▶ starting ──port/url ready──▶ running
   - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
   - **home/profile/package** 归为一组；**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
   - 编辑表单只改名称、home、profile、auto-open、browser；改 home/profile 不移动数据，必须显示警告。
-- **Runtime**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在独立的 Runtime section，不放进 Instances。
+- **Runtime（最上方）**：`deepseek harness` 版本、mode（pkg/src）、Update/⟳；这些是共享的。
 - **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
-- **DeepSeek API 状态**：独立 section；模型 API 和其他 API（search/fetch）竖着分两栏，保留紧凑胶囊样式；余额单独一行。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
-- **Settings**：独立 section，放 Global Settings、浏览器选择和 node/launcher 版本；标题可有可无，本版保留小标题。
+- **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
+- **Settings**：页面底部，无边框、无标题；放 Global Settings、浏览器选择和 node/launcher 版本。
 - **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。
 - **共享 home 警告**：在 tab 名旁显示警告标记，tooltip 说明「与 <name> 共用 DSH 数据，不能同时运行」。

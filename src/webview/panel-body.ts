@@ -19,6 +19,21 @@ export function panelBody(values: PanelBodyValues): string {
   return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>
   </div>
+  <section class="section" id="runtimeSection">
+    <div class="section-head">
+      <span class="section-title">Runtime</span>
+      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
+        <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
+        <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
+      </div>
+    </div>
+    <div class="runtime-row runtime-version-row">
+      <span class="runtime-label runtime-version-label">deepseek harness</span>
+      <span class="runtime-value" id="dshVersion" title="Shared DeepSeek Harness install used by every instance">—</span>
+      <button class="mini-btn" id="updateBtn" title="Update the shared dsh" style="display:none">Update</button>
+      <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
+    </div>
+  </section>
   <section class="section" id="instancesSection">
     <div class="section-head">
       <span class="section-title">Instances</span>
@@ -56,44 +71,6 @@ export function panelBody(values: PanelBodyValues): string {
       <button data-cmd="stop" class="secondary danger when-running" title="Stop the local dsh server">■ Stop</button>
     </div>
   </section>
-  <section class="section" id="runtimeSection">
-    <div class="section-head">
-      <span class="section-title">Runtime</span>
-      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
-        <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
-        <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
-      </div>
-    </div>
-    <div class="runtime-row">
-      <span class="runtime-label">dsh</span>
-      <span class="runtime-value" id="dshVersion" title="Shared dsh install used by every instance">—</span>
-      <button class="mini-btn" id="updateBtn" title="Update the shared dsh" style="display:none">Update</button>
-      <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
-    </div>
-  </section>
-  <section class="section" id="dsCard">
-    <div class="section-head">
-      <span class="section-title">DeepSeek API</span>
-      <span class="ds-pricing" id="dsPricing" title=""></span>
-      <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
-    </div>
-    <div class="ds-columns">
-      <div class="ds-column">
-        <div class="ds-column-title">Model APIs</div>
-        <div class="ds-components" id="dsComponents"></div>
-      </div>
-      <div class="ds-column">
-        <div class="ds-column-title">Other APIs</div>
-        <div class="ds-components" id="dsComponentsOther"></div>
-      </div>
-    </div>
-    <div class="ds-incidents" id="dsIncidents"></div>
-    <div class="ds-balance-row">
-      <span class="ds-balance-label">Account</span>
-      <span class="balance-value" id="balanceValue"></span>
-      <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
-    </div>
-  </section>
   <section class="section" id="consoleSection">
     <div class="section-head">
       <span class="section-title">Console</span>
@@ -114,10 +91,33 @@ export function panelBody(values: PanelBodyValues): string {
       </div>
     </div>
   </section>
-  <section class="section" id="settingsSection">
-    <div class="section-head">
-      <span class="section-title">Settings</span>
+  <section class="section" id="dsCard">
+    <button type="button" class="section-head section-toggle" id="dsToggle" aria-expanded="false" aria-controls="dsBody" title="Expand or collapse DeepSeek status">
+      <span class="section-title">DeepSeek API</span>
+      <span class="ds-pricing" id="dsPricing" title=""></span>
+      <span class="section-chevron" aria-hidden="true">▸</span>
+    </button>
+    <div class="ds-body" id="dsBody" hidden>
+      <div class="ds-columns">
+        <div class="ds-column">
+          <div class="ds-column-title">Model APIs</div>
+          <div class="ds-components" id="dsComponents"></div>
+        </div>
+        <div class="ds-column">
+          <div class="ds-column-title">Other APIs</div>
+          <div class="ds-components" id="dsComponentsOther"></div>
+        </div>
+      </div>
+      <div class="ds-incidents" id="dsIncidents"></div>
+      <div class="ds-balance-row">
+        <span class="ds-balance-label">Account</span>
+        <span class="balance-value" id="balanceValue"></span>
+        <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
+        <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
+      </div>
     </div>
+  </section>
+  <section class="settings-area" id="settingsSection">
     <div class="settings-row">
       <button class="icon-btn" id="settingsBtn" title="Open the global extension settings">⚙ Global Settings</button>
       <div class="lap-select">

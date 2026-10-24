@@ -7,8 +7,10 @@
 ## [Unreleased]
 
 - launcher 现在可以管理多个 DSH 实例。每个实例有自己的 DSH home 和 profile；端口由 launcher 分配（`Default` 保持 3080，新实例使用 `dsh.instancePortBase` 起的五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建。tab 内可启动/停止/打开该实例、编辑名称/home/profile/自动打开/浏览器，删除实例（先停止；不删除 DSH 数据）。原有单实例设置会迁移成 `Default` 实例。
-- 面板改成统一的带边框区块：Instances、Runtime、DeepSeek API、Console、Settings，每个区块有内标题，统一的标签/值字号和操作位置。Start / New Tab / Stop 放进 Instances 区；当前实例 tab 改用底色区分，不再用下划线。共享的 dsh 版本、`pkg`/`src` 模式和 Update 控件放在 Runtime 区，因为它们不是每个实例独立的。
-- DeepSeek 状态卡保留紧凑的组件胶囊，但把模型 API 和其他 API 竖着分成两栏；余额仍单独一行。
+- 面板改成统一的带边框区块：Runtime、Instances、Console、DeepSeek API；底部 Settings 无边框。Runtime 放最上面；Start / New Tab / Stop 放进 Instances 区；当前实例 tab 改用底色区分，不再用下划线。区块内边距收紧，面板不再固定高度。
+- DeepSeek 区默认收起，只显示标题和 Peak/Off-peak；展开后模型 API 和其他 API 竖着分两栏（中间短分割线），余额单独一行。Runtime 里共享安装的名称改为 `deepseek harness`。
+- Settings 不设线框和标题，只放 Global Settings、浏览器选择和 node/launcher 版本。
+- 状态栏快捷菜单标题改为 **DSH Launcher Panel**（不再用旧的 `🐳 DSH` / DeepSeek Harness 写法）；停止项改为 **Stop DSH Web UI**。
 - 每个实例有独立的实时服务端日志和状态；VS Code 重载后会重新接管仍在运行的实例。控制台、账户余额和 DeepSeek 状态跟随当前活动实例。
 - 全新安装不再要求已有 `~/.dsh`：第一次 Start 会安装 dsh、初始化目标 profile，再启动实例。
 
