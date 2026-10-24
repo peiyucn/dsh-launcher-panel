@@ -148,6 +148,7 @@ export class InstanceManager {
   private detectionAt = 0
   private logLineSeq = 0
   private updateCache: { update: DshUpdate; at: number } | undefined
+  private updateCheckedAt = 0
   private checkPromise: Promise<DshUpdate | undefined> | undefined
   private checkingUpdate = false
 
@@ -237,7 +238,8 @@ export class InstanceManager {
     }
     // Keep the Update button honest without blocking a status refresh on the
     // registry/tag lookup: a stale cache starts one background check.
-    if (!this.checkingUpdate && (!this.updateCache || now - this.updateCache.at > UPDATE_CHECK_TTL_MS)) {
+    const lastUpdateCheck = this.updateCache?.at ?? this.updateCheckedAt
+    if (!this.checkingUpdate && Date.now() - lastUpdateCheck > UPDATE_CHECK_TTL_MS) {
       void this.checkUpdate()
     }
   }
@@ -265,6 +267,7 @@ export class InstanceManager {
       })
       .finally(() => {
         this.checkingUpdate = false
+        this.updateCheckedAt = Date.now()
         this.checkPromise = undefined
       })
     return this.checkPromise

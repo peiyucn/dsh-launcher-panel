@@ -26,6 +26,7 @@ import { findPortOwner, killPid } from './process.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../paths.ts'
 import { instanceHome, instanceLogPath, type DshInstance } from '../instances.ts'
 import { readConfig, type DshConfig } from './config.ts'
+import { isUpdating } from './update.ts'
 
 /** What a prepared shared install supplies to an instance start. */
 export interface PreparedDsh {
@@ -385,6 +386,7 @@ export class InstanceRuntime {
     if (this.host.isHomeRunning(this.resolveHome(), this.instance.id)) {
       return this.fail('another instance with the same home is running')
     }
+    if (isUpdating()) return this.fail('a dsh update is in progress — wait for it to finish')
 
     this.error = ''
     this.setState('starting')

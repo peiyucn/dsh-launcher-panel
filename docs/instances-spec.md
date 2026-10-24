@@ -74,6 +74,7 @@ interface DshInstance {
 约束：
 
 - 实例对象**不包含** model、provider、preset、API key、权限、工作区、环境变量值。
+- `dsh.runMode`（pkg/src）是**全局**运行来源，不是实例字段：所有实例共用同一份 dsh 树，切换模式前必须停止全部实例。
 - `id` 不可编辑；`name`、`home`、`profile`、`port`、浏览器选项可编辑。
 - `home`、`profile`、`port` 的修改不移动、不复制任何数据，只改变下次启动指向。
 - 实例对象可以安全地出现在 `settings.json` 里：没有秘密。
