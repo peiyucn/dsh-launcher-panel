@@ -308,7 +308,7 @@ export function panelScript(values: PanelScriptValues): string {
         list.innerHTML = items.map((c) => {
           const st = c.status || 'operational'
           const stCls = compStateClass(st)
-          return '<div class="ds-comp"><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span></div>'
+          return '<div class="ds-comp"><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>'
         }).join('') || '<div class="ds-empty">' + empty + '</div>'
       }
       // Model services carry the deepseek-* label; search/fetch and any future
