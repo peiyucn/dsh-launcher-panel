@@ -225,4 +225,5 @@ export const PANEL_CSS = `
   .instance-field input:focus, .instance-field select:focus { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
   .instance-modal-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; margin-bottom: 6px; word-break: break-word; }
   .instance-modal-actions { display: flex; justify-content: flex-end; gap: 6px; }
-  .instance-modal-actions .primary { color: var(--lap-accent); border-color: var(--lap-accent); }`
+  .instance-modal-actions .primary { color: #fff; background: var(--lap-accent); border-color: var(--lap-accent); }
+  .instance-modal-actions .primary:hover { background: var(--lap-accent-hover); }`
