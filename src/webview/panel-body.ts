@@ -37,6 +37,8 @@ export function panelBody(values: PanelBodyValues): string {
   <section class="section" id="instancesSection">
     <div class="section-head">
       <span class="section-title">Instances</span>
+      <span class="instance-summary" id="instanceSummary"></span>
+      <button class="icon-btn new-instance-btn" id="newInstanceBtn" title="New instance" aria-label="New instance">＋</button>
     </div>
     <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances"></div>
     <div class="status">
@@ -55,10 +57,6 @@ export function panelBody(values: PanelBodyValues): string {
       <div class="runtime-row">
         <span class="runtime-label">home</span>
         <span class="runtime-value runtime-data" id="instanceHome">—</span>
-      </div>
-      <div class="runtime-row">
-        <span class="runtime-label">profile</span>
-        <span class="runtime-value runtime-data" id="instanceProfile">—</span>
       </div>
       <div class="runtime-row">
         <span class="runtime-label" id="runtimeLabel">package</span>

@@ -29,7 +29,7 @@ const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
 const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
 /** A quick-pick row; only the action rows carry an action. */
-type MenuPick = vscode.QuickPickItem & { action?: StatusMenuAction }
+type MenuPick = vscode.QuickPickItem & { action?: StatusMenuAction; instanceId?: string }
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -66,21 +66,23 @@ export function activate(context: vscode.ExtensionContext): void {
     const dashboard = await manager.dashboard()
     const status = dashboard.status
     const active = dashboard.active
+    const runningCount = dashboard.instances.filter((instance) => instance.running).length
+    const multiRunning = runningCount > 1 ? ` · ${runningCount} instances running` : ''
     const label = active?.name ? ` · ${active.name}` : ''
     if (status.running) {
       stopSpinner()
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
       statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
-      statusBar.tooltip = `DeepSeek Harness${label} running at ${status.url} — click for options`
+      statusBar.tooltip = `DSH Launcher Panel${label} running at ${status.url}${multiRunning} — click for options`
     } else if (status.starting || status.installing || status.updating) {
       stopSpinner()
       statusBar.text = STATUS_SPLASH_SMALL
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
       statusBar.tooltip = status.updating
-        ? `DeepSeek Harness${label} updating — click for options`
-        : (status.installing ? `DeepSeek Harness${label} installing — click for options` : `DeepSeek Harness${label} starting — click for options`)
+        ? `DSH Launcher Panel${label} updating${multiRunning} — click for options`
+        : (status.installing ? `DSH Launcher Panel${label} installing${multiRunning} — click for options` : `DSH Launcher Panel${label} starting${multiRunning} — click for options`)
       spinnerTimer = setInterval(() => {
         statusBar.text = statusBar.text === STATUS_SPLASH_SMALL ? STATUS_SPLASH_LARGE : STATUS_SPLASH_SMALL
       }, STATUS_SPIN_INTERVAL_MS)
@@ -89,13 +91,13 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = `DeepSeek Harness${label} stopping — click for options`
+      statusBar.tooltip = `DSH Launcher Panel${label} stopping${multiRunning} — click for options`
     } else {
       stopSpinner()
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = `DeepSeek Harness${label} stopped — click for options`
+      statusBar.tooltip = `DSH Launcher Panel${label} stopped${multiRunning} — click for options`
     }
   }
 
@@ -129,18 +131,37 @@ export function activate(context: vscode.ExtensionContext): void {
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
     vscode.commands.registerCommand('dsh.statusMenu', async () => {
       const dashboard = await manager.dashboard()
+      const active = dashboard.active
+      const running = dashboard.instances.filter((instance) => instance.running)
+      const showRunning = running.length > 1 || (running.length === 1 && !active?.running)
       const items: MenuPick[] = [
-        { label: buildStatusMenuSummary(dashboard.status, dashboard.active?.name), kind: vscode.QuickPickItemKind.Separator },
-        ...buildStatusMenuItems(dashboard.status).map((item) => ({
-          label: item.label,
-          iconPath: new vscode.ThemeIcon(item.icon),
-          action: item.action,
-        })),
+        { label: buildStatusMenuSummary(dashboard.status, active?.name), kind: vscode.QuickPickItemKind.Separator },
       ]
+      if (showRunning) {
+        items.push({ label: running.length > 1 ? `${running.length} running instances` : 'Running instance', kind: vscode.QuickPickItemKind.Separator })
+        for (const instance of running) {
+          items.push({
+            label: instance.name,
+            description: `:${instance.port}${instance.id === active?.id ? ' · active' : ''}`,
+            iconPath: new vscode.ThemeIcon('globe'),
+            instanceId: instance.id,
+          })
+        }
+      }
+      items.push(...buildStatusMenuItems(dashboard.status).map((item) => ({
+        label: item.label,
+        iconPath: new vscode.ThemeIcon(item.icon),
+        action: item.action,
+      })))
       const picked = await vscode.window.showQuickPick(items, {
         title: 'DSH Launcher Panel',
-        placeHolder: dashboard.active?.name ? `${dashboard.active.name} — choose an action` : 'Choose an action',
+        placeHolder: active?.name ? `${active.name} — choose an action` : 'Choose an action',
       })
+      if (picked?.instanceId) {
+        await manager.select(picked.instanceId)
+        await actionOpen(picked.instanceId)
+        return
+      }
       if (picked?.action) await runMenuAction(picked.action)
     }),
     vscode.commands.registerCommand('dsh.start', () => actionStart()),

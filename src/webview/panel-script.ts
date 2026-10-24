@@ -132,7 +132,7 @@ export function panelScript(values: PanelScriptValues): string {
           tab.setAttribute('role', 'tab')
           tab.setAttribute('aria-selected', String(item.id === activeId))
           tab.dataset.id = item.id
-          tab.title = 'Instance: ' + (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '') + ' · profile ' + (item.profile || 'web')
+          tab.title = 'Instance: ' + (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '')
           tab.setAttribute('aria-label', 'Instance ' + (item.name || '') + ', ' + (item.state || 'stopped'))
           tab.innerHTML = instanceDot(item.state) + '<span class="tab-name"></span>'
           tab.querySelector('.tab-name').textContent = item.name || 'Instance'
@@ -141,35 +141,29 @@ export function panelScript(values: PanelScriptValues): string {
           if (item.id === activeId) window.requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
         })
       }
-      const add = document.createElement('button')
-      add.type = 'button'
-      add.className = 'instance-tab-add'
-      add.title = 'New instance'
-      add.setAttribute('aria-label', 'New instance')
-      add.textContent = '+'
-      add.addEventListener('click', () => vscode.postMessage({ command: 'instanceForm', value: 'new' }))
-      host.appendChild(add)
+    }
+    function renderInstanceSummary(list) {
+      const el = document.getElementById('instanceSummary')
+      if (!el) return
+      const items = Array.isArray(list) ? list : []
+      if (items.length === 0) {
+        el.textContent = 'No instances'
+        return
+      }
+      const running = items.filter((item) => item.running).length
+      el.textContent = items.length + ' instance' + (items.length === 1 ? '' : 's') + (running ? ' · ' + running + ' running' : '')
     }
     function renderInstanceMeta(status) {
       status = status || {}
       const active = !!status.id
       const busy = !!(status.running || status.starting || status.installing || status.stopping)
       const home = document.getElementById('instanceHome')
-      const profile = document.getElementById('instanceProfile')
       const edit = document.getElementById('editInstanceBtn')
       const del = document.getElementById('deleteInstanceBtn')
       if (home) {
         home.textContent = active && status.home ? (status.homeShort || status.home) : '—'
         home.title = active && status.home ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
         home.dataset.path = active && status.home ? status.home : ''
-      }
-      if (profile) {
-        const profilePath = active && status.home && status.profile
-          ? status.home.replace(/[\\/]+$/, '') + '/profiles/' + status.profile
-          : ''
-        profile.textContent = active ? (status.profile || '—') : '—'
-        profile.title = profilePath ? 'Agent profile: ' + status.profile + ' (at ' + profilePath + ')' : ''
-        profile.dataset.path = profilePath
       }
       if (edit) edit.disabled = !active || busy
       if (del) del.disabled = !active || busy
@@ -251,7 +245,7 @@ export function panelScript(values: PanelScriptValues): string {
       }
 
       // The row label follows the mode: package (published dsh) or source
-      // (checkout). It is grouped with home/profile in the instance card.
+      // (checkout). It is grouped with home in the instance card.
       const runtimeLabel = document.getElementById('runtimeLabel')
       if (runtimeLabel) runtimeLabel.textContent = status.mode === 'source' ? 'source' : 'package'
       const runtimePath = document.getElementById('runtimePath')
@@ -355,6 +349,9 @@ export function panelScript(values: PanelScriptValues): string {
         if (b.dataset.cmd === 'start') b.disabled = true
         vscode.postMessage({ command: b.dataset.cmd, value: currentInstanceId })
       })
+    })
+    document.getElementById('newInstanceBtn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'instanceForm', value: 'new' })
     })
     document.getElementById('editInstanceBtn').addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'instanceForm', value: currentInstanceId })
@@ -547,6 +544,7 @@ export function panelScript(values: PanelScriptValues): string {
       if (dsCard) dsCard.style.display = m.showDs === false ? 'none' : ''
       renderRunning(m.status)
       renderTabs(instanceList, currentInstanceId)
+      renderInstanceSummary(instanceList)
       renderInstanceMeta(m.active)
       renderRuntime(m.status)
       renderLogFiles(m.status)

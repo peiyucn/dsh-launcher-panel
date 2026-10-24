@@ -168,7 +168,7 @@ export const PANEL_CSS = `
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
   .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
-  .ds-columns::after { content: ''; position: absolute; left: 50%; top: 50%; height: 18px; width: 0.5px; transform: translateY(-50%); background: var(--lap-border-soft); }
+  .ds-columns::after { content: ''; position: absolute; left: 50%; top: 2px; bottom: 2px; width: 0.5px; background: var(--lap-border-soft); }
   .ds-column { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .ds-column-title { font-size: 10px; color: var(--lap-fg2); }
   .ds-components { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
@@ -220,9 +220,10 @@ export const PANEL_CSS = `
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tab[aria-selected='true'] { background: var(--lap-surface); color: var(--lap-fg); font-weight: 600; }
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .instance-tab-add { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 24px; width: 26px; margin-left: 6px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 18px; font-weight: 400; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
-  .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
+  .instance-summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lap-fg2); font-size: 10px; }
+  .new-instance-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 4px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; flex: none; }
+  .new-instance-btn:hover { background: var(--lap-hover); }
   .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   .instance-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; }
   .instance-error:empty { display: none; }
