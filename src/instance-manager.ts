@@ -110,6 +110,10 @@ class ManagerHost implements RuntimeHost {
     return this.manager.prepare()
   }
 
+  isDshMissing(): boolean {
+    return this.manager.isDshMissing()
+  }
+
   isHomeRunning(home: string, exceptId: string): boolean {
     return this.manager.isHomeRunning(home, exceptId)
   }
@@ -449,6 +453,11 @@ export class InstanceManager {
       if (sameHome(status.home, home)) return true
     }
     return false
+  }
+
+  /** Whether the shared dsh is currently known to be missing. */
+  isDshMissing(): boolean {
+    return this.dshState === 'missing'
   }
 
   /** Shared install preparation; concurrent starts coalesce onto one install. */

@@ -47,6 +47,8 @@ export interface PreparedDsh {
 export interface RuntimeHost {
   /** Install/detect the shared dsh once; concurrent calls coalesce. */
   prepare(): Promise<PreparedDsh | undefined>
+  /** Whether the shared dsh is currently known to be missing (first-run install). */
+  isDshMissing(): boolean
   /** Whether another instance with the same normalized home is running. */
   isHomeRunning(home: string, exceptId: string): boolean
   /** Append one line to the shared launcher activity feed. */
@@ -401,9 +403,16 @@ export class InstanceRuntime {
       return this.fail(`cannot create home ${home}: ${error instanceof Error ? error.message : String(error)}`)
     }
 
-    this.installing = true
-    const prepared = await this.host.prepare()
-    this.installing = false
+    // `prepare()` also detects an already-installed dsh; only expose the
+    // Installing state when the shared dsh is actually missing. Otherwise every
+    // normal Start flashes "Installing…" even though nothing is installed.
+    this.installing = this.host.isDshMissing()
+    let prepared: PreparedDsh | undefined
+    try {
+      prepared = await this.host.prepare()
+    } finally {
+      this.installing = false
+    }
     if (prepared === undefined) {
       return this.fail('dsh install or detection failed — see the launcher log')
     }
