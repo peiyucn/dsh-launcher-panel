@@ -34,15 +34,21 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
     <div class="instance-meta">
       <div class="runtime-row">
+        <span class="runtime-label">home</span>
+        <span class="runtime-value runtime-data" id="instanceHome">—</span>
+      </div>
+      <div class="runtime-row">
         <span class="runtime-label">profile</span>
-        <span class="runtime-value" id="instanceProfile">—</span>
+        <span class="runtime-value runtime-data" id="instanceProfile">—</span>
       </div>
       <div class="runtime-row">
         <span class="runtime-label">port</span>
-        <input class="port-input" id="instancePortInput" type="number" min="1" max="65535" aria-label="Instance port">
-        <button class="mini-btn" id="savePortBtn" title="Save this instance's port">Save</button>
-        <button class="mini-btn" id="editInstanceBtn" title="Edit this instance">Edit</button>
-        <button class="mini-btn" id="deleteInstanceBtn" title="Remove this instance; DSH data is kept">Delete</button>
+        <input class="port-input" id="instancePortInput" type="number" min="1" max="65535" aria-label="Instance port" title="Web UI port for this instance">
+        <button class="mini-btn" id="savePortBtn" title="Save this instance's Web UI port">Save port</button>
+      </div>
+      <div class="instance-actions">
+        <button class="mini-btn" id="editInstanceBtn" title="Edit this instance's name, home, profile, port and browser settings">Edit instance…</button>
+        <button class="mini-btn" id="deleteInstanceBtn" title="Remove this instance from the launcher; DSH data is kept">Delete instance</button>
       </div>
     </div>
     <div class="instance-error" id="instanceError"></div>
@@ -59,10 +65,6 @@ export function panelBody(values: PanelBodyValues): string {
         <span class="runtime-label" id="runtimeLabel">package</span>
         <span class="runtime-path" id="runtimePath"></span>
       </div>
-      <div class="runtime-row">
-        <span class="runtime-label">data</span>
-        <span class="runtime-data" id="runtimeData"></span>
-      </div>
     </div>
   </div>
   <div class="buttons">
@@ -75,12 +77,17 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="ds-pricing" id="dsPricing" title=""></span>
       <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
     </div>
-    <div class="ds-components" id="dsComponents"></div>
-    <div class="balance-row">
-      <button class="balance-btn" id="balanceBtn" title="Query DeepSeek account balance">Balance</button>
-      <span class="balance-value" id="balanceValue"></span>
+    <div class="ds-body">
+      <div class="ds-status-col">
+        <div class="ds-components" id="dsComponents"></div>
+        <div class="ds-incidents" id="dsIncidents"></div>
+      </div>
+      <div class="ds-side-col">
+        <span class="ds-side-label">Account</span>
+        <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
+        <span class="balance-value" id="balanceValue"></span>
+      </div>
     </div>
-    <div class="ds-incidents" id="dsIncidents"></div>
   </div>
   <div class="console-header">
     <span class="console-title">Console</span>

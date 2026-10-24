@@ -75,6 +75,9 @@ export const PANEL_CSS = `
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
   .dot.stopped { background: var(--lap-fg2); opacity: .5; box-shadow: none; }
+  /* The tab strip already carries the instance's status dot. The card's copy
+     would be the same state twice in one view, so the card keeps only text. */
+  .status > #dot { display: none; }
   /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
      几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
      stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方
@@ -116,6 +119,7 @@ export const PANEL_CSS = `
   .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--lap-fg); }
   .runtime-path, .runtime-data { font-size: 11px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
   .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
+  .instance-actions { display: flex; justify-content: flex-end; gap: 6px; }
   .buttons { display: flex; gap: 8px; }
   /* 按钮：官方 Button 几何（h28 + r14 胶囊 + 超椭圆；无支持时退普通圆角）。 */
   button { height: 28px; border: none; border-radius: 14px; padding: 0 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
@@ -152,7 +156,7 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-components { display: flex; flex-direction: column; gap: 4px; }
+  .ds-components { display: flex; flex-direction: column; gap: 3px; }
   .ds-comp { display: flex; align-items: center; gap: 6px; font-size: 11px; }
   .ds-comp-name { flex: 1; min-width: 0; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cdot { width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: #888; flex: none; }
@@ -163,8 +167,13 @@ export const PANEL_CSS = `
   .ds-incidents { display: flex; flex-direction: column; gap: 3px; }
   .ds-incident { font-size: 11px; color: var(--lap-danger); word-break: break-all; }
   .ds-empty { font-size: 11px; color: var(--lap-fg2); }
-  .balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .balance-value { color: var(--lap-fg); }
+  /* Status and account read as two columns so the card stays short. */
+  #dsCard { gap: 6px; padding: 10px 12px; }
+  .ds-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(92px, auto); gap: 10px; align-items: start; }
+  .ds-status-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .ds-side-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-left: 10px; border-left: 0.5px solid var(--lap-border-soft); min-width: 92px; }
+  .ds-side-label { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
+  .balance-value { color: var(--lap-fg); font-size: 11px; text-align: right; word-break: break-all; }
   .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
@@ -189,20 +198,24 @@ export const PANEL_CSS = `
   }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
-  /* Instance tabs: one row, horizontally scrollable; the + stays pinned right. */
-  .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 2px; }
-  .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; }
+  /* Instance tabs sit directly on the card: the active tab's background is
+     the card background and its bottom border disappears into the card edge. */
+  .instance-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 1px 4px; margin-bottom: -11px; position: relative; z-index: 2; }
+  .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 26px; padding: 0 8px; border: 0.5px solid transparent; border-bottom: none; border-radius: 10px 10px 0 0; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; }
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
-  .instance-tab[aria-selected='true'] { background: var(--lap-surface); border-color: var(--lap-border-soft); color: var(--lap-fg); font-weight: 600; }
+  .instance-tab[aria-selected='true'] { background: var(--lap-bg); border-color: var(--lap-border); border-bottom-color: var(--lap-bg); color: var(--lap-fg); font-weight: 600; position: relative; top: 1px; }
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .instance-tab-add { height: 24px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
+  .instance-tab-add { height: 26px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
   .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
   .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; flex-direction: column; gap: 4px; }
   .port-input { width: 72px; height: 22px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-input, transparent); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 4px; }
   .port-input:disabled { opacity: .55; }
   .instance-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; }
+  .instance-error:empty { display: none; }
   .instance-tab .dot { width: 7px; height: 7px; margin: 0; flex: none; }
+  .instance-tab .dot.matrix { width: 10px; height: 10px; }
+  .instance-tab .state-spinner { --spinner-size: 10px; }
   .instance-modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .45); }
   .instance-modal[hidden] { display: none; }
   .instance-modal-card { width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto; box-sizing: border-box; padding: 12px; border: 0.5px solid var(--lap-border); border-radius: 12px; background: var(--lap-menu); color: var(--lap-fg); box-shadow: 0 8px 28px rgba(0, 0, 0, .35); }

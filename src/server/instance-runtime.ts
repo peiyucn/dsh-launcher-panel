@@ -60,6 +60,7 @@ export interface InstanceRuntimeStatus {
   id: string
   name: string
   home: string
+  homeShort: string
   profile: string
   port: number
   state: InstanceState
@@ -608,10 +609,12 @@ export class InstanceRuntime {
 
   status(): InstanceRuntimeStatus {
     const display = `http://127.0.0.1:${this.instance.port}`
+    const home = this.resolveHome()
     return {
       id: this.instance.id,
       name: this.instance.name,
-      home: this.resolveHome(),
+      home,
+      homeShort: maskPath(home),
       profile: this.instance.profile,
       port: this.instance.port,
       state: this.state,

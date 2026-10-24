@@ -132,7 +132,8 @@ export function panelScript(values: PanelScriptValues): string {
           tab.setAttribute('role', 'tab')
           tab.setAttribute('aria-selected', String(item.id === activeId))
           tab.dataset.id = item.id
-          tab.title = (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '') + ' · profile ' + (item.profile || 'web')
+          tab.title = 'Instance: ' + (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '') + ' · profile ' + (item.profile || 'web')
+          tab.setAttribute('aria-label', 'Instance ' + (item.name || '') + ', ' + (item.state || 'stopped'))
           tab.innerHTML = instanceDot(item.state) + '<span class="tab-name"></span>'
           tab.querySelector('.tab-name').textContent = item.name || 'Instance'
           tab.addEventListener('click', () => vscode.postMessage({ command: 'selectInstance', value: item.id }))
@@ -153,12 +154,25 @@ export function panelScript(values: PanelScriptValues): string {
       status = status || {}
       const active = !!status.id
       const busy = !!(status.running || status.starting || status.installing || status.stopping)
+      const home = document.getElementById('instanceHome')
       const profile = document.getElementById('instanceProfile')
       const input = document.getElementById('instancePortInput')
       const save = document.getElementById('savePortBtn')
       const edit = document.getElementById('editInstanceBtn')
       const del = document.getElementById('deleteInstanceBtn')
-      if (profile) profile.textContent = active ? (status.profile || 'web') : '—'
+      if (home) {
+        home.textContent = active && status.home ? (status.homeShort || status.home) : '—'
+        home.title = active && status.home ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
+        home.dataset.path = active && status.home ? status.home : ''
+      }
+      if (profile) {
+        const profilePath = active && status.home && status.profile
+          ? status.home.replace(/[\\/]+$/, '') + '/profiles/' + status.profile
+          : ''
+        profile.textContent = active ? (profilePath ? (status.homeShort || status.home).replace(/[\\/]+$/, '') + '/profiles/' + status.profile : status.profile || '—') : '—'
+        profile.title = profilePath ? 'Agent profile (tools, models, presets): ' + profilePath : ''
+        profile.dataset.path = profilePath
+      }
       if (input) {
         if (input.dataset.instanceId !== String(status.id || '')) {
           input.dataset.instanceId = String(status.id || '')
@@ -256,9 +270,6 @@ export function panelScript(values: PanelScriptValues): string {
       const runtimePath = document.getElementById('runtimePath')
       runtimePath.textContent = status.dshPathShort || '—'
       runtimePath.title = status.dshPath || ''
-      const runtimeData = document.getElementById('runtimeData')
-      runtimeData.textContent = status.dshHomeShort || '—'
-      runtimeData.title = status.dshHome || ''
 
       // node + launcher versions live at the very bottom.
       document.getElementById('nodeVersionFooter').textContent = status.nodeVersion ? ('node v' + status.nodeVersion) : 'node —'
@@ -453,7 +464,7 @@ export function panelScript(values: PanelScriptValues): string {
     })
     document.querySelectorAll('.runtime-path, .runtime-data').forEach((el) => {
       el.addEventListener('click', () => {
-        const full = el.getAttribute('title')
+        const full = el.dataset.path || el.getAttribute('title')
         if (!full) return
         if (el.dataset.log) vscode.postMessage({ command: 'openLog', value: full })
         else vscode.postMessage({ command: 'revealPath', value: full })
