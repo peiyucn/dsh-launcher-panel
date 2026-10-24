@@ -225,8 +225,8 @@ export function panelScript(values: PanelScriptValues): string {
       // 服务端两种模式都给**裸版本号**（pkg = npm 版本号，source = git tag 去掉 dsh-v
       // 前缀，不在 tag 上时带 -N-gsha 后缀）；v 只在这里补一次，服务端别再补。
       document.getElementById('dshVersion').textContent = status.dshVersion
-        ? 'dsh v' + status.dshVersion
-        : 'dsh ' + dshMissingText
+        ? 'v' + status.dshVersion
+        : dshMissingText
 
       const upd = status.update
       const updateBtn = document.getElementById('updateBtn')

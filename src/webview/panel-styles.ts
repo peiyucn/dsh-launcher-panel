@@ -197,6 +197,12 @@ export const PANEL_CSS = `
   .version-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .version-spacer { flex: 1; min-width: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
+  .shared-card { padding: 10px 12px; gap: 6px; }
+  .shared-header { display: flex; align-items: center; gap: 8px; }
+  .shared-title { font-size: 11px; font-weight: 600; }
+  .shared-header .mode-toggle { margin-left: auto; }
+  .shared-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .shared-row .runtime-value { flex: 1; }
   /* Tabs live inside the instance card, so there is no outside seam to align. */
   .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 4px; margin: 0; border-bottom: 0.5px solid var(--lap-border-soft); }
   .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; position: relative; }

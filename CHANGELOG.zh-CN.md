@@ -7,7 +7,7 @@
 ## [Unreleased]
 
 - launcher 现在可以管理多个 DSH 实例。每个实例有自己的 DSH home 和 profile；端口由 launcher 分配（`Default` 保持 3080，新实例使用 `dsh.instancePortBase` 起的五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建。tab 内可启动/停止/打开该实例、编辑名称/home/profile/自动打开/浏览器，删除实例（先停止；不删除 DSH 数据）。原有单实例设置会迁移成 `Default` 实例。
-- 实例卡片里放该实例的 tab、状态、编辑/删除操作，以及归组的 home/profile/package 路径。共享的 dsh 版本、`pkg`/`src` 模式和 Update 控件移到页脚，因为它们不是每个实例独立的。
+- 实例卡片里放该实例的 tab、状态、编辑/删除操作，以及归组的 home/profile/package 路径。共享的 dsh 版本、`pkg`/`src` 模式和 Update 控件移到它下方带边框的 Shared runtime 卡片，因为它们不是每个实例独立的。
 - DeepSeek 状态卡改用紧凑的组件胶囊，余额并成一行，占用的竖向空间更少。
 - 每个实例有独立的实时服务端日志和状态；VS Code 重载后会重新接管仍在运行的实例。控制台、账户余额和 DeepSeek 状态跟随当前活动实例。
 - 全新安装不再要求已有 `~/.dsh`：第一次 Start 会安装 dsh、初始化目标 profile，再启动实例。

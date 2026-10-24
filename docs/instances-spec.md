@@ -256,7 +256,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 
 ### 面板（v1：实例 tab）
 
-**替换范围**：现在顶部 Running/Stopped 的那张 `.card` + Start/Stop 按钮区，改成「卡片内 tab 条 + 当前实例内容」。DeepSeek API 状态卡、Console/日志、页脚仍留在下方的全局区。
+**替换范围**：现在顶部 Running/Stopped 的那张 `.card` + Start/Stop 按钮区，改成「卡片内 tab 条 + 当前实例内容」。实例卡片下方增加一张带边框的 **Shared runtime** 卡片；DeepSeek API 状态卡、Console/日志、页脚仍留在全局区。
 
 ```text
 ┌────────────────────────────────────┐
@@ -267,7 +267,11 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 │ package  C:\...\package            │
 └────────────────────────────────────┘
 [Start] [Stop]
-footer: [pkg src] dsh v0.2.1 [Update] [⟳] · node · launcher   ← shared/global
+┌ Shared runtime ────────────────────┐
+│ [pkg src]              dsh v0.2.1  │
+│ [Update]                    [⟳]    │
+└────────────────────────────────────┘
+footer: node · launcher
 ```
 
 - **tab 条**：在实例卡片内部，不再是外挂标签；每个实例一个 tab，显示名称 + 状态点；`+` 是新建按钮，固定在右端。只有一个内容面板；切换 tab 重渲染当前实例，不复制 N 份 DOM。
@@ -281,7 +285,7 @@ footer: [pkg src] dsh v0.2.1 [Update] [⟳] · node · launcher   ← shared/glo
   - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
   - **home/profile/package** 归为一组；**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
   - 编辑表单只改名称、home、profile、auto-open、browser；改 home/profile 不移动数据，必须显示警告。
-- **全局/共享信息**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在**页脚**的 shared runtime 行，不再放进实例卡片；原 `data` 行改成每个 tab 的 home/profile。
+- **全局/共享信息**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在实例卡片下方带边框的 **Shared runtime** 卡片，不放进实例卡片；原 `data` 行改成每个 tab 的 home/profile。
 - **Console/日志**：跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
 - **DeepSeek API 状态**：全局；组件用紧凑的胶囊排布，余额单独一行，不做左右分栏。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
 - **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。

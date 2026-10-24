@@ -53,6 +53,21 @@ export function panelBody(values: PanelBodyValues): string {
     <button id="startBtn" data-cmd="start" class="primary" title="Start dsh and open the browser (or open a new tab when already running)">▶ Start</button>
     <button data-cmd="stop" class="secondary danger when-running" title="Stop the local dsh server">■ Stop</button>
   </div>
+  <div class="card shared-card" title="Shared by every instance: one dsh install, one run mode">
+    <div class="shared-header">
+      <span class="shared-title">Shared runtime</span>
+      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
+        <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
+        <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
+      </div>
+    </div>
+    <div class="shared-row">
+      <span class="runtime-label">dsh</span>
+      <span class="runtime-value" id="dshVersion" title="Shared dsh install used by every instance">—</span>
+      <button class="mini-btn" id="updateBtn" title="Update the shared dsh" style="display:none">Update</button>
+      <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
+    </div>
+  </div>
   <div class="card" id="dsCard">
     <div class="ds-header">
       <span class="ds-title">DeepSeek API Status</span>
@@ -98,13 +113,6 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
   </div>
   <div class="version-row">
-    <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
-      <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
-      <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
-    </div>
-    <span class="plugin-version" id="dshVersion" title="Shared dsh install used by every instance">dsh —</span>
-    <button class="mini-btn" id="updateBtn" title="Update the shared dsh" style="display:none">Update</button>
-    <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
     <span class="version-spacer"></span>
     <span class="plugin-version" id="nodeVersionFooter">node —</span>
     <span class="plugin-version">·</span>
