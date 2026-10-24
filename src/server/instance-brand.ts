@@ -139,9 +139,10 @@ function clientSource(name: string): string {
   const instanceName = JSON.stringify(name)
   const css = JSON.stringify([
     '[class*="_logoRow"]{position:relative!important;overflow:visible!important}',
-    '.launcher-instance-line{position:absolute;left:36px;right:36px;bottom:5px;display:flex;align-items:baseline;gap:3px;overflow:hidden;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary);pointer-events:none;font-family:system-ui,sans-serif}',
-    '.launcher-instance-line-label{flex:none}',
-    '.launcher-instance-line-name{color:var(--dsw-alias-label-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis}',
+    '[class*="_logoRow"]:has(.launcher-instance-line){height:68px!important}',
+    '.launcher-instance-line{position:absolute;left:36px;right:36px;bottom:4px;display:flex;align-items:baseline;gap:4px;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);pointer-events:none;font-family:inherit}',
+    '.launcher-instance-line-label{flex:none;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.72}',
+    '.launcher-instance-line-name{color:var(--dsw-alias-label-primary);font-size:10.5px;font-weight:600;letter-spacing:0;overflow:hidden;text-overflow:ellipsis}',
   ].join(''))
   return `window.__ModuleLoader__.load({
   id: ${JSON.stringify(INSTANCE_BRAND_PACKAGE)},
@@ -164,7 +165,7 @@ function clientSource(name: string): string {
       try { return String(navigator.language || "en") } catch (e) { return "en" }
     }
     function labelFor(locale) {
-      return String(locale || "").toLowerCase().indexOf("zh") === 0 ? "运行实例：" : "Running instance:"
+      return String(locale || "").toLowerCase().indexOf("zh") === 0 ? "运行实例：" : "Instance:"
     }
     function apply(ctx) {
       try {

@@ -40,6 +40,7 @@ test('ensureInstanceBrand writes a local bundle and adds it to the profile', () 
     assert.ok(client.includes('launcher-instance-line'))
     assert.ok(client.includes('_logoRow'))
     assert.ok(client.includes('locale/change'))
+    assert.ok(client.includes('Instance:'))
     const manifest = readManifest(home)
     assert.deepEqual(manifest.dsh.profile.bundles, [
       '@deepseek-ai/dsh-base',
