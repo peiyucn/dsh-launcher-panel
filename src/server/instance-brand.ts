@@ -141,7 +141,7 @@ function clientSource(name: string): string {
     '[class*="_logoRow"]{position:relative!important;overflow:visible!important}',
     '[class*="_logoRow"]:has(.launcher-instance-line){height:68px!important}',
     '.launcher-instance-line{position:absolute;left:36px;right:36px;bottom:4px;display:flex;align-items:baseline;gap:4px;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);pointer-events:none;font-family:inherit}',
-    '.launcher-instance-line-label{flex:none;font-size:9.5px;font-weight:500;letter-spacing:.02em;opacity:.8}',
+    '.launcher-instance-line-label{flex:none;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.72}',
     '.launcher-instance-line-name{color:var(--dsw-alias-label-primary);font-size:10.5px;font-weight:600;letter-spacing:0;overflow:hidden;text-overflow:ellipsis}',
   ].join(''))
   return `window.__ModuleLoader__.load({
