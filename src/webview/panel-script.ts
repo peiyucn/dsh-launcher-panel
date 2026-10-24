@@ -296,15 +296,22 @@ export function panelScript(values: PanelScriptValues): string {
 
     function renderDs(ds) {
       ds = ds || {}
-      const list = document.getElementById('dsComponents')
+      const modelList = document.getElementById('dsComponents')
+      const otherList = document.getElementById('dsComponentsOther')
       const comps = ds.components || []
-      let html = ''
-      for (const c of comps) {
-        const st = c.status || 'operational'
-        const stCls = compStateClass(st)
-        html += '<div class="ds-comp"><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span></div>'
+      const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
+      const renderGroup = (list, items, empty) => {
+        if (!list) return
+        list.innerHTML = items.map((c) => {
+          const st = c.status || 'operational'
+          const stCls = compStateClass(st)
+          return '<div class="ds-comp"><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span></div>'
+        }).join('') || '<div class="ds-empty">' + empty + '</div>'
       }
-      list.innerHTML = html || '<div class="ds-empty">' + (ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data') + '</div>'
+      // Model services carry the deepseek-* label; search/fetch and any future
+      // auxiliary APIs stay in the right column.
+      renderGroup(modelList, comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
+      renderGroup(otherList, comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')

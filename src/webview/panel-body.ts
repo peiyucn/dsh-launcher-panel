@@ -77,7 +77,16 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="ds-pricing" id="dsPricing" title=""></span>
       <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
     </div>
-    <div class="ds-components" id="dsComponents"></div>
+    <div class="ds-columns">
+      <div class="ds-column">
+        <div class="ds-column-title">Model APIs</div>
+        <div class="ds-components" id="dsComponents"></div>
+      </div>
+      <div class="ds-column">
+        <div class="ds-column-title">Other APIs</div>
+        <div class="ds-components" id="dsComponentsOther"></div>
+      </div>
+    </div>
     <div class="ds-incidents" id="dsIncidents"></div>
     <div class="ds-balance-row">
       <span class="ds-balance-label">Account</span>

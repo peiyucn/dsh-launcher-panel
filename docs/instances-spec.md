@@ -272,7 +272,9 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 │ dsh  v0.2.1              [Update] [⟳]│
 └────────────────────────────────────┘
 ┌ DeepSeek API ──────────────────────┐
-│ chips ...                          │
+│ Model APIs        Other APIs       │
+│ ● deepseek-v4-pro ● search         │
+│ ● deepseek-v4.1   ● fetch          │
 │ Account  11845.53 CNY      [Balance]│
 └────────────────────────────────────┘
 ┌ Console ───────────────────────────┐
@@ -299,7 +301,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
   - 编辑表单只改名称、home、profile、auto-open、browser；改 home/profile 不移动数据，必须显示警告。
 - **Runtime**：dsh 版本、安装路径、mode（pkg/src）、Update 是共享的，放在独立的 Runtime section，不放进 Instances。
 - **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
-- **DeepSeek API 状态**：独立 section；组件用紧凑的胶囊排布，余额单独一行，不做左右分栏。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
+- **DeepSeek API 状态**：独立 section；模型 API 和其他 API（search/fetch）竖着分两栏，保留紧凑胶囊样式；余额单独一行。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
 - **Settings**：独立 section，放 Global Settings、浏览器选择和 node/launcher 版本；标题可有可无，本版保留小标题。
 - **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。
