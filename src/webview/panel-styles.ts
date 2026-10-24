@@ -167,9 +167,9 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 6px; align-items: start; }
   .ds-columns::after { content: ''; position: absolute; left: 50%; top: 2px; bottom: 2px; width: 0.5px; background: var(--lap-border-soft); }
-  .ds-column { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .ds-column { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
   .ds-column-title { font-size: 10px; color: var(--lap-fg2); }
   .ds-components { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
   .ds-comp { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: 10px; color: var(--lap-fg); background: var(--lap-surface); border-radius: 999px; padding: 2px 7px; }
