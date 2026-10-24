@@ -35,6 +35,12 @@ test('updating status menu does not offer start', () => {
   assert.deepEqual(actions({ ...base, updating: true }), ['dashboard', 'settings'])
 })
 
+test('running menu labels name the active instance', () => {
+  const items = buildStatusMenuItems({ ...base, running: true }, 'Work')
+  assert.equal(items[0].label, 'Open Work Web UI')
+  assert.equal(items[2].label, 'Stop Work Web UI')
+})
+
 test('every menu item carries a label and a codicon id', () => {
   for (const item of buildStatusMenuItems({ ...base, running: true })) {
     assert.ok(item.label.length > 0)

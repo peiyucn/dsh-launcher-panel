@@ -148,7 +148,7 @@ export function activate(context: vscode.ExtensionContext): void {
           })
         }
       }
-      items.push(...buildStatusMenuItems(dashboard.status).map((item) => ({
+      items.push(...buildStatusMenuItems(dashboard.status, active?.name).map((item) => ({
         label: item.label,
         iconPath: new vscode.ThemeIcon(item.icon),
         action: item.action,

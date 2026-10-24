@@ -28,18 +28,23 @@ const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'se
  */
 export function buildStatusMenuItems(
   status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
+  instanceName?: string,
 ): StatusMenuItem[] {
+  const name = instanceName && instanceName.trim() !== '' ? instanceName.trim() : ''
+  const openLabel = name ? `Open ${name} Web UI` : 'Open Web UI'
+  const stopLabel = name ? `Stop ${name} Web UI` : 'Stop DSH Web UI'
+  const startLabel = name ? `Start ${name} & Open Web UI` : 'Start & Open Web UI'
   let items: StatusMenuItem[]
   if (status.running) {
     items = [
-      { label: 'Open Web UI', icon: 'globe', action: 'open' },
+      { label: openLabel, icon: 'globe', action: 'open' },
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: 'Stop DSH Web UI', icon: 'debug-stop', action: 'stop' },
+      { label: stopLabel, icon: 'debug-stop', action: 'stop' },
     ]
   } else if (status.starting || status.installing) {
     items = [
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: 'Stop DSH Web UI', icon: 'debug-stop', action: 'stop' },
+      { label: stopLabel, icon: 'debug-stop', action: 'stop' },
     ]
   } else if (status.stopping || status.updating) {
     // An update rewrites the checkout / package tree; offering Start here would
@@ -47,7 +52,7 @@ export function buildStatusMenuItems(
     items = [{ label: 'Open Dashboard', icon: 'browser', action: 'dashboard' }]
   } else {
     items = [
-      { label: 'Start & Open Web UI', icon: 'play', action: 'start' },
+      { label: startLabel, icon: 'play', action: 'start' },
       { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
     ]
   }
