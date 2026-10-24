@@ -37,10 +37,9 @@ test('ensureInstanceBrand writes a local bundle and adds it to the profile', () 
     assert.ok(fs.existsSync(path.join(dir, 'lib', 'index.js')))
     const client = fs.readFileSync(path.join(dir, 'lib', 'client.js'), 'utf8')
     assert.ok(client.includes('var INSTANCE_NAME = "sssden"'))
-    assert.ok(client.includes('sidebar.brand.name'))
-    assert.ok(client.includes('priority: -1'))
-    assert.ok(client.includes('_brandIdentity'))
-    assert.ok(client.includes('_brandName'))
+    assert.ok(client.includes('launcher-instance-line'))
+    assert.ok(client.includes('_logoRow'))
+    assert.ok(client.includes('locale/change'))
     const manifest = readManifest(home)
     assert.deepEqual(manifest.dsh.profile.bundles, [
       '@deepseek-ai/dsh-base',

@@ -2,11 +2,16 @@
  * Launcher-managed DSH Web branding.
  *
  * The launcher cannot reach into the Web UI from the outside: the page is a
- * separate browser surface and the brand is a React slot occupant. This module
- * therefore writes a tiny, fixed-purpose client bundle into the instance's
- * profile. DSH loads it as an ordinary profile bundle; the bundle only fills
- * `sidebar.brand.name` with the official wordmark plus the instance name, and
- * keeps the official whale mark untouched.
+ * separate browser surface and its brand is rendered by the Web client. This
+ * module therefore writes a tiny, fixed-purpose client bundle into the
+ * instance's profile. DSH loads it as an ordinary profile bundle; the bundle
+ * only appends the instance name under the official wordmark in the sidebar
+ * logo row, leaving the official mark and wordmark untouched.
+ *
+ * The line is a DOM overlay rather than a `sidebar.brand.name` occupant: the
+ * shell's brand slot is a fixed 24px row whose overflow rules clip a second
+ * line. The overlay lives in the 60px logo row, follows locale changes and is
+ * re-attached if the sidebar re-renders.
  *
  * Everything here is local to one profile. No npm install, no plugin market and
  * no global dsh modification are involved.
@@ -19,7 +24,6 @@ import * as path from 'node:path'
 
 export const INSTANCE_BRAND_PACKAGE = '@dsh-launcher/instance-brand'
 const INSTANCE_BRAND_ID = 'launcher-instance-brand'
-const INSTANCE_BRAND_HEIGHT = 38
 
 /** Directory of the generated bundle inside one profile. */
 export function instanceBrandDir(home: string, profile: string): string {
@@ -124,84 +128,43 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 }
 
 /**
- * The generated client half. It uses DSH's public brand slot and locale service
- * only; the official mark and wordmark remain the official components.
+ * The generated client half. The sidebar's brand slot is a fixed 24px row
+ * owned by the official wordmark, so a second line inside that slot is clipped
+ * by the shell's overflow rules. Instead this client half keeps the official
+ * brand subtree untouched and appends one absolutely-positioned line to the
+ * logo row, under the official wordmark. Locale changes update the label in
+ * place; a MutationObserver re-adds the line if the sidebar re-renders.
  */
 function clientSource(name: string): string {
   const instanceName = JSON.stringify(name)
   const css = JSON.stringify([
-    `.launcher-brand{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;height:${INSTANCE_BRAND_HEIGHT}px;min-width:0;max-width:100%;line-height:1;font-family:var(--vscode-font-family,system-ui,sans-serif)}`,
-    '.launcher-brand>svg{display:block;flex:none}',
-    '.launcher-brand-sub{display:flex;align-items:baseline;gap:3px;max-width:100%;overflow:hidden;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary)}',
-    '.launcher-brand-label{flex:none}',
-    '.launcher-brand-name{color:var(--dsw-alias-label-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis}',
-    // The slot outlet wraps the entry in a display:contents anchor, so brandName
-    // is a grandparent rather than the direct parent. CSS-module class names
-    // keep their local suffix; expand every layer that can clip the second line
-    // (the shell fixes brandIdentity/brand at 24px and hides overflow).
-    '[class*="_brandIdentity"]:has(.launcher-brand){height:38px!important;align-items:flex-start!important}',
-    '[class*="_brandName"]:has(.launcher-brand){height:38px!important;align-items:flex-start!important}',
-    '[class*="_brand"]:has(.launcher-brand){overflow:visible!important}',
-    '[class*="_logoRow"]:has(.launcher-brand){overflow:visible!important}',
-    `:has(> :has(> .launcher-brand)){height:${INSTANCE_BRAND_HEIGHT}px!important;align-items:flex-start!important}`,
+    '[class*="_logoRow"]{position:relative!important;overflow:visible!important}',
+    '.launcher-instance-line{position:absolute;left:36px;right:36px;bottom:5px;display:flex;align-items:baseline;gap:3px;overflow:hidden;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary);pointer-events:none;font-family:system-ui,sans-serif}',
+    '.launcher-instance-line-label{flex:none}',
+    '.launcher-instance-line-name{color:var(--dsw-alias-label-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis}',
   ].join(''))
   return `window.__ModuleLoader__.load({
   id: ${JSON.stringify(INSTANCE_BRAND_PACKAGE)},
   factory: (require) => {
     var module = { exports: {} }
     Object.defineProperty(module.exports, Symbol.toStringTag, { value: "Module" })
-    var jsxRuntime = require("react/jsx-runtime")
-    var React = require("react")
-    var primitives = require("@deepseek-ai/dsh-client-ui-primitives")
     var INSTANCE_NAME = ${instanceName}
     var CSS = ${css}
-    var inject = ["slots"]
-    function fallbackLocale() {
+    var LINE_CLASS = "launcher-instance-line"
+    var inject = []
+    function localeOf(ctx) {
+      try {
+        var snapshot = ctx.locale.getLocale()
+        if (snapshot && snapshot.active) return String(snapshot.active)
+      } catch (e) {}
       try {
         var html = document.documentElement
-        var lang = html && html.lang
-        if (lang) return String(lang)
+        if (html && html.lang) return String(html.lang)
       } catch (e) {}
       try { return String(navigator.language || "en") } catch (e) { return "en" }
     }
     function labelFor(locale) {
       return String(locale || "").toLowerCase().indexOf("zh") === 0 ? "运行实例：" : "Running instance:"
-    }
-    function makeName(ctx) {
-      return function InstanceBrandName() {
-        var pair = React.useState(function () {
-          try { return String(ctx.locale.getLocale().active || fallbackLocale()) } catch (e) { return fallbackLocale() }
-        })
-        var active = pair[0]
-        var setActive = pair[1]
-        React.useEffect(function () {
-          var off
-          try {
-            if (ctx.locale && typeof ctx.locale.getLocale === "function") setActive(String(ctx.locale.getLocale().active || fallbackLocale()))
-            if (typeof ctx.on === "function") {
-              off = ctx.on("locale/change", function (snapshot) {
-                setActive(String((snapshot && snapshot.active) || fallbackLocale()))
-              })
-            }
-          } catch (e) {}
-          return function () { if (typeof off === "function") off() }
-        }, [])
-        return jsxRuntime.jsxs("span", {
-          className: "launcher-brand",
-          children: [
-            jsxRuntime.jsx(primitives.BrandWordmark, { includeMark: false, key: "wordmark" }),
-            jsxRuntime.jsxs("span", {
-              className: "launcher-brand-sub",
-              title: INSTANCE_NAME,
-              key: "sub",
-              children: [
-                jsxRuntime.jsx("span", { className: "launcher-brand-label", key: "label" }, labelFor(active)),
-                jsxRuntime.jsx("span", { className: "launcher-brand-name", key: "name" }, INSTANCE_NAME)
-              ]
-            })
-          ]
-        })
-      }
     }
     function apply(ctx) {
       try {
@@ -211,11 +174,67 @@ function clientSource(name: string): string {
         style.setAttribute("data-dsh-instance-brand", "")
         style.textContent = CSS
         document.head.appendChild(style)
-        if (typeof ctx.effect === "function") ctx.effect(function () { return function () { style.remove() } })
-        var Name = makeName(ctx)
-        ctx.slots.inject("sidebar.brand.name", function* () {
-          yield ctx.slots.register({ name: "sidebar.brand.name", priority: -1 }, Name)
-        })
+
+        var lineEl = null
+        var labelEl = null
+        var frame = 0
+        function removeLine() {
+          if (lineEl && lineEl.parentNode) lineEl.parentNode.removeChild(lineEl)
+          lineEl = null
+          labelEl = null
+        }
+        function ensure() {
+          var row = document.querySelector('[class*="_logoRow"]')
+          var identity = row && row.querySelector('[class*="_brandIdentity"]')
+          if (!row || !identity) { removeLine(); return }
+          var existing = row.querySelector("." + LINE_CLASS)
+          if (existing) {
+            lineEl = existing
+            labelEl = existing.querySelector("." + LINE_CLASS + "-label")
+            return
+          }
+          var line = document.createElement("span")
+          line.className = LINE_CLASS
+          line.title = INSTANCE_NAME
+          labelEl = document.createElement("span")
+          labelEl.className = LINE_CLASS + "-label"
+          labelEl.textContent = labelFor(localeOf(ctx))
+          var nameEl = document.createElement("span")
+          nameEl.className = LINE_CLASS + "-name"
+          nameEl.textContent = INSTANCE_NAME
+          line.appendChild(labelEl)
+          line.appendChild(nameEl)
+          row.appendChild(line)
+          lineEl = line
+        }
+        function schedule() {
+          if (frame) return
+          frame = requestAnimationFrame(function () {
+            frame = 0
+            ensure()
+          })
+        }
+        function syncLabel() {
+          if (labelEl) labelEl.textContent = labelFor(localeOf(ctx))
+        }
+        var off = null
+        if (typeof ctx.on === "function") {
+          try { off = ctx.on("locale/change", syncLabel) } catch (e) {}
+        }
+        var observer = new MutationObserver(schedule)
+        observer.observe(document.body, { childList: true, subtree: true })
+        schedule()
+        if (typeof ctx.effect === "function") {
+          ctx.effect(function () {
+            return function () {
+              observer.disconnect()
+              if (frame) cancelAnimationFrame(frame)
+              if (typeof off === "function") off()
+              style.remove()
+              removeLine()
+            }
+          })
+        }
       } catch (error) {
         console.warn("[dsh-instance-brand] inactive", error)
       }
