@@ -16,7 +16,7 @@ import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
 import { getInstanceManager } from './instance-manager.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
 import { describeDshUpdate } from './versions.ts'
-import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
+import { PANEL_REFRESH_INTERVAL_MS } from './timing.ts'
 import {
   addActivity,
   applyMode,
@@ -349,7 +349,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
 
   private startTimer(): void {
     this.stopTimer()
-    this.timer = setInterval(() => void this.refresh(), STATUS_REFRESH_INTERVAL_MS)
+    this.timer = setInterval(() => void this.refresh(), PANEL_REFRESH_INTERVAL_MS)
   }
 
   private stopTimer(): void {

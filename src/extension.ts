@@ -12,7 +12,7 @@ import {
 import { DshPanelProvider } from './panel.ts'
 import { getInstanceManager, InstanceManager, setInstanceManager } from './instance-manager.ts'
 import { dshBaseDir } from './paths.ts'
-import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
+import { STATUS_BAR_REFRESH_INTERVAL_MS } from './timing.ts'
 import { dbg, migrateLegacyDshConfig, setLogPath, stopLogTail } from './server.ts'
 import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
 
@@ -102,7 +102,7 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   void refreshStatusBar().catch(() => {})
-  const statusTimer = setInterval(() => void refreshStatusBar().catch(() => {}), STATUS_REFRESH_INTERVAL_MS)
+  const statusTimer = setInterval(() => void refreshStatusBar().catch(() => {}), STATUS_BAR_REFRESH_INTERVAL_MS)
 
   const runMenuAction = async (action: StatusMenuAction): Promise<void> => {
     switch (action) {
@@ -160,12 +160,22 @@ export function activate(context: vscode.ExtensionContext): void {
       if (picked?.instanceId) {
         await manager.select(picked.instanceId)
         await actionOpen(picked.instanceId)
+        void refreshStatusBar().catch(() => {})
         return
       }
-      if (picked?.action) await runMenuAction(picked.action)
+      if (picked?.action) {
+        await runMenuAction(picked.action)
+        void refreshStatusBar().catch(() => {})
+      }
     }),
-    vscode.commands.registerCommand('dsh.start', () => actionStart()),
-    vscode.commands.registerCommand('dsh.stop', () => actionStop()),
+    vscode.commands.registerCommand('dsh.start', async () => {
+      await actionStart()
+      void refreshStatusBar().catch(() => {})
+    }),
+    vscode.commands.registerCommand('dsh.stop', async () => {
+      await actionStop()
+      void refreshStatusBar().catch(() => {})
+    }),
     vscode.commands.registerCommand('dsh.instance.new', () => actionCreateInstance()),
     vscode.commands.registerCommand('dsh.instance.edit', () => actionEditInstance()),
     vscode.commands.registerCommand('dsh.instance.delete', () => actionDeleteInstance()),

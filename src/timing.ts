@@ -24,8 +24,11 @@ export const TASKKILL_TIMEOUT_MS = 5_000
 /** How long a detected environment fact is reused before it is probed again. */
 export const DETECTION_CACHE_TTL_MS = 8_000
 
-/** How often the panel refreshes its status (drives the webview timer). */
-export const STATUS_REFRESH_INTERVAL_MS = 4_000
+/** How often the visible panel refreshes its status (drives the webview timer). */
+export const PANEL_REFRESH_INTERVAL_MS = 4_000
+
+/** Ambient status-bar refresh; slower because it runs even when the panel is hidden. */
+export const STATUS_BAR_REFRESH_INTERVAL_MS = 15_000
 
 /** How long a background dsh update check is reused before it asks again. */
 export const UPDATE_CHECK_TTL_MS = 5 * 60_000
