@@ -27,7 +27,7 @@ Start **DeepSeek Harness** (dsh) inside VS Code and open its web UI in the built
 
 Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: its top line summarizes the current run (state, mode, dsh version and, while running, the web address), followed by Open Web UI / Open Dashboard / Stop / Open Settings.
 
-The panel's tab strip is the instance list. `+` opens the create form; each instance tab's Start/Stop/Open acts on that instance. Edit changes its name, home, profile, auto-open and browser overrides; Delete removes the instance from the launcher only. Ports are assigned by the launcher and are not edited in the panel — the running URL shows the active port. Creating an instance does not install or start anything by itself; the first Start creates the home/profile as needed.
+The panel's tab strip is the instance list. `+` opens the create form; each instance tab's Start/Stop/Open acts on that instance. Edit changes its name, home, auto-open and browser overrides; the home field follows `.dsh-{name}` until you edit it by hand, and new instances always use the `web` profile. Delete removes the instance from the launcher only. Ports are assigned by the launcher and are not edited in the panel — the running URL shows the active port. Creating an instance does not install or start anything by itself; the first Start creates the home/profile as needed.
 
 ## Settings
 

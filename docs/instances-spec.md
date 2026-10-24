@@ -75,8 +75,8 @@ interface DshInstance {
 
 - 实例对象**不包含** model、provider、preset、API key、权限、工作区、环境变量值。
 - `dsh.runMode`（pkg/src）是**全局**运行来源，不是实例字段：所有实例共用同一份 dsh 树，切换模式前必须停止全部实例。
-- `id` 不可编辑；`name`、`home`、`profile`、浏览器选项可编辑。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
-- `home`、`profile` 的修改不移动、不复制任何数据，只改变下次启动指向。
+- `id` 不可编辑；`name`、`home`、浏览器选项可编辑。新建实例的 `profile` 固定为 `web`（高级设置里已有的其他 profile 不被表单覆盖）。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
+- `home` 的修改不移动、不复制任何数据，只改变下次启动指向。
 - 实例对象可以安全地出现在 `settings.json` 里：没有秘密。
 
 ## 五、设置与迁移
@@ -129,20 +129,19 @@ interface DshInstance {
 | 字段 | 必填 | 默认 | 说明 |
 |---|---|---|---|
 | 名称 | 是 | `Instance N` | 唯一，大小写不敏感，去首尾空白 |
-| home | 是 | `~/.dsh-<slug>` | 可输入新路径，或从已有目录选择 |
-| profile | 是 | `web` | 可从 home 下已有 profile 选择，或新建 |
-| 端口 | 是 | 自动建议 | 从 3080 起找第一个空闲且未被实例占用的端口 |
+| home | 是 | `~/.dsh-<slug>` | 默认跟随名称；手动改过后不再自动跟随 |
+| 端口 | 是 | 自动分配 | 从 `dsh.instancePortBase + 1` 起找空闲端口；`Default` 保持 3080 |
 | 自动打开浏览器 | 否 | 继承全局 | 高级选项 |
 | 浏览器 | 否 | 继承全局 | `built-in` / `external`，高级选项 |
 
-- 第一个实例（迁移场景）默认 home 是 `~/.dsh`；新建实例默认 `~/.dsh-<slug>`（slug 由名称生成）。若该路径已存在，建议 `-2`、`-3`，或让用户显式选择「使用已有目录」。
+- 第一个实例（迁移场景）默认 home 是 `~/.dsh`；新建实例默认 `~/.dsh-<slug>`（slug 由名称生成，表单里名称变化时 home 跟着变，手动改 home 后停止跟随）。
 - 表单必须有「浏览…」选择已有目录；新建不存在的 home 走文本输入。
-- profile 下拉从 `<home>/profiles/*` 读取；home 变化时刷新。
+- profile 固定为 `web`，不在表单里显示；现有高级配置里的其他 profile 不会被表单覆盖。
 - 端口由 launcher 在创建时按 `dsh.instancePortBase` 自动分配；表单不显示端口输入框。
 
 ### 创建步骤
 
-1. **前端校验**：名称、home、profile 的基本格式；重复检查；给出内联错误。端口不在表单里，由 launcher 分配。
+1. **前端校验**：名称、home 的基本格式；重复检查；给出内联错误。profile 固定 web，端口由 launcher 分配。
 2. **后端复验**：不信任 webview，扩展侧重新跑全部校验。
 3. **准备 home**：
    - 路径不存在：创建目录（只创建目标目录，不递归删除任何东西）。
@@ -298,7 +297,7 @@ node · launcher
   - 状态/URL；**Start / New Tab / Stop 都在这个区内**（Start 在 running 时变成 New Tab）。
   - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
   - **home/package** 归为一组；profile 只在 Edit 表单里配置，不在 Instances 区显示。**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
-  - 编辑表单只改名称、home、profile、auto-open、browser；改 home/profile 不移动数据，必须显示警告。
+  - 编辑表单只改名称、home、auto-open、browser；名称变化时，若 home 仍是自动格式，会同步改成 `.dsh-{new name}`；改 home 不移动数据。profile 固定 web，不在表单里。
 - **Runtime（最上方）**：`deepseek harness` 版本、mode（pkg/src）、Update/⟳；这些是共享的。
 - **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
 - **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。

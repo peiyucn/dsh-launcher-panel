@@ -9,6 +9,7 @@ import {
   actionStop,
   actionUpdateDsh,
   defaultInstanceHome,
+  defaultInstanceHomePrefix,
   openUrl,
 } from './actions.ts'
 import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
@@ -254,7 +255,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       const name = `Instance ${manager.instances().length + 1}`
       this.postToWebview({
         type: 'instanceForm',
-        form: { mode: 'new', name, home: defaultInstanceHome(name), profile: 'web' },
+        form: { mode: 'new', name, home: defaultInstanceHome(name), homePrefix: defaultInstanceHomePrefix() },
       })
       return
     }
@@ -267,7 +268,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         id: instance.id,
         name: instance.name,
         home: manager.homeOf(instance),
-        profile: instance.profile,
+        homePrefix: defaultInstanceHomePrefix(),
         autoOpenBrowser: instance.autoOpenBrowser,
         browser: instance.browser,
       },
@@ -283,7 +284,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       id?: unknown
       name?: unknown
       home?: unknown
-      profile?: unknown
       autoOpenBrowser?: unknown
       browser?: unknown
     }
@@ -293,8 +293,8 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       this.postToWebview({ type: 'instanceFormError', message: 'Malformed instance form' })
       return
     }
-    if (typeof payload.name !== 'string' || typeof payload.home !== 'string' || typeof payload.profile !== 'string') {
-      this.postToWebview({ type: 'instanceFormError', message: 'Name, home and profile are required' })
+    if (typeof payload.name !== 'string' || typeof payload.home !== 'string') {
+      this.postToWebview({ type: 'instanceFormError', message: 'Name and home are required' })
       return
     }
     const autoOpenBrowser = typeof payload.autoOpenBrowser === 'boolean' ? payload.autoOpenBrowser : undefined
@@ -303,6 +303,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
 
     const editing = payload.mode === 'edit'
     let port: number | undefined
+    let profile = 'web'
     if (editing) {
       const current = typeof payload.id === 'string' ? manager.instance(payload.id) : undefined
       if (!current) {
@@ -311,6 +312,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       }
       // Ports are assigned by the launcher and are not edited from this form.
       port = current.port
+      profile = current.profile
     } else {
       port = await manager.suggestPort()
       if (port === undefined) {
@@ -322,7 +324,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     const input = {
       name: payload.name,
       home: payload.home,
-      profile: payload.profile,
+      profile,
       port,
       autoOpenBrowser,
       browser,

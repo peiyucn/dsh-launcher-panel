@@ -44,6 +44,8 @@ export function panelScript(values: PanelScriptValues): string {
     let currentInstanceId = ''
     let formMode = 'new'
     let formId = ''
+    let formHomePrefix = ''
+    let formHomeAuto = true
     setTimeout(() => {
       if (!gotUpdate) {
         const st = document.getElementById('statusText')
@@ -175,14 +177,22 @@ export function panelScript(values: PanelScriptValues): string {
       }
     }
 
+    function slugInstanceName(name) {
+      return String(name || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'instance'
+    }
+    function autoHomeFor(name) {
+      return formHomePrefix + slugInstanceName(name)
+    }
+
     function openInstanceForm(form) {
       form = form || {}
       formMode = form.mode === 'edit' ? 'edit' : 'new'
       formId = form.id || ''
+      formHomePrefix = form.homePrefix || ''
       document.getElementById('instanceModalTitle').textContent = formMode === 'edit' ? 'Edit instance' : 'New instance'
       document.getElementById('instanceFormName').value = form.name || ''
       document.getElementById('instanceFormHome').value = form.home || ''
-      document.getElementById('instanceFormProfile').value = form.profile || 'web'
+      formHomeAuto = formMode === 'new' || document.getElementById('instanceFormHome').value === autoHomeFor(form.name || '')
       document.getElementById('instanceFormAuto').value = form.autoOpenBrowser === true ? 'true' : form.autoOpenBrowser === false ? 'false' : 'global'
       document.getElementById('instanceFormBrowser').value = form.browser === 'built-in' || form.browser === 'external' ? form.browser : 'global'
       document.getElementById('instanceFormError').textContent = ''
@@ -199,7 +209,6 @@ export function panelScript(values: PanelScriptValues): string {
     function saveInstanceForm() {
       const name = document.getElementById('instanceFormName').value
       const home = document.getElementById('instanceFormHome').value
-      const profile = document.getElementById('instanceFormProfile').value
       const autoText = document.getElementById('instanceFormAuto').value
       const browserText = document.getElementById('instanceFormBrowser').value
       const autoOpenBrowser = autoText === 'true' ? true : autoText === 'false' ? false : undefined
@@ -209,7 +218,7 @@ export function panelScript(values: PanelScriptValues): string {
       document.getElementById('instanceFormError').textContent = ''
       vscode.postMessage({
         command: 'saveInstanceForm',
-        value: JSON.stringify({ mode: formMode, id: formId, name, home, profile, autoOpenBrowser, browser }),
+        value: JSON.stringify({ mode: formMode, id: formId, name, home, autoOpenBrowser, browser }),
       })
     }
 
@@ -361,6 +370,14 @@ export function panelScript(values: PanelScriptValues): string {
     })
     document.getElementById('instanceFormCancel').addEventListener('click', closeInstanceForm)
     document.getElementById('instanceFormSave').addEventListener('click', saveInstanceForm)
+    const instanceNameField = document.getElementById('instanceFormName')
+    const instanceHomeField = document.getElementById('instanceFormHome')
+    instanceNameField.addEventListener('input', () => {
+      if (formHomeAuto) instanceHomeField.value = autoHomeFor(instanceNameField.value)
+    })
+    instanceHomeField.addEventListener('input', () => {
+      formHomeAuto = instanceHomeField.value === autoHomeFor(instanceNameField.value)
+    })
     document.getElementById('instanceModal').addEventListener('click', (e) => {
       if (e.target.id === 'instanceModal') closeInstanceForm()
     })

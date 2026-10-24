@@ -27,7 +27,7 @@
 
 点击活动栏中的 🐳DSH WebUI 小鲸鱼图标，然后点击 **Start**。状态栏的鲸鱼图标反映启动器状态（运行中为蓝底白字、启动中喷水跳动）——点击它可弹出快捷菜单：顶部一行显示当前运行信息（状态、模式、dsh 版本，运行中还有 Web 地址），下面是 Open Web UI / Open Dashboard / Stop / Open Settings。
 
-面板顶部的 tab 条就是实例列表。`+` 打开新建表单；每个实例 tab 的 Start/Stop/Open 只作用于该实例。Edit 修改名称、home、profile、自动打开与浏览器覆盖；Delete 只从 launcher 移除实例。端口由 launcher 分配，面板里不编辑——运行中的 URL 会显示当前端口。新建实例本身不会安装或启动任何东西——第一次 Start 时才按需创建 home/profile。
+面板顶部的 tab 条就是实例列表。`+` 打开新建表单；每个实例 tab 的 Start/Stop/Open 只作用于该实例。Edit 修改名称、home、自动打开与浏览器覆盖；home 默认跟随 `.dsh-{name}`，手动改过后就不再自动跟随；新实例固定使用 `web` profile。Delete 只从 launcher 移除实例。端口由 launcher 分配，面板里不编辑——运行中的 URL 会显示当前端口。新建实例本身不会安装或启动任何东西——第一次 Start 时才按需创建 home/profile。
 
 ## 设置
 

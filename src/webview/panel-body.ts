@@ -146,9 +146,6 @@ export function panelBody(values: PanelBodyValues): string {
       <label class="instance-field">DSH_HOME
         <input id="instanceFormHome" autocomplete="off">
       </label>
-      <label class="instance-field">Profile
-        <input id="instanceFormProfile" autocomplete="off">
-      </label>
       <label class="instance-field">Auto-open
         <select id="instanceFormAuto">
           <option value="global">Use global default</option>

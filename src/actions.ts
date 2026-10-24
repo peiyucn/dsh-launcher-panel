@@ -156,14 +156,6 @@ export async function actionCreateInstance(): Promise<void> {
   })
   if (home === undefined) return
 
-  const profile = await vscode.window.showInputBox({
-    title: 'New DSH instance',
-    prompt: 'Profile name',
-    value: 'web',
-    validateInput: (value) => value.trim() === '' ? 'profile is required' : undefined,
-  })
-  if (profile === undefined) return
-
   const suggested = await manager.suggestPort()
   if (suggested === undefined) {
     void vscode.window.showErrorMessage('No free Web UI port was found for the new instance.')
@@ -178,7 +170,7 @@ export async function actionCreateInstance(): Promise<void> {
   const result = await manager.create({
     name,
     home,
-    profile,
+    profile: 'web',
     port: suggested,
     autoOpenBrowser: autoOpen.value,
     browser: browser.value,
@@ -215,8 +207,6 @@ export async function actionEditInstance(id?: string): Promise<void> {
     value: manager.homeOf(current),
   })
   if (home === undefined) return
-  const profile = await vscode.window.showInputBox({ title: 'Edit instance', prompt: 'Profile name', value: current.profile })
-  if (profile === undefined) return
 
   const autoOpen = await pickAutoOpen(current.autoOpenBrowser)
   if (autoOpen === undefined) return
@@ -226,7 +216,7 @@ export async function actionEditInstance(id?: string): Promise<void> {
   const result = await manager.update(target, {
     name,
     home,
-    profile,
+    profile: current.profile,
     port: current.port,
     autoOpenBrowser: autoOpen.value,
     browser: browser.value,
@@ -281,7 +271,12 @@ export async function activeInstance(): Promise<DshInstance | undefined> {
   return manager.activeInstance()
 }
 
+/** Prefix for an auto-named instance home (`<home>/.dsh-`). */
+export function defaultInstanceHomePrefix(): string {
+  return path.join(os.homedir(), '.dsh-')
+}
+
 /** The home directory used to suggest a new instance's default DSH_HOME. */
 export function defaultInstanceHome(name: string): string {
-  return path.join(os.homedir(), `.dsh-${slug(name)}`)
+  return defaultInstanceHomePrefix() + slug(name)
 }
