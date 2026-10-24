@@ -135,7 +135,14 @@ function clientSource(name: string): string {
     '.launcher-brand-sub{display:flex;align-items:baseline;gap:3px;max-width:100%;overflow:hidden;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary)}',
     '.launcher-brand-label{flex:none}',
     '.launcher-brand-name{color:var(--dsw-alias-label-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis}',
-    `:has(> .launcher-brand){height:${INSTANCE_BRAND_HEIGHT}px!important;align-items:flex-start!important}`,
+    // The slot outlet wraps the entry in a display:contents anchor, so brandName
+    // is a grandparent rather than the direct parent. CSS-module class names
+    // keep their local suffix; expand every layer that can clip the second line
+    // (the shell fixes brandIdentity/brand at 24px and hides overflow).
+    '[class*="_brandIdentity"]:has(.launcher-brand){height:38px!important;align-items:flex-start!important}',
+    '[class*="_brandName"]:has(.launcher-brand){height:38px!important;align-items:flex-start!important}',
+    '[class*="_brand"]:has(.launcher-brand){overflow:visible!important}',
+    '[class*="_logoRow"]:has(.launcher-brand){overflow:visible!important}',
     `:has(> :has(> .launcher-brand)){height:${INSTANCE_BRAND_HEIGHT}px!important;align-items:flex-start!important}`,
   ].join(''))
   return `window.__ModuleLoader__.load({
