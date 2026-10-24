@@ -1,10 +1,19 @@
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { actionStart, actionStop } from './actions.ts'
+import {
+  actionCreateInstance,
+  actionDeleteInstance,
+  actionEditInstance,
+  actionOpen,
+  actionSelectInstance,
+  actionStart,
+  actionStop,
+} from './actions.ts'
 import { DshPanelProvider } from './panel.ts'
+import { getInstanceManager, InstanceManager, setInstanceManager } from './instance-manager.ts'
 import { dshBaseDir } from './paths.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
-import { checkNodeOnce, currentStatus, dbg, migrateLegacyDshConfig, registerConfigWatcher, setLogPath, stopLogTail } from './server.ts'
+import { dbg, migrateLegacyDshConfig, setLogPath, stopLogTail } from './server.ts'
 import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
@@ -25,11 +34,13 @@ type MenuPick = vscode.QuickPickItem & { action?: StatusMenuAction }
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
   dbg('activated')
-  // Node is probed exactly once, here, at activation.
-  void checkNodeOnce()
-  // Move pre-0.2.6 config values (dsh.mode / dsh.channel / dsh.path) onto the
-  // renamed keys once, then remove the legacy keys.
   void migrateLegacyDshConfig()
+
+  const manager = new InstanceManager(context)
+  setInstanceManager(manager)
+  void manager.ready().then(() => manager.refresh()).catch((error) => {
+    dbg(`manager initialization failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
 
   const panelProvider = new DshPanelProvider(context.extension.packageJSON.version ?? '0.0.0')
   context.subscriptions.push(
@@ -38,11 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   )
 
-  context.subscriptions.push(registerConfigWatcher())
-
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-  // Clicking the item opens a command menu (like other status bar entries)
-  // instead of starting the server directly.
   statusBar.command = 'dsh.statusMenu'
   statusBar.show()
 
@@ -55,22 +62,25 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   const refreshStatusBar = async (): Promise<void> => {
-    const status = await currentStatus()
+    if (!getInstanceManager()) return
+    const dashboard = await manager.dashboard()
+    const status = dashboard.status
+    const active = dashboard.active
+    const label = active?.name ? ` · ${active.name}` : ''
     if (status.running) {
       stopSpinner()
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
       statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
-      statusBar.tooltip = `DeepSeek Harness running at ${status.url} — click for options`
+      statusBar.tooltip = `DeepSeek Harness${label} running at ${status.url} — click for options`
     } else if (status.starting || status.installing || status.updating) {
       stopSpinner()
       statusBar.text = STATUS_SPLASH_SMALL
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
       statusBar.tooltip = status.updating
-        ? 'DeepSeek Harness updating — click for options'
-        : (status.installing ? 'DeepSeek Harness installing — click for options' : 'DeepSeek Harness starting — click for options')
-      // Pulse the whale's spout between the small and large splash frames.
+        ? `DeepSeek Harness${label} updating — click for options`
+        : (status.installing ? `DeepSeek Harness${label} installing — click for options` : `DeepSeek Harness${label} starting — click for options`)
       spinnerTimer = setInterval(() => {
         statusBar.text = statusBar.text === STATUS_SPLASH_SMALL ? STATUS_SPLASH_LARGE : STATUS_SPLASH_SMALL
       }, STATUS_SPIN_INTERVAL_MS)
@@ -79,13 +89,13 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = 'DeepSeek Harness stopping — click for options'
+      statusBar.tooltip = `DeepSeek Harness${label} stopping — click for options`
     } else {
       stopSpinner()
       statusBar.text = STATUS_TEXT
       statusBar.backgroundColor = undefined
       statusBar.color = undefined
-      statusBar.tooltip = 'DeepSeek Harness stopped — click for options'
+      statusBar.tooltip = `DeepSeek Harness${label} stopped — click for options`
     }
   }
 
@@ -118,13 +128,10 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar,
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
     vscode.commands.registerCommand('dsh.statusMenu', async () => {
-      const status = await currentStatus()
-      // The first row is a read-only summary of the current run. It is a
-      // separator item on purpose: separators cannot be picked, so clicking the
-      // summary never closes the menu without doing anything.
+      const dashboard = await manager.dashboard()
       const items: MenuPick[] = [
-        { label: buildStatusMenuSummary(status), kind: vscode.QuickPickItemKind.Separator },
-        ...buildStatusMenuItems(status).map((item) => ({
+        { label: buildStatusMenuSummary(dashboard.status), kind: vscode.QuickPickItemKind.Separator },
+        ...buildStatusMenuItems(dashboard.status).map((item) => ({
           label: item.label,
           iconPath: new vscode.ThemeIcon(item.icon),
           action: item.action,
@@ -138,12 +145,17 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('dsh.start', () => actionStart()),
     vscode.commands.registerCommand('dsh.stop', () => actionStop()),
+    vscode.commands.registerCommand('dsh.instance.new', () => actionCreateInstance()),
+    vscode.commands.registerCommand('dsh.instance.edit', () => actionEditInstance()),
+    vscode.commands.registerCommand('dsh.instance.delete', () => actionDeleteInstance()),
+    vscode.commands.registerCommand('dsh.instance.select', () => actionSelectInstance()),
+    vscode.commands.registerCommand('dsh.instance.open', () => actionOpen()),
   )
 }
 
 export function deactivate(): void {
-  // The server is intentionally left running. Stop it from the panel or the
-  // DSH Launcher Panel: Stop command. The log tailer belongs to this host,
-  // so it stops with it (the server keeps writing the log file regardless).
+  // The servers are intentionally left running; Stop them from the panel or the
+  // DSH Launcher Panel: Stop command. The log tailer belongs to this host, so it
+  // stops with it (the servers keep writing their log files regardless).
   stopLogTail()
 }

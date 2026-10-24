@@ -19,6 +19,7 @@ export function panelBody(values: PanelBodyValues): string {
   return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>
   </div>
+  <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances"></div>
   <div class="card">
     <div class="status">
       <span class="dot" id="dot"></span>
@@ -31,6 +32,20 @@ export function panelBody(values: PanelBodyValues): string {
         <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
       </div>
     </div>
+    <div class="instance-meta">
+      <div class="runtime-row">
+        <span class="runtime-label">profile</span>
+        <span class="runtime-value" id="instanceProfile">—</span>
+      </div>
+      <div class="runtime-row">
+        <span class="runtime-label">port</span>
+        <input class="port-input" id="instancePortInput" type="number" min="1" max="65535" aria-label="Instance port">
+        <button class="mini-btn" id="savePortBtn" title="Save this instance's port">Save</button>
+        <button class="mini-btn" id="editInstanceBtn" title="Edit this instance">Edit</button>
+        <button class="mini-btn" id="deleteInstanceBtn" title="Remove this instance; DSH data is kept">Delete</button>
+      </div>
+    </div>
+    <div class="instance-error" id="instanceError"></div>
     <div class="runtime-section">
       <div class="runtime-row">
         <span class="runtime-label">dsh</span>

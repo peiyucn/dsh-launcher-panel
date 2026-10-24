@@ -111,6 +111,31 @@
         "command": "dsh.stop",
         "title": "Stop",
         "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.new",
+        "title": "New Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.edit",
+        "title": "Edit Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.delete",
+        "title": "Delete Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.select",
+        "title": "Select Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.open",
+        "title": "Open Instance",
+        "category": "DSH Launcher Panel"
       }
     ],
     "configuration": {

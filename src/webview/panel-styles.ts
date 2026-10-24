@@ -74,6 +74,7 @@ export const PANEL_CSS = `
   .status { display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
+  .dot.stopped { background: var(--lap-fg2); opacity: .5; box-shadow: none; }
   /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
      几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
      stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方
@@ -187,4 +188,18 @@ export const PANEL_CSS = `
     button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .card, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
   }
   .version-row { display: flex; justify-content: flex-end; gap: 8px; }
-  .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }`
+  .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
+  /* Instance tabs: one row, horizontally scrollable; the + stays pinned right. */
+  .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 2px; }
+  .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; }
+  .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
+  .instance-tab[aria-selected='true'] { background: var(--lap-surface); border-color: var(--lap-border-soft); color: var(--lap-fg); font-weight: 600; }
+  .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .instance-tab-add { height: 24px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
+  .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
+  .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
+  .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; margin-top: 2px; display: flex; flex-direction: column; gap: 4px; }
+  .port-input { width: 72px; height: 22px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-input, transparent); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 4px; }
+  .port-input:disabled { opacity: .55; }
+  .instance-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; }
+  .instance-tab .dot { width: 7px; height: 7px; margin: 0; flex: none; }`

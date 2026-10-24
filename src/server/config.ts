@@ -32,6 +32,10 @@ export interface DshConfig {
   sourceDebug: boolean
   /** Open the browser automatically after Start (dsh.autoOpenBrowser; explicit 'New Tab' clicks always open). */
   autoOpenBrowser: boolean
+  /** Hide the child console; dsh's own tool subprocesses inherit it. */
+  hideConsole: boolean
+  /** Truncate the server log before a start. */
+  clearServerLogOnStart: boolean
 }
 
 /** 0.2.6 改名的配置键（新键 ← 旧键）。 */
@@ -60,6 +64,8 @@ export function readConfig(): DshConfig {
     port: Number.isInteger(port) && port > 0 && port <= MAX_PORT ? port : DEFAULT_PORT,
     sourceDebug: c.get<boolean>('sourceDebug') ?? false,
     autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
+    hideConsole: c.get<boolean>('hideConsole') ?? true,
+    clearServerLogOnStart: c.get<boolean>('clearServerLogOnStart') ?? true,
   }
 }
 

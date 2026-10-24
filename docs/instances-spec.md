@@ -146,20 +146,32 @@ interface DshInstance {
    - 路径不存在：创建目录（只创建目标目录，不递归删除任何东西）。
    - 路径存在且是文件：拒绝。
    - 路径存在且非空、但不像 DSH home：提示「这不是空的 DSH 数据目录，继续会把 DSH 数据混进去」，要求显式确认。
-4. **准备 profile**：
+4. **profile 可以先不存在**：
    - 已存在：直接使用，不重置。
-   - 不存在：调用 DSH CLI 初始化，**不复制模板文件**。
-     - shipped `web`：通过与启动相同的 CLI 入口、带目标 `DSH_HOME` 首次运行，让 DSH 自己创建 profile；实现时必须确认该版本的非交互初始化行为。
-     - 自定义 profile：使用 DSH 文档化的 `--from-default-profile web` 形式创建；不要覆盖已存在的 profile。
-     - 如果该 DSH 版本无法可靠地非交互初始化，创建流程应失败并给出明确的手工初始化提示，不要猜。
-5. **写实例**：只有 home/profile 准备成功后，才把实例写入 `dsh.instances`，并设为活动实例。
+   - 不存在：创建阶段不阻塞；Start 时再让 DSH 自己初始化（shipped `web` 用首次 `dsh web --dump-config`，自定义 profile 用 `--from-default-profile web`）。不要手工复制模板。
+5. **写实例**：校验通过即写入 `dsh.instances`，并设为活动实例；home 目录可以本次创建；profile 缺失不是创建失败。
 6. **不自动启动**：创建完成即停；用户再点 Start。可以提供「Create & Start」作为后续增强，v1 不做。
+
+### 首次安装 / 空机器
+
+这是必须单独保证的起始状态：用户刚装好扩展，电脑上没有 dsh 安装、没有 `~/.dsh`、也没有任何实例。
+
+- 首次激活且尚未迁移时，仍然合成一个 `Default` 实例（`home: ''`、`profile: 'web'`、端口取 `dsh.port` 或 3080），写入 `dsh.instances`。**不要求 `~/.dsh` 或 dsh 安装已经存在。**
+- 面板显示 `Default` tab，状态 `stopped`；dsh 缺失时 Start 按钮显示「Install & Start」，`+` 仍然可用。
+- Start 的顺序：
+  1. 走现有全局安装流程装 dsh（pkg/source）；
+  2. 用目标 `DSH_HOME` 确认 profile 存在；缺失时让 DSH 自己初始化（shipped `web` 用首次 `dsh web --dump-config`，自定义 profile 用 `--from-default-profile web`，不手工复制模板）；
+  3. 再 spawn `dsh web --port <port>`。
+- 创建实例不要求 dsh 已安装：表单只写实例坐标，允许 home/profile 尚不存在；Start 时再安装并初始化 profile。
+- 初始化失败时保留实例和 settings，显示错误与日志路径；不要删除用户数据，也不要悄悄回退到别的 home。
+- 如果用户删光所有实例，面板显示空状态 + `+`；不要用迁移逻辑自动重新创建 Default。
+- 现有用户升级：`dsh.port` 迁移成 Default；已有 `~/.dsh` / dsh 安装继续可用。
 
 ### 创建失败
 
-- 任何一步失败：显示具体原因；不写入实例；不自动删除已创建的 home（不逆操作用户数据）。
+- 任何一步失败：显示具体原因；不自动删除已创建的 home（不逆操作用户数据）。
 - 如果 home 是本次新建的空目录，可以提示用户「目录已创建，可重试或手动删除」。
-- 初始化可能触发全局安装 / pnpm / 网络；复用现有安装流程和进度 UI，不并发跑两个安装。
+- 全局安装 / pnpm / 网络失败：保留实例，Start 显示错误与重试入口；不要丢失 settings。
 
 ## 七、编辑与删除
 

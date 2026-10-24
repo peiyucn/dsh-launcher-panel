@@ -1,11 +1,32 @@
 import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
-import { actionSetBrowser, actionStart, actionStop, openUrl } from './actions.ts'
+import {
+  actionCreateInstance,
+  actionDeleteInstance,
+  actionEditInstance,
+  actionSavePort,
+  actionSetBrowser,
+  actionStart,
+  actionStop,
+  actionUpdateDsh,
+  openUrl,
+} from './actions.ts'
 import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
+import { getInstanceManager } from './instance-manager.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
-import { describeDshUpdate } from './versions.ts'
 import { STATUS_REFRESH_INTERVAL_MS } from './timing.ts'
-import { addActivity, applyMode, clearConsole, clearRequirementsCaches, currentStatus, dbg, fetchDshBalance, isCheckingUpdates, isUpdating, getActivity, getDsStatus, getDshBalance, hasDeepSeekModel, readConfig, runDshUpdate, beginUpdateCheck, endUpdateCheck, withBusy, type ServerStatus } from './server.ts'
+import {
+  addActivity,
+  applyMode,
+  clearConsole,
+  dbg,
+  fetchDshBalance,
+  getActivity,
+  getDshBalance,
+  getDsStatus,
+  hasDeepSeekModel,
+  withBusy,
+} from './server.ts'
 import { PANEL_CSS } from './webview/panel-styles.ts'
 import { panelBody } from './webview/panel-body.ts'
 import { panelScript } from './webview/panel-script.ts'
@@ -17,6 +38,36 @@ function getNonce(): string {
   let out = ''
   for (let i = 0; i < NONCE_LENGTH; i++) out += chars.charAt(bytes[i] % chars.length)
   return out
+}
+
+/** The status shape used before the manager exists or when a refresh throws. */
+function emptyStatus() {
+  const cfg = vscode.workspace.getConfiguration('dsh')
+  return {
+    running: false,
+    starting: false,
+    installing: false,
+    stopping: false,
+    checking: false,
+    updating: false,
+    url: '',
+    dsh: 'unknown' as const,
+    dshVersion: '',
+    dshPath: '',
+    dshHome: '',
+    dshPathShort: '',
+    dshHomeShort: '',
+    nodeVersion: '',
+    mode: cfg.get<string>('runMode') === 'source' ? 'source' as const : 'pnpm' as const,
+    update: undefined,
+    consoleLogPath: '',
+    consoleLogPathShort: '',
+    serverLogPath: '',
+    serverLogPathShort: '',
+    consoleLogSize: 0,
+    serverLogSize: 0,
+    sourceDebug: cfg.get<boolean>('sourceDebug') ?? false,
+  }
 }
 
 export class DshPanelProvider implements vscode.WebviewViewProvider {
@@ -93,59 +144,57 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
   }
 
   private async handleMessage(message: { command?: string; value?: string }): Promise<void> {
+    const manager = getInstanceManager()
     switch (message.command) {
       case 'start':
-        await actionStart()
+        await actionStart(message.value)
         break
       case 'stop':
-        await actionStop()
+        await actionStop(message.value)
         break
+      case 'newInstance':
+        await actionCreateInstance()
+        break
+      case 'selectInstance':
+        if (manager && message.value) await manager.select(message.value)
+        break
+      case 'editInstance':
+        await actionEditInstance(message.value)
+        break
+      case 'deleteInstance':
+        await actionDeleteInstance(message.value)
+        break
+      case 'savePort': {
+        if (!manager || !message.value) break
+        try {
+          const payload = JSON.parse(message.value) as { id?: unknown; port?: unknown }
+          if (typeof payload.id !== 'string' || typeof payload.port !== 'number') break
+          await actionSavePort(payload.id, payload.port)
+        } catch {
+          // malformed webview payload: ignore and refresh
+        }
+        break
+      }
       case 'updateDsh':
-        await runDshUpdate()
+        try {
+          await actionUpdateDsh()
+        } catch (error) {
+          void vscode.window.showErrorMessage(`DSH update failed: ${error instanceof Error ? error.message : String(error)}`)
+        }
         break
       case 'refreshRequirements':
-        // The spinner and the `checking` flag (which greys the button) must be
-        // released even when the check throws, and must stay set for the whole
-        // handler: `clearRequirementsCaches` runs a check of its own, so an
-        // inner release would re-enable the button while this one still runs.
-        // The counter in server.ts makes nesting safe; this pair only brackets.
-        beginUpdateCheck()
-        try {
-          await withBusy('↻ Checking for updates…', async () => {
-            await this.refresh()
-            await clearRequirementsCaches()
-            const st = await currentStatus()
-            addActivity(
-              !st.dshVersion
-                ? 'ℹ dsh is not installed yet — use Install & Start'
-                : describeDshUpdate(st.update),
-            )
-          })
-        } finally {
-          endUpdateCheck()
-        }
+        await manager?.refresh()
+        addActivity('↻ Status refreshed')
         break
       case 'setMode':
         if (message.value === 'pnpm' || message.value === 'source') {
-          const st = await currentStatus()
-          const active = st.running || st.starting || st.installing
-          if (active) {
-            // The snapshot can be stale by the time this runs: confirm for
-            // every active state so cancelling always keeps the current
-            // mode, and a start that completed mid-flight is never stopped
-            // without asking.
-            const pick = await vscode.window.showInformationMessage(
-              `DeepSeek Harness is ${st.running ? 'running' : 'starting'} — switch to ${message.value} mode?`,
-              st.running ? 'Restart' : 'Switch',
-              'Cancel',
-            )
-            if (pick === 'Cancel' || !pick) break
-            await actionStop()
-            await applyMode(message.value)
-            if (st.running) await actionStart()
-          } else {
-            await applyMode(message.value)
+          if (manager?.anyActive()) {
+            void vscode.window.showWarningMessage('Stop all DSH instances before switching run mode.')
+            break
           }
+          await applyMode(message.value)
+          manager?.invalidateDetection()
+          await manager?.refresh()
         }
         break
       case 'revealPath':
@@ -186,6 +235,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         break
       }
       case 'clearConsole':
+        if (manager) manager.clearConsole(manager.activeInstance()?.id ?? '')
         clearConsole()
         break
       default:
@@ -211,55 +261,39 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       return
     }
     try {
-      const status = await currentStatus()
-      const activity = getActivity()
+      const manager = getInstanceManager()
+      if (!manager) {
+        await this.view.webview.postMessage({ type: 'update', status: emptyStatus(), instances: [], activeId: '', issues: [], activity: [], browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')), pricing: pricingWindowAt(new Date()) })
+        return
+      }
+      const dashboard = await manager.dashboard()
+      const activity = manager.activityFor(dashboard.activeId)
       const showDs = hasDeepSeekModel()
       const dsStatus = showDs ? await getDsStatus() : undefined
       const balance = showDs ? getDshBalance() : undefined
-      // Read browser AFTER the slow awaits: a refresh that started before a
-      // setBrowser click would otherwise deliver a stale value and flip the
-      // trigger back for one cycle.
       const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
-      await this.view.webview.postMessage({ type: 'update', status, activity, browser, dsStatus, balance, showDs, pricing: pricingWindowAt(new Date()) })
+      await this.view.webview.postMessage({
+        type: 'update',
+        ...dashboard,
+        activity,
+        browser,
+        dsStatus,
+        balance,
+        showDs,
+        pricing: pricingWindowAt(new Date()),
+      })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error('[dsh-launcher-panel] refresh failed:', error)
-      // Typed fallback so it stays in sync with ServerStatus (no drifting fields).
-      const cfg = readConfig()
-      const fallback: ServerStatus = {
-        running: false,
-        starting: false,
-        installing: false,
-        stopping: false,
-        checking: isCheckingUpdates(),
-        updating: isUpdating(),
-        url: '',
-        dsh: 'unknown',
-        dshVersion: '',
-        dshPath: '',
-        dshHome: '',
-        dshPathShort: '',
-        dshHomeShort: '',
-        nodeVersion: '',
-        mode: cfg.runMode,
-        update: undefined,
-        consoleLogPath: '',
-        consoleLogPathShort: '',
-        serverLogPath: '',
-        serverLogPathShort: '',
-        consoleLogSize: 0,
-        serverLogSize: 0,
-        sourceDebug: cfg.sourceDebug,
-      }
       try {
-        // Carry the REAL browser setting even on failure: a hardcoded 'built-in'
-        // here made the trigger flip between failed and successful refreshes.
-        const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
         await this.view.webview.postMessage({
           type: 'update',
-          status: fallback,
-          activity: [{ text: `✗ Status refresh failed: ${msg}`, busy: false }],
-          browser,
+          status: emptyStatus(),
+          instances: [],
+          activeId: '',
+          issues: [{ index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${msg}` }],
+          activity: getActivity().concat([{ id: -1, text: `✗ Status refresh failed: ${msg}`, busy: false }]),
+          browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')),
           balance: undefined,
           pricing: pricingWindowAt(new Date()),
         })

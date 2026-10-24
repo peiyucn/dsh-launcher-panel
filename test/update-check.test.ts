@@ -36,13 +36,11 @@ test('both the outer bracket and the inner check go through the counter', () => 
   assert.match(serverSource, /checksInFlight = Math\.max\(0, checksInFlight - 1\)/, 'endUpdateCheck decrements without going negative')
 })
 
-test('the panel brackets its handler and releases in a finally', () => {
+test('the panel refresh handler delegates to the instance manager', () => {
   const panel = readFileSync(new URL('../src/panel.ts', import.meta.url), 'utf8')
   const branch = /case 'refreshRequirements':([\s\S]*?)break/.exec(panel)?.[1] ?? ''
-  assert.match(branch, /beginUpdateCheck\(\)/, 'the handler must open the bracket')
-  // The release has to be in a finally: the branch awaits three things that can
-  // throw, and an unwound marker leaves the button greyed for the session.
-  assert.match(branch, /finally \{\s*endUpdateCheck\(\)/, 'the bracket must close in a finally')
+  assert.match(branch, /manager\?\.refresh\(\)/, 'the handler must refresh the instance manager')
+  assert.doesNotMatch(branch, /clearRequirementsCaches/, 'the retired single-server check cache is gone')
   assert.doesNotMatch(branch, /setCheckingUpdates\(/, 'the old boolean setter must be gone')
 })
 

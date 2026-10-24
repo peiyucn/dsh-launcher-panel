@@ -40,6 +40,8 @@ export function panelScript(values: PanelScriptValues): string {
       + '</g></svg>'
     document.getElementById('loadingSpinner').innerHTML = SPINNER_SVG
     let gotUpdate = false
+    let instanceList = []
+    let currentInstanceId = ''
     setTimeout(() => {
       if (!gotUpdate) {
         const st = document.getElementById('statusText')
@@ -103,6 +105,75 @@ export function panelScript(values: PanelScriptValues): string {
         b.classList.toggle('active', active)
         b.setAttribute('aria-pressed', String(active))
       })
+    }
+
+    function instanceDot(state) {
+      if (state === 'running') return '<span class="dot running"></span>'
+      if (state === 'starting' || state === 'installing' || state === 'stopping') return '<span class="dot matrix">' + SPINNER_SVG + '</span>'
+      if (state === 'error') return '<span class="dot"></span>'
+      return '<span class="dot stopped"></span>'
+    }
+    function renderTabs(list, activeId) {
+      const host = document.getElementById('instanceTabs')
+      if (!host) return
+      host.innerHTML = ''
+      if (!Array.isArray(list) || list.length === 0) {
+        const empty = document.createElement('span')
+        empty.className = 'instance-tabs-empty'
+        empty.textContent = 'No instances — click + to create one'
+        host.appendChild(empty)
+      } else {
+        list.forEach((item) => {
+          const tab = document.createElement('button')
+          tab.type = 'button'
+          tab.className = 'instance-tab'
+          tab.setAttribute('role', 'tab')
+          tab.setAttribute('aria-selected', String(item.id === activeId))
+          tab.dataset.id = item.id
+          tab.title = (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '') + ' · profile ' + (item.profile || 'web')
+          tab.innerHTML = instanceDot(item.state) + '<span class="tab-name"></span>'
+          tab.querySelector('.tab-name').textContent = item.name || 'Instance'
+          tab.addEventListener('click', () => vscode.postMessage({ command: 'selectInstance', value: item.id }))
+          host.appendChild(tab)
+          if (item.id === activeId) window.requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+        })
+      }
+      const add = document.createElement('button')
+      add.type = 'button'
+      add.className = 'instance-tab-add'
+      add.title = 'New instance'
+      add.setAttribute('aria-label', 'New instance')
+      add.textContent = '+'
+      add.addEventListener('click', () => vscode.postMessage({ command: 'newInstance' }))
+      host.appendChild(add)
+    }
+    function renderInstanceMeta(status) {
+      status = status || {}
+      const active = !!status.id
+      const busy = !!(status.running || status.starting || status.installing || status.stopping)
+      const profile = document.getElementById('instanceProfile')
+      const input = document.getElementById('instancePortInput')
+      const save = document.getElementById('savePortBtn')
+      const edit = document.getElementById('editInstanceBtn')
+      const del = document.getElementById('deleteInstanceBtn')
+      if (profile) profile.textContent = active ? (status.profile || 'web') : '—'
+      if (input) {
+        if (input.dataset.instanceId !== String(status.id || '')) {
+          input.dataset.instanceId = String(status.id || '')
+          input.dataset.dirty = ''
+        }
+        if (document.activeElement !== input && input.dataset.dirty !== '1') input.value = active ? String(status.port || '') : ''
+        input.disabled = !active || busy
+      }
+      if (save) save.disabled = !active || busy
+      if (edit) edit.disabled = !active || busy
+      if (del) del.disabled = !active || busy
+      const err = document.getElementById('instanceError')
+      if (err) err.textContent = active && status.error ? status.error : ''
+      if (!active) {
+        const start = document.getElementById('startBtn')
+        if (start) { start.disabled = true; start.textContent = '+ New' }
+      }
     }
 
     function renderRuntime(status) {
@@ -235,8 +306,24 @@ export function panelScript(values: PanelScriptValues): string {
       b.addEventListener('click', () => {
         // Gray the Start button instantly; the next status update re-enables it.
         if (b.dataset.cmd === 'start') b.disabled = true
-        vscode.postMessage({ command: b.dataset.cmd })
+        vscode.postMessage({ command: b.dataset.cmd, value: currentInstanceId })
       })
+    })
+    document.getElementById('savePortBtn').addEventListener('click', () => {
+      if (!currentInstanceId) return
+      const input = document.getElementById('instancePortInput')
+      const port = Number(input.value)
+      input.dataset.dirty = ''
+      vscode.postMessage({ command: 'savePort', value: JSON.stringify({ id: currentInstanceId, port }) })
+    })
+    document.getElementById('instancePortInput').addEventListener('input', (e) => {
+      e.target.dataset.dirty = '1'
+    })
+    document.getElementById('editInstanceBtn').addEventListener('click', () => {
+      if (currentInstanceId) vscode.postMessage({ command: 'editInstance', value: currentInstanceId })
+    })
+    document.getElementById('deleteInstanceBtn').addEventListener('click', () => {
+      if (currentInstanceId) vscode.postMessage({ command: 'deleteInstance', value: currentInstanceId })
     })
     document.getElementById('updateBtn').addEventListener('click', () => {
       const btn = document.getElementById('updateBtn')
@@ -375,6 +462,8 @@ export function panelScript(values: PanelScriptValues): string {
         document.getElementById('balanceBtn').disabled = false
       }
       setBrowserUI(m.browser || '${values.defaultBrowser}')
+      instanceList = Array.isArray(m.instances) ? m.instances : []
+      currentInstanceId = typeof m.activeId === 'string' ? m.activeId : ''
       const log = document.getElementById('log')
       const entries = Array.isArray(m.activity) ? m.activity : []
       const newline = String.fromCharCode(10)
@@ -394,6 +483,8 @@ export function panelScript(values: PanelScriptValues): string {
       const dsCard = document.getElementById('dsCard')
       if (dsCard) dsCard.style.display = m.showDs === false ? 'none' : ''
       renderRunning(m.status)
+      renderTabs(instanceList, currentInstanceId)
+      renderInstanceMeta(m.active)
       renderRuntime(m.status)
       renderLogFiles(m.status)
       renderDebug(m.status)
