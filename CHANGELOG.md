@@ -6,12 +6,9 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [Unreleased]
 
-- The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile; the launcher assigns the Web UI port (`Default` keeps 3080, new instances get five-digit ports from `dsh.instancePortBase`). The panel shows one tab per instance plus a `+` tab to create another. Tabs start/stop/open their instance, edit name/home/auto-open/browser, and delete the instance (stop first; DSH data is never deleted). The existing single-instance settings migrate to a `Default` instance.
-- New-instance/edit forms no longer show a Profile field (new instances use `web`). The home field follows `.dsh-{name}` as the name is typed until you edit it by hand.
-- New setting `dsh.instanceBrand` (default on) shows the instance name below the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation.
-- Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
-- A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
-- Start no longer flashes Installing when the shared dsh is already installed; the Installing state now appears only for an actual first-run install.
+- The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile, and the launcher assigns its Web UI port (`Default` keeps 3080). Tabs start/stop/open instances and can create, edit or delete them; deleting an instance never deletes DSH data. Existing single-instance settings migrate to a `Default` instance.
+- New setting `dsh.instanceBrand` (default on) shows the instance name under the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation.
+- A fresh install can start from an empty `~/.dsh`: the first Start initializes the target profile before launching the instance.
 - The panel got a visual refresh: framed sections, a borderless Settings area, a collapsed DeepSeek section, and the DSH Launcher Panel naming.
 
 ## [0.2.17] - 2026-10-22

@@ -6,12 +6,9 @@
 
 ## [Unreleased]
 
-- launcher 现在可以管理多个 DSH 实例。每个实例有自己的 DSH home 和 profile；端口由 launcher 分配（`Default` 保持 3080，新实例使用 `dsh.instancePortBase` 起的五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建。tab 内可启动/停止/打开该实例、编辑名称/home/自动打开/浏览器，删除实例（先停止；不删除 DSH 数据）。原有单实例设置会迁移成 `Default` 实例。
-- 新建/编辑实例表单不再显示 Profile（新实例固定 `web`）；home 默认随名称变成 `.dsh-{name}`，手动改过后不再自动跟随。
+- launcher 现在可以管理多个 DSH 实例。每个实例有自己的 DSH home 和 profile，Web UI 端口由 launcher 分配（`Default` 保持 3080）。tab 可启动/停止/打开实例，也可新建、编辑或删除；删除实例不会删除 DSH 数据。原有单实例设置会迁移成 `Default` 实例。
 - 新增 `dsh.instanceBrand`（默认开启）：在 DSH Web UI 的 DeepSeek Harness 官方 wordmark 下方显示实例名，跟随当前 DSH 语言。launcher 会在每个实例 profile 里维护一个很小的本地 client bundle，不需要手动装插件。
-- 每个实例有独立的实时服务端日志和状态；VS Code 重载后会重新接管仍在运行的实例。控制台、账户余额和 DeepSeek 状态跟随当前活动实例。
-- 全新安装不再要求已有 `~/.dsh`：第一次 Start 会安装 dsh、初始化目标 profile，再启动实例。
-- Start 在 dsh 已安装时不再闪现 Installing；只有真正首次安装才显示 Installing 状态。
+- 全新安装可以从空的 `~/.dsh` 开始：第一次 Start 会先初始化目标 profile 再启动实例。
 - 面板做了一次纯视觉整理：分区带边框、Settings 无边框、DeepSeek 区默认收起，并统一了 DSH Launcher Panel 命名。
 
 ## [0.2.17] - 2026-10-22
