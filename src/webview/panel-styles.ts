@@ -69,8 +69,12 @@ export const PANEL_CSS = `
     --lap-warning: #F59E0B;
     --lap-info: #4D8BFE;
   }
-  /* 卡片：官方 rowCard 同款（0.5px hairline l4 + r16）。 */
-  .card { border: 0.5px solid var(--lap-border); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  /* One framed region for every functional area: border, inner title, body. */
+  .section { border: 0.5px solid var(--lap-border); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--lap-fg); line-height: 16px; }
+  .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .section-head > .mode-toggle { margin-left: auto; }
   .status { display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
@@ -104,8 +108,8 @@ export const PANEL_CSS = `
     .state-spinner-arc { stroke-dasharray: 18 150; stroke-dashoffset: -3; }
   }
   .status-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-  .status-main { font-weight: 600; }
-  .status-sub { color: var(--lap-fg2); font-size: 11px; word-break: break-all; }
+  .status-main { font-size: 12px; font-weight: 600; }
+  .status-sub { color: var(--lap-fg2); font-size: 10px; word-break: break-all; }
   .mode-toggle { display: flex; flex-direction: row; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 14px; padding: 2px; gap: 2px; flex: none; }
   /* 模式切换：普通药丸按钮（选中 = 主色实心 + 白字）。药丸半径取高的一半（22/2 = 11），
      与面板里 h28 + r14 的胶囊同一套比例；不再是圆形图标钮。 */
@@ -116,11 +120,11 @@ export const PANEL_CSS = `
   .status-actions { display: flex; align-items: center; gap: 2px; flex: none; }
   .status-sep { width: 1px; height: 16px; background: var(--lap-border-soft); flex: none; margin: 0 3px; }
   .runtime-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .runtime-label { flex: none; width: 52px; color: var(--lap-fg2); font-size: 10px; opacity: .65; }
+  .runtime-label { flex: none; width: 56px; color: var(--lap-fg2); font-size: 10px; }
   .runtime-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--lap-fg); }
-  .runtime-path, .runtime-data { font-size: 11px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
+  .runtime-path, .runtime-data { font-size: 10px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
   .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
-  .buttons { display: flex; gap: 8px; }
+  .instance-buttons { display: flex; gap: 8px; margin-top: 2px; }
   /* 按钮：官方 Button 几何（h28 + r14 胶囊 + 超椭圆；无支持时退普通圆角）。 */
   button { height: 28px; border: none; border-radius: 14px; padding: 0 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
   button.primary { background: var(--lap-accent); color: #fff; flex: 1; }
@@ -131,15 +135,13 @@ export const PANEL_CSS = `
   button.secondary:hover { background: var(--lap-hover); }
   button.danger:hover { border-color: var(--lap-danger); color: var(--lap-danger); background: var(--lap-danger-bg); }
   .console { height: 200px; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
-  .log-files { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .log-files { display: flex; flex-direction: column; gap: 3px; }
   .log-file-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .log-size { color: var(--lap-fg2); font-size: 10px; opacity: .65; flex: none; }
-  .console-header { display: flex; align-items: center; gap: 6px; }
-  .console-title { font-weight: 600; font-size: 11px; }
+  .log-size { color: var(--lap-fg2); font-size: 10px; flex: none; }
+  .section-actions .mini-btn { flex: none; }
   /* debug 状态药丸：文字在按钮内，on = 绿色点亮（owner 拍板恢复原方式）。 */
-  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; margin-left: auto; }
+  .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 500; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; }
   .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
-  .console-header .mini-btn { flex: none; }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
   .icon-btn:hover { color: var(--lap-accent); }
   .icon-btn.spinning { animation: spin 1s linear infinite; }
@@ -149,8 +151,6 @@ export const PANEL_CSS = `
   .loading-spinner { --spinner-size: 28px; }
   .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
   .mini-btn:hover { background: var(--lap-hover); }
-  .ds-header { display: flex; align-items: center; gap: 6px; }
-  .ds-title { font-weight: 600; }
   .ds-open { background: transparent; border: none; color: var(--lap-accent); cursor: pointer; padding: 0; font-size: 11px; flex: none; text-decoration: none; margin-left: auto; height: auto; }
   .ds-open:hover { text-decoration: underline; }
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
@@ -166,13 +166,12 @@ export const PANEL_CSS = `
   .cdot.maintenance { background: var(--lap-info); }
   .ds-incidents { display: flex; flex-direction: column; gap: 3px; }
   .ds-incident { font-size: 11px; color: var(--lap-danger); word-break: break-all; }
-  .ds-empty { font-size: 11px; color: var(--lap-fg2); }
-  #dsCard { gap: 5px; padding: 10px 12px; }
+  .ds-empty { font-size: 10px; color: var(--lap-fg2); }
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .ds-balance-label { color: var(--lap-fg2); font-size: 10px; opacity: .65; }
+  .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
   .ds-balance-row .balance-btn { flex: none; }
-  .footer { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lap-fg2); }
+  .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
   .lap-select { position: relative; flex: none; margin-left: auto; }
@@ -192,23 +191,16 @@ export const PANEL_CSS = `
   .balance-btn:disabled { opacity: .6; cursor: progress; }
   /* 官方全局规则的同款曲率：非圆角形状一律走 superellipse(1.5)（不支持的引擎退普通圆角）。 */
   @supports (corner-shape: superellipse(1.5)) {
-    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .card, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
+    button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .section, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
   }
   .version-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .version-spacer { flex: 1; min-width: 8px; }
-  .plugin-version { font-size: 10px; color: var(--lap-fg2); opacity: .65; }
-  .shared-card { padding: 10px 12px; gap: 6px; }
-  .shared-header { display: flex; align-items: center; gap: 8px; }
-  .shared-title { font-size: 11px; font-weight: 600; }
-  .shared-header .mode-toggle { margin-left: auto; }
-  .shared-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .shared-row .runtime-value { flex: 1; }
+  .plugin-version { font-size: 10px; color: var(--lap-fg2); }
   /* Tabs live inside the instance card, so there is no outside seam to align. */
   .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 4px; margin: 0; border-bottom: 0.5px solid var(--lap-border-soft); }
   .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; position: relative; }
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
-  .instance-tab[aria-selected='true'] { background: var(--lap-hover); color: var(--lap-fg); font-weight: 600; }
-  .instance-tab[aria-selected='true']::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -4px; height: 2px; border-radius: 2px; background: var(--lap-accent); }
+  .instance-tab[aria-selected='true'] { background: var(--lap-surface); color: var(--lap-fg); font-weight: 600; }
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .instance-tab-add { height: 24px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
   .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
@@ -223,7 +215,7 @@ export const PANEL_CSS = `
   .instance-modal[hidden] { display: none; }
   .instance-modal-card { width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto; box-sizing: border-box; padding: 12px; border: 0.5px solid var(--lap-border); border-radius: 12px; background: var(--lap-menu); color: var(--lap-fg); box-shadow: 0 8px 28px rgba(0, 0, 0, .35); }
   .instance-modal-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-  .instance-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 8px; font-size: 11px; color: var(--lap-fg2); }
+  .instance-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 8px; font-size: 10px; color: var(--lap-fg2); }
   .instance-field input, .instance-field select { height: 24px; box-sizing: border-box; border: 0.5px solid var(--lap-border-soft); border-radius: 6px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 11px; padding: 0 6px; }
   .instance-field input:focus, .instance-field select:focus { outline: 2px solid var(--lap-accent); outline-offset: 1px; }
   .instance-modal-error { color: var(--lap-danger); font-size: 10px; min-height: 12px; margin-bottom: 6px; word-break: break-word; }
