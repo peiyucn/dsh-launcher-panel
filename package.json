@@ -74,7 +74,7 @@
       "activitybar": [
         {
           "id": "dsh",
-          "title": "DSH WebUI",
+          "title": "DSH Launcher Panel",
           "icon": "resources/icon.svg"
         }
       ]

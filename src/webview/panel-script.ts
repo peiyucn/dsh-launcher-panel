@@ -167,8 +167,8 @@ export function panelScript(values: PanelScriptValues): string {
         const profilePath = active && status.home && status.profile
           ? status.home.replace(/[\\/]+$/, '') + '/profiles/' + status.profile
           : ''
-        profile.textContent = active ? (profilePath ? (status.homeShort || status.home).replace(/[\\/]+$/, '') + '/profiles/' + status.profile : status.profile || '—') : '—'
-        profile.title = profilePath ? 'Agent profile (tools, models, presets): ' + profilePath : ''
+        profile.textContent = active ? (status.profile || '—') : '—'
+        profile.title = profilePath ? 'Agent profile: ' + status.profile + ' (at ' + profilePath + ')' : ''
         profile.dataset.path = profilePath
       }
       if (edit) edit.disabled = !active || busy

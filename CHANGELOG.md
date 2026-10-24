@@ -10,7 +10,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - The panel is now a stack of framed sections — Runtime, Instances, Console and DeepSeek API — with a borderless Settings area at the bottom. Runtime comes first. Start / New Tab / Stop live inside Instances, and the active instance tab is marked by its background instead of an underline. Section padding is tighter, and the panel no longer pins a fixed height.
 - The DeepSeek section is collapsed by default and shows only its title and Peak/Off-peak. Expanding it reveals Model APIs and Other APIs in two columns with a short divider, plus the account balance. Runtime names the shared DSH install `deepseek harness`.
 - Settings has no frame or title; it holds Global Settings, the browser selector and node/launcher versions.
-- The status-bar quick menu is titled **DSH Launcher Panel** (the old `🐳 DSH` / DeepSeek Harness wording is gone); the stop item now reads **Stop DSH Web UI**.
+- The status-bar quick menu and activity-bar view are titled **DSH Launcher Panel** (the old `🐳 DSH` / DSH WebUI / DeepSeek Harness wording is gone); the stop item now reads **Stop DSH Web UI**.
 - Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
 - A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
 

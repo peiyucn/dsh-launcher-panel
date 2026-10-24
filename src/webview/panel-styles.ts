@@ -13,8 +13,10 @@
  */
 
 export const PANEL_CSS = `
-  /* Do not pin the document to the viewport: the panel grows with its content
-     and only scrolls when it genuinely exceeds the view. */
+  /* Viewport-filling flex column (not a hard-coded content height): the
+     console is the flexible region, so expanding DeepSeek API shrinks the
+     console instead of adding a page scrollbar. */
+  html, body { height: 100%; }
   body {
     color-scheme: light;
     font-family: var(--vscode-font-family);
@@ -25,6 +27,7 @@ export const PANEL_CSS = `
     flex-direction: column;
     gap: 8px;
     box-sizing: border-box;
+    overflow: hidden;
     /* 官方 dsh 静态色板（design-platform.css）关键值；明暗主题跟随 VS Code 主题类。 */
     --lap-bg: #FFFFFF;
     --lap-fg: #0F1115;
@@ -69,7 +72,7 @@ export const PANEL_CSS = `
     --lap-info: #4D8BFE;
   }
   /* One framed region for every functional area: border, inner title, body. */
-  .section { border: 0.5px solid var(--lap-border); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .section { flex: 0 0 auto; border: 0.5px solid var(--lap-border); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
   .section-title { font-size: 12px; font-weight: 600; color: var(--lap-fg); line-height: 16px; }
   .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -141,7 +144,8 @@ export const PANEL_CSS = `
   button.secondary { background: transparent; color: var(--lap-fg); border: 0.5px solid var(--lap-border-soft); }
   button.secondary:hover { background: var(--lap-hover); }
   button.danger:hover { border-color: var(--lap-danger); color: var(--lap-danger); background: var(--lap-danger-bg); }
-  .console { height: auto; min-height: 48px; max-height: 200px; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 10px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
+  .console { flex: 1 1 auto; height: auto; min-height: 48px; max-height: none; margin: 0; padding: 8px; background: var(--lap-surface); border: 0.5px solid var(--lap-border); border-radius: 10px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--lap-fg2); font-family: var(--vscode-editor-font-family); font-size: 11px; }
+  #consoleSection { flex: 1 1 auto; min-height: 0; overflow: hidden; }
   .log-files { display: flex; flex-direction: column; gap: 3px; }
   .log-file-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .log-size { color: var(--lap-fg2); font-size: 10px; flex: none; }
@@ -184,7 +188,7 @@ export const PANEL_CSS = `
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
   .ds-balance-row .balance-btn { flex: none; }
   .ds-balance-row .ds-open { margin-left: 0; }
-  .settings-area { display: flex; flex-direction: column; gap: 6px; }
+  .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
   /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
@@ -216,7 +220,7 @@ export const PANEL_CSS = `
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tab[aria-selected='true'] { background: var(--lap-surface); color: var(--lap-fg); font-weight: 600; }
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .instance-tab-add { height: 24px; width: 26px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
+  .instance-tab-add { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 24px; width: 26px; margin-left: 6px; padding: 0; border: 0.5px solid transparent; border-radius: 8px; background: var(--lap-bg); color: var(--lap-fg2); font-size: 18px; font-weight: 400; line-height: 1; cursor: pointer; flex: 0 0 auto; position: sticky; right: 0; z-index: 1; }
   .instance-tab-add:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
   .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }

@@ -44,14 +44,29 @@ export interface NodeCheckHost {
 
 /** Whether Node.js is present and satisfies the harness engines range. */
 async function checkNode(nodePath: string): Promise<{ ok: boolean; version: string }> {
-  const result = await runFile(nodePath || 'node', ['--version'], NODE_PROBE_TIMEOUT_MS)
-  const version = result.ok ? result.stdout.trim().replace(/^v/, '') : ''
-  if (!result.ok) return { ok: false, version: '' }
-  const match = /^v?(\d+)\.(\d+)/.exec(result.stdout.trim())
+  const version = await probeNodeVersion(nodePath)
+  if (!version) return { ok: false, version: '' }
+  const match = /^(\d+)\.(\d+)/.exec(version)
   if (!match) return { ok: false, version }
   const major = Number(match[1])
   const minor = Number(match[2])
   return { ok: major >= NODE_MIN_MAJOR || (major === 22 && minor >= NODE_22_MIN_MINOR), version }
+}
+
+/** One `node --version` probe per Node path for the session (shared by checks and the panel). */
+const nodeVersionCache = new Map<string, Promise<string>>()
+
+/** The configured Node's version without the leading `v` ('' when it cannot be run). */
+export function probeNodeVersion(nodePath: string): Promise<string> {
+  const key = nodePath || 'node'
+  let probe = nodeVersionCache.get(key)
+  if (!probe) {
+    probe = runFile(key, ['--version'], NODE_PROBE_TIMEOUT_MS).then((result) => (
+      result.ok ? result.stdout.trim().replace(/^v/, '') : ''
+    ))
+    nodeVersionCache.set(key, probe)
+  }
+  return probe
 }
 
 /** Memoized one-shot Node check, run once at extension activation. */

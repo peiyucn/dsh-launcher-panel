@@ -35,6 +35,7 @@ import type { CheckoutHost } from './server/checkout.ts'
 import { ensureCheckoutReady } from './server/checkout.ts'
 import { readConfig } from './server/config.ts'
 import { detectDsh, detectDshVersion, type DetectHost } from './server/detect.ts'
+import { probeNodeVersion } from './server/node-check.ts'
 import { runInTerminal as runInTerminalInner, type TerminalHost } from './server/terminal.ts'
 import {
   ensurePnpmAvailable,
@@ -146,6 +147,7 @@ export class InstanceManager {
   private dshVersion = ''
   private dshPath = ''
   private dshState: 'unknown' | 'ok' | 'missing' = 'unknown'
+  private nodeVersion = ''
   private detectionAt = 0
   private logLineSeq = 0
   private updateCache: { update: DshUpdate; at: number } | undefined
@@ -163,6 +165,7 @@ export class InstanceManager {
     this.readyPromise = (async () => {
       this.settings = await migrateLegacyInstances(this.context)
       this.rebuildRuntimes()
+      this.nodeVersion = await probeNodeVersion(readConfig().nodePath).catch(() => '')
       if (this.settings.issues.length > 0) {
         for (const issue of this.settings.issues) addActivity(`⚠ Instance settings: ${issue.message}`)
       }
@@ -325,7 +328,7 @@ export class InstanceManager {
         dshHome: status?.home ?? '',
         dshPathShort: maskPath(this.dshPath),
         dshHomeShort: maskPath(status?.home ?? ''),
-        nodeVersion: '',
+        nodeVersion: this.nodeVersion,
         mode: cfg.runMode,
         update: this.updateCache?.update,
         consoleLogPath: activityLogFile(),
