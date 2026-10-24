@@ -74,7 +74,7 @@ export const PANEL_CSS = `
   /* One framed region for every functional area: border, inner title, body. */
   .section { flex: 0 0 auto; border: 0.5px solid var(--lap-border); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-  .section-title { font-size: 12px; font-weight: 600; color: var(--lap-fg); line-height: 16px; }
+  .section-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--lap-fg); line-height: 16px; }
   .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
   .section-head > .mode-toggle { margin-left: auto; }
   .section-toggle { width: 100%; height: auto; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
