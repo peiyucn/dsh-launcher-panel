@@ -45,6 +45,8 @@ export interface DshConfig {
   hideConsole: boolean
   /** Truncate the server log before a start. */
   clearServerLogOnStart: boolean
+  /** Show the instance name under the DSH Web wordmark (launcher-managed local bundle). */
+  instanceBrand: boolean
 }
 
 /** 0.2.6 改名的配置键（新键 ← 旧键）。 */
@@ -79,6 +81,7 @@ export function readConfig(): DshConfig {
     autoOpenBrowser: c.get<boolean>('autoOpenBrowser') ?? true,
     hideConsole: c.get<boolean>('hideConsole') ?? true,
     clearServerLogOnStart: c.get<boolean>('clearServerLogOnStart') ?? true,
+    instanceBrand: c.get<boolean>('instanceBrand') ?? true,
   }
 }
 

@@ -44,6 +44,7 @@
 | dsh.instancePortBase | 31000 | 新实例五位端口的根：第一个新实例是 base+1，之后 base+2……`Default` 保持 3080。范围 10000–65535；面板里不编辑端口。 |
 | dsh.instances   | `[]`      | 实例列表：`{ id, name, home, profile, port, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。机器本地，不同步。 |
 | dsh.activeInstance | 空      | 当前活动实例 id；空则回退到第一个实例 |
+| dsh.instanceBrand | true | 在 Web UI 的 DeepSeek Harness 官方 wordmark 下方显示实例名。launcher 会在每个 profile 维护一个很小的本地 client bundle，文字跟随 DSH 当前语言；不需要手动安装插件。 |
 | dsh.autoOpenBrowser | true      | 未单独设置覆盖的实例的默认值。关掉则保留当前标签页（Start 的「New Tab」点击仍按浏览器设置打开） |
 | dsh.browser     | built-in  | 未单独设置覆盖的实例的默认浏览器。`built-in` 用 VS Code 内置浏览器（不可用时回退系统浏览器）；`external` 打开系统浏览器 |
 | dsh.hideConsole | true      | 在 Windows 上隐藏控制台窗口（也让 dsh 自己的工具子进程不闪窗） |

@@ -291,6 +291,13 @@
           "scope": "machine",
           "default": "",
           "description": "Id of the active instance; empty falls back to the first instance."
+        },
+        "dsh.instanceBrand": {
+          "order": 15,
+          "type": "boolean",
+          "scope": "machine",
+          "default": true,
+          "description": "Show the instance name under the DeepSeek Harness wordmark in the Web UI. The launcher maintains a tiny local client bundle in each instance profile; no manual plugin install is needed."
         }
       }
     }

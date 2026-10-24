@@ -12,6 +12,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 - Settings has no frame or title; it holds Global Settings, the browser selector and node/launcher versions.
 - New-instance/edit forms no longer show a Profile field (new instances use `web`). The home field follows `.dsh-{name}` as the name is typed until you edit it by hand.
 - The status-bar quick menu and activity-bar view are titled **DSH Launcher Panel** (the old `🐳 DSH` / DSH WebUI / DeepSeek Harness wording is gone); the stop item now reads **Stop DSH Web UI**.
+- New setting `dsh.instanceBrand` (default on) shows the instance name below the official DeepSeek Harness wordmark in the Web UI, in the current DSH language. The launcher maintains a tiny local client bundle in each instance profile; there is no manual plugin installation. Restart an instance to apply.
 - Each instance has its own live server log and status; a running instance is re-adopted after a VS Code reload. The console, account balance and DeepSeek status follow the active instance.
 - A fresh install no longer needs an existing `~/.dsh`: the first Start installs dsh, initializes the target profile and then starts the instance.
 

@@ -8,7 +8,9 @@
  *
  * The launcher deliberately drives DSH only through its public CLI
  * (`dsh <profile> --port …`, `--dump-config` for profile initialization); it
- * never copies a profile template or edits the profile's config.
+ * never copies a profile template. The one exception is the optional instance
+ * branding bundle (see `instance-brand.ts`), which is a launcher-generated local
+ * client bundle added to the profile's bundle list.
  *
  * @module server/instance-runtime
  */
@@ -26,6 +28,7 @@ import { findPortOwner, killPid } from './process.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../paths.ts'
 import { instanceHome, instanceLogPath, type DshInstance } from '../instances.ts'
 import { readConfig, type DshConfig } from './config.ts'
+import { ensureInstanceBrand, removeInstanceBrand } from './instance-brand.ts'
 import { isUpdating } from './update.ts'
 
 /** What a prepared shared install supplies to an instance start. */
@@ -408,6 +411,13 @@ export class InstanceRuntime {
 
     if (!(await this.ensureProfile(prepared, home))) return false
     if (this.state !== 'starting') return false
+    try {
+      if (cfg.instanceBrand) ensureInstanceBrand(home, this.instance.profile, this.instance.name)
+      else removeInstanceBrand(home, this.instance.profile)
+    } catch (error) {
+      // Branding must never block Start; fall back to the official wordmark.
+      this.activity(`⚠ Instance brand skipped: ${error instanceof Error ? error.message : String(error)}`)
+    }
     if (!(await this.spawnServer(prepared, home))) return false
     return this.waitForReady(cfg.port)
   }

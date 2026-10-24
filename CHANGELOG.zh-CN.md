@@ -12,6 +12,7 @@
 - Settings 不设线框和标题，只放 Global Settings、浏览器选择和 node/launcher 版本。
 - 新建/编辑实例表单不再显示 Profile（新实例固定 `web`）；home 默认随名称变成 `.dsh-{name}`，手动改过后不再自动跟随。
 - 状态栏快捷菜单和活动栏视图标题改为 **DSH Launcher Panel**（不再用旧的 `🐳 DSH` / DSH WebUI / DeepSeek Harness 写法）；停止项改为 **Stop DSH Web UI**。
+- 新增 `dsh.instanceBrand`（默认开启）：在 DSH Web UI 的 DeepSeek Harness 官方 wordmark 下方显示实例名，跟随当前 DSH 语言。launcher 会在每个实例 profile 里维护一个很小的本地 client bundle，不需要手动装插件；实例 Stop/Start 后生效。
 - 每个实例有独立的实时服务端日志和状态；VS Code 重载后会重新接管仍在运行的实例。控制台、账户余额和 DeepSeek 状态跟随当前活动实例。
 - 全新安装不再要求已有 `~/.dsh`：第一次 Start 会安装 dsh、初始化目标 profile，再启动实例。
 

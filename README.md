@@ -44,6 +44,7 @@ Settings → search "dsh":
 | dsh.instancePortBase | 31000 | Five-digit base for ports assigned to new instances: the first gets base+1, the next base+2, and so on. The `Default` instance keeps 3080. Range 10000–65535; ports are not edited in the panel. |
 | dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. Machine-local, not synced. |
 | dsh.activeInstance | empty | Id of the active instance; empty falls back to the first instance. |
+| dsh.instanceBrand | true | Show the instance name below the official DeepSeek Harness wordmark in the Web UI. The launcher maintains a tiny local client bundle per profile; the line follows the current DSH language. No manual plugin install. |
 | dsh.autoOpenBrowser | true | Default for instances that do not set their own override. Turn off to keep your current tab; the Start button's "New Tab" click still opens one. |
 | dsh.browser | built-in | Default browser for instances that do not set their own override. `built-in` uses VS Code's Simple Browser (falling back to the system browser if unavailable); `external` opens the system browser |
 | dsh.hideConsole | true | Hide the console window on Windows (also keeps dsh's own tool subprocesses from flashing one) |
