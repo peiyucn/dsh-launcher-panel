@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.3.1] - 2026-10-26
+
+- 启动状态提示不再带 Web UI 后缀。
+
 ## [0.3.0] - 2026-10-25
 
 - launcher 现在可以管理多个 DSH 实例。每个实例有自己的 DSH home 和 profile，Web UI 端口由 launcher 分配（`Default` 保持 3080）。tab 可启动/停止/打开实例，也可新建、编辑或删除；删除实例不会删除 DSH 数据。原有单实例设置会迁移成 `Default` 实例。

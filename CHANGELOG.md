@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.1] - 2026-10-26
+
+- The starting status no longer mentions Web UI.
+
 ## [0.3.0] - 2026-10-25
 
 - The launcher can manage multiple DSH instances. Each instance has its own DSH home and profile, and the launcher assigns its Web UI port (`Default` keeps 3080). Tabs start/stop/open instances and can create, edit or delete them; deleting an instance never deletes DSH data. Existing single-instance settings migrate to a `Default` instance.
