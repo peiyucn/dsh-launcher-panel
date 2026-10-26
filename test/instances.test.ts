@@ -11,6 +11,7 @@ import {
   nextPort,
   normalizeHome,
   normalizeInstances,
+  resolveInitialInstances,
   sameHome,
   validateInstance,
   type DshInstance,
@@ -185,6 +186,46 @@ test('sameHome and isNestedHome compare normalized directories', () => {
   assert.equal(isNestedHome(homeDir, path.join(homeDir, 'child')), true)
   assert.equal(isNestedHome(homeDir, homeDir), false)
   assert.equal(isNestedHome(homeDir, path.join(homeDir, '..', 'other')), false)
+})
+
+test('resolveInitialInstances synthesizes the legacy Default on a first run', () => {
+  const result = resolveInitialInstances(undefined, undefined, 3099, false, options)
+  assert.equal(result.synthesized, true)
+  assert.deepEqual(result.instances.map((entry) => entry.id), ['default'])
+  assert.equal(result.instances[0]?.name, 'Default')
+  assert.equal(result.instances[0]?.port, 3099)
+  assert.equal(result.instances[0]?.home, path.resolve(options.defaultHome))
+  assert.equal(result.activeId, 'default')
+  assert.deepEqual(result.issues, [])
+  assert.equal(result.stored[0]?.home, '', 'the persisted Default keeps "default home" rather than a pinned path')
+})
+
+test('resolveInitialInstances keeps an existing list and does not synthesize', () => {
+  const result = resolveInitialInstances(
+    [{ id: 'one', name: 'One', home: '', profile: 'web', port: 3080 }],
+    'one',
+    3099,
+    false,
+    options,
+  )
+  assert.equal(result.synthesized, false)
+  assert.deepEqual(result.instances.map((entry) => entry.id), ['one'])
+  assert.equal(result.activeId, 'one')
+})
+
+test('resolveInitialInstances does not resurrect a list the user emptied on purpose', () => {
+  const result = resolveInitialInstances([], '', 3099, true, options)
+  assert.equal(result.synthesized, false)
+  assert.deepEqual(result.instances, [])
+  assert.deepEqual(result.issues, [])
+})
+
+test('resolveInitialInstances keeps normalization issues and still offers the Default', () => {
+  // An unreadable settings value must be reported, not silently replaced.
+  const result = resolveInitialInstances([{ id: 'broken' }], undefined, 3099, false, options)
+  assert.equal(result.synthesized, true)
+  assert.deepEqual(result.instances.map((entry) => entry.id), ['default'])
+  assert.ok(result.issues.some((entry) => entry.severity === 'error'))
 })
 
 test('instanceHome resolves the effective home and instanceLogPath uses the id', () => {

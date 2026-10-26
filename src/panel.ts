@@ -251,6 +251,10 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
   private async openInstanceForm(value: string): Promise<void> {
     const manager = getInstanceManager()
     if (!manager || !this.view) return
+    // The form's prefilled name (and the edit form's fields) come from the
+    // settings list: waiting for the bootstrap keeps the prefill consistent
+    // with what the save will validate against.
+    await manager.ready().catch(() => {})
     if (value === 'new') {
       const name = `Instance ${manager.instances().length + 1}`
       this.postToWebview({
@@ -279,6 +283,10 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
   private async saveInstanceForm(value: string | undefined): Promise<void> {
     const manager = getInstanceManager()
     if (!manager || !value) return
+    // Wait for the bootstrap before reading the instance being edited: a save
+    // that raced the first-run setup would otherwise validate against an empty
+    // list and report a bogus "already used" (or lose the instance).
+    await manager.ready().catch(() => {})
     let payload: {
       mode?: unknown
       id?: unknown
@@ -390,13 +398,18 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error('[dsh-launcher-panel] refresh failed:', error)
+      // Keep the known instances and settings issues on screen: sending
+      // `instances: []` turned any refresh failure into "No instances" while the
+      // manager still had them, so creating one then reported "already used".
+      const manager = getInstanceManager()
+      const issues = manager?.issues() ?? []
       try {
         await this.view.webview.postMessage({
           type: 'update',
           status: emptyStatus(),
-          instances: [],
-          activeId: '',
-          issues: [{ index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${msg}` }],
+          instances: manager?.instanceStatuses() ?? [],
+          activeId: manager?.activeInstanceId() ?? '',
+          issues: [...issues, { index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${msg}` }],
           activity: getActivity().concat([{ id: -1, text: `✗ Status refresh failed: ${msg}`, busy: false }]),
           browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')),
           balance: undefined,

@@ -155,6 +155,24 @@ export function panelScript(values: PanelScriptValues): string {
       const running = items.filter((item) => item.running).length
       el.textContent = items.length + ' instance' + (items.length === 1 ? '' : 's') + (running ? ' · ' + running + ' running' : '')
     }
+    // Settings/bootstrap problems (invalid entries, a settings write VS Code
+    // refused) must be visible: an empty instance list without a reason reads as
+    // "there is no instance", which is how a failed first-run save ended up
+    // looking like a broken launcher.
+    function renderIssues(list) {
+      const host = document.getElementById('instanceIssues')
+      if (!host) return
+      host.innerHTML = ''
+      const items = Array.isArray(list) ? list : []
+      for (const issue of items) {
+        if (!issue || typeof issue.message !== 'string' || issue.message === '') continue
+        const line = document.createElement('div')
+        const isError = issue.severity === 'error'
+        line.className = 'instance-issue ' + (isError ? 'error' : 'warning')
+        line.textContent = (isError ? '⚠ ' : 'ℹ ') + issue.message
+        host.appendChild(line)
+      }
+    }
     function renderInstanceMeta(status) {
       status = status || {}
       const active = !!status.id
@@ -562,6 +580,7 @@ export function panelScript(values: PanelScriptValues): string {
       renderRunning(m.status)
       renderTabs(instanceList, currentInstanceId)
       renderInstanceSummary(instanceList)
+      renderIssues(m.issues)
       renderInstanceMeta(m.active)
       renderRuntime(m.status)
       renderLogFiles(m.status)

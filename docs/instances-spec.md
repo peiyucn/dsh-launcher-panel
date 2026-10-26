@@ -103,14 +103,19 @@ interface DshInstance {
 - `dsh.autoOpenBrowser` → 实例 `autoOpenBrowser` 的缺省值
 - `dsh.browser` → 实例 `browser` 的缺省值
 
-### 旧设置迁移
+### 首次运行 / 旧设置迁移
 
 - `dsh.port` 标记为 legacy，升级后只用于合成 `Default`；新实例的端口来自 `dsh.instancePortBase`。
 - 首次激活时，如果尚未迁移过，且 `dsh.instances` 为空：
   - 用 `dsh.port`、`resolveDshHome()`、`profile: 'web'` 合成一个 `Default` 实例；
-  - 写入 `dsh.instances`，设置 `dsh.activeInstance`；
-  - 用一个 `context.globalState` 标记记录已迁移，避免用户删光实例后又被自动重建。
-- 如果 `dsh.instances` 已有内容，不覆盖，只记录迁移标记。
+  - **先在内存里得到这个实例，再尽力写入** `dsh.instances`、设置 `dsh.activeInstance`；
+  - 写入成功后才用 `context.globalState` 标记记录「列表已落地」，避免用户删光实例后又被自动重建（用户删空列表时也写该标记）；
+  - 写入失败不得让初始化失败：实例留在内存里照常可用，面板显示一条黄色警告说明「设置没保存成功、重载窗口后会保存」。见下条。
+- **写 `dsh.instances` 可能失败**：刚安装 / 更新扩展、窗口还没 reload 时，运行中的窗口配置注册表里可能还没有这个键，`update()` 会报 `Unable to write to User Settings because dsh.instances is not a registered configuration.`。这不是错误配置，重载窗口即可。启动路径必须容忍它：
+  - 合成实例、创建/编辑/删除实例都**先落盘、成功后再改内存**；写失败就报错并回滚，绝不留下「面板看不见但校验时存在」的幽灵实例（否则重试会报 `name "…" is already used`）。
+  - 面板必须把设置/初始化问题渲染出来（`issues`），不能只显示空的实例列表。
+  - 首次安装时 `dsh.pkgPath` / `dsh.srcPath` 的写入失败同样只警告、不阻断 Start。
+- 如果 `dsh.instances` 已有内容，不覆盖。
 - `dsh.port` 保留在 schema 中并标注 deprecated；迁移后不再读取。
 - README / CHANGELOG 必须写明这次迁移和 `dsh.port` 的变化。
 

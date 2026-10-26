@@ -222,6 +222,13 @@ export const PANEL_CSS = `
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
   .instance-summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lap-fg2); font-size: 10px; }
+  /* Settings/bootstrap diagnostics (invalid entries, a refused settings write).
+     Hidden when empty so a healthy panel looks unchanged. */
+  .instance-issues { display: flex; flex-direction: column; gap: 2px; }
+  .instance-issues:empty { display: none; }
+  .instance-issue { font-size: 10px; line-height: 14px; word-break: break-word; color: var(--lap-fg2); }
+  .instance-issue.warning { color: var(--lap-warning); }
+  .instance-issue.error { color: var(--lap-danger); }
   .new-instance-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 4px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; flex: none; }
   .new-instance-btn:hover { background: var(--lap-hover); }
   .instance-meta { border-top: 0.5px solid var(--lap-border-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }

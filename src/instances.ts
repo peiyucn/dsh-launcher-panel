@@ -115,6 +115,18 @@ export interface ValidatedInstance {
   issues: InstanceIssue[]
 }
 
+/** The instance list a session starts from, plus where it came from. */
+export interface InitialInstances extends NormalizedInstances {
+  /** True when the list was synthesized because settings held no instance. */
+  synthesized: boolean
+  /**
+   * The list in its persisted form. The synthesized Default keeps `home: ''`
+   * there, so it keeps following the default DSH home instead of pinning the
+   * directory that happened to be current on the first run.
+   */
+  stored: DshInstance[]
+}
+
 function issue(
   index: number,
   field: InstanceIssueField,
@@ -415,6 +427,43 @@ export function migrateLegacyInstance(legacyPort: unknown): DshInstance {
     home: '',
     profile: DEFAULT_PROFILE,
     port,
+  }
+}
+
+/**
+ * Decide the instance list a session starts from.
+ *
+ * The persisted settings are the store, but reading and writing them are not
+ * equally reliable: a freshly installed or updated extension can be activated
+ * before VS Code registers its configuration contribution, so reads still yield
+ * the defaults while writes fail ("… is not a registered configuration"). The
+ * synthesized Default therefore must not be contingent on the write: this
+ * function only decides the list, and the caller persists it best-effort.
+ *
+ * @param listAuthoritative - the list was persisted (or deliberately emptied)
+ *   before, so an empty list is the user's decision, not a first run.
+ */
+export function resolveInitialInstances(
+  raw: unknown,
+  activeRaw: unknown,
+  legacyPort: unknown,
+  listAuthoritative: boolean,
+  options: InstanceModelOptions,
+): InitialInstances {
+  const current = normalizeInstances(raw, activeRaw, options)
+  if (current.instances.length > 0 || listAuthoritative) {
+    return { ...current, synthesized: false, stored: current.instances }
+  }
+  const migrated = migrateLegacyInstance(legacyPort)
+  const normalized = normalizeInstances([migrated], migrated.id, options)
+  return {
+    instances: normalized.instances,
+    activeId: normalized.activeId,
+    // Keep the normalization errors so a broken settings value is reported,
+    // not silently replaced by the synthesized instance.
+    issues: [...current.issues, ...normalized.issues],
+    synthesized: normalized.instances.length > 0,
+    stored: [migrated],
   }
 }
 

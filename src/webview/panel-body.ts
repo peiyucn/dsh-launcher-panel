@@ -40,7 +40,10 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="instance-summary" id="instanceSummary"></span>
       <button class="icon-btn new-instance-btn" id="newInstanceBtn" title="New instance" aria-label="New instance">＋</button>
     </div>
-    <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances"></div>
+    <div class="instance-tabs" id="instanceTabs" role="tablist" aria-label="DSH instances">
+      <span class="instance-tabs-empty">Loading instances…</span>
+    </div>
+    <div class="instance-issues" id="instanceIssues"></div>
     <div class="status">
       <span class="dot" id="dot"></span>
       <div class="status-text">

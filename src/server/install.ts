@@ -95,11 +95,24 @@ export async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: strin
   return undefined
 }
 
-/** Persist a dsh path setting (idempotent). */
-export async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promise<void> {
+/**
+ * Persist a dsh path setting.
+ *
+ * Never throws: a freshly installed or updated extension can run in a window
+ * whose configuration registry does not know the setting yet, and that must not
+ * abort a first Start — the chosen path still works for this session, it just is
+ * not remembered until a window reload.
+ *
+ * @returns true when the value is persisted (or already equal), false otherwise.
+ */
+export async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promise<boolean> {
   const c = vscode.workspace.getConfiguration('dsh')
-  if ((c.get<string>(key) ?? '') !== value) {
+  if ((c.get<string>(key) ?? '') === value) return true
+  try {
     await c.update(key, value, vscode.ConfigurationTarget.Global)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -219,8 +232,11 @@ export async function preparePkgStart(
     if (!chosen) return undefined
     // Persist the user's choice even when it is the managed default: the
     // setting then shows the actual install path and pins it against future
-    // default-location changes.
-    await saveDshSetting('pkgPath', chosen)
+    // default-location changes. A failed write only means the choice is not
+    // remembered, so it must not abort the install.
+    if (!(await saveDshSetting('pkgPath', chosen))) {
+      host.addActivity(`⚠ could not remember dsh.pkgPath — installing to ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
+    }
     installDir = chosen
   }
   host.addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
@@ -297,8 +313,12 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
   const chosen = await chooseInstallDir('source', managedSourceCheckout())
   if (!chosen) return undefined
   // Persist the choice even when it is the managed default: the setting then
-  // shows the actual clone path and pins it against future default changes.
-  await saveDshSetting('srcPath', chosen)
+  // shows the actual clone path and pins it against future default changes. A
+  // failed write only means the choice is not remembered, so it must not abort
+  // the clone.
+  if (!(await saveDshSetting('srcPath', chosen))) {
+    host.addActivity(`⚠ could not remember dsh.srcPath — using ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
+  }
   // The picked folder may already be a checkout (e.g. the user pointed at
   // their own clone): reuse it instead of cloning into it, which git would
   // refuse for a non-empty folder anyway.
