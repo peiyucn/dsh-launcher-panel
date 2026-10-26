@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.3] - 2026-10-26
+
+- The panel console now shows only each launch's startup output. A running dsh no longer keeps filling it with its periodic plugin log lines (model listings and similar); the complete log stays in the instance's `server.log`, linked from the panel.
+- `dsh.pkgPath`, `dsh.srcPath`, `dsh.nodePath`, `dsh.runMode` and `dsh.port` are machine-local settings and are no longer synchronized between machines. A `dsh.pkgPath` left over from another machine whose drive does not exist here is ignored in favour of the managed location.
+
 ## [0.3.2] - 2026-10-26
 
 - A first run no longer gets stuck when VS Code has not registered the extension's settings yet (typically right after installing or updating it without reloading the window). The `Default` instance stays usable and the panel warns that a window reload is needed to save it, instead of showing an empty instance list and then refusing to create one with "already used".

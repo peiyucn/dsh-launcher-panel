@@ -4,6 +4,11 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.3.3] - 2026-10-26
+
+- 面板 Console 只显示每次启动过程的输出。运行中的 dsh 不会再把它周期性的插件日志（模型列表之类）一直灌进 Console；完整日志仍在实例的 `server.log` 里，面板可点击打开。
+- `dsh.pkgPath`、`dsh.srcPath`、`dsh.nodePath`、`dsh.runMode`、`dsh.port` 改为机器本地设置，不再跨机同步。若 `dsh.pkgPath` 里留着别的机器同步来的路径、而它的盘符在本机不存在，launcher 会忽略它并改用自管位置。
+
 ## [0.3.2] - 2026-10-26
 
 - 修复首次运行卡死：刚安装或更新扩展、窗口还没重载时，VS Code 尚未注册扩展的设置，写入会失败。现在 `Default` 实例照常可用，面板会提示「重载窗口后即可保存」，而不是显示空实例列表、再用 "already used" 挡住创建。
