@@ -220,6 +220,24 @@ export function maskPath(p: string): string {
   return '…/' + segs[segs.length - 1]
 }
 
+/**
+ * Whether the drive a configured path lives on exists on this machine.
+ *
+ * `dsh.pkgPath` / `dsh.srcPath` / `dsh.nodePath` are machine-local paths, but
+ * older versions let VS Code synchronize them, so a value recorded on another
+ * machine (`D:\dsh`, a home directory that does not exist here) can still sit in
+ * local settings. Treating it as usable sends an install to a missing drive;
+ * the callers fall back to a machine-local default instead.
+ *
+ * Only local drive roots are probed: an UNC root may point at an offline share,
+ * and a filesystem probe there could block for a long time.
+ */
+export function driveRootExists(target: string): boolean {
+  const root = path.parse(path.resolve(target)).root
+  if (!/^[A-Za-z]:[\\/]$/.test(root)) return true
+  return fs.existsSync(root)
+}
+
 // --- Official client build (the web UI brand shipped by published dsh) ---
 
 /** Build selector env var: dsh's root build embeds the official brand when set to the official profile. */

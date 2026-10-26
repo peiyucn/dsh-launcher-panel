@@ -37,9 +37,9 @@ Settings → search "dsh":
 |---|---|---|
 | dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx. Shared by every instance; stop all instances before switching. |
 | dsh.npmChannel | latest | npm dist-tag pkg mode installs from, and what the Update button targets: `latest`, `next` (rc), or `alpha`. An installed dsh always starts as-is — the channel never downgrades or auto-upgrades it. Source mode ignores this and tracks the newest official `dsh-v…` tag instead. |
-| dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. Empty uses a managed default. |
-| dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. Empty clones automatically. |
-| dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH |
+| dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. Empty uses a managed default. Machine-local path, not synced. |
+| dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. Empty clones automatically. Machine-local path, not synced. |
+| dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH. Machine-local path, not synced. |
 | dsh.port | 3080 | Legacy single-instance port. Read once to create the `Default` instance. |
 | dsh.instancePortBase | 31000 | Five-digit base for ports assigned to new instances: the first gets base+1, the next base+2, and so on. The `Default` instance keeps 3080. Range 10000–65535; ports are not edited in the panel. |
 | dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. Machine-local, not synced. |
@@ -53,7 +53,7 @@ Settings → search "dsh":
 
 ## Notes
 
-* pkg mode installs dsh with pnpm (the tool the dsh repo itself uses) and runs it directly. `npx` is not offered: npm's peer resolver can hang indefinitely on dsh's dependency graph. The first install records where it went in `dsh.pkgPath` / `dsh.srcPath`, so it shows up in Settings and stays pinned.
+* pkg mode installs dsh with pnpm (the tool the dsh repo itself uses) and runs it directly. `npx` is not offered: npm's peer resolver can hang indefinitely on dsh's dependency graph. The first install records where it went in `dsh.pkgPath` / `dsh.srcPath`, so it shows up in Settings and stays pinned on that machine. These two (and `dsh.nodePath`) are machine-local paths and are deliberately not synchronized between machines; a `dsh.pkgPath` left over from another machine whose drive does not exist here is ignored in favor of the managed location.
 * The panel's mode pill uses short labels: `pkg` = the pnpm mode, `src` = the source mode. The mode is global: every instance runs the same shared dsh tree, and switching it requires stopping all instances.
 * Each instance is a runtime coordinate only: a `DSH_HOME`, a profile inside it, and an auto-assigned port. Its model/provider/preset/credential configuration lives in that home's profile and is not managed by the launcher. Two instances may point at the same home, but only one can run at a time (DSH's sessions/workspaces/credentials are shared); the panel shows a warning.
 * Delete removes the instance from `dsh.instances` only. It never deletes the home, sessions or workspaces; remove those yourself if you want them gone.

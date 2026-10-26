@@ -37,9 +37,9 @@
 | --------------- | --------- | ----------------------------------------------------------- |
 | dsh.runMode     | pnpm      | `pnpm` 把 dsh 装进 launcher 自管目录并运行；`source` 通过 tsx 运行本地检出。所有实例共用这一份 dsh；切换前须停止全部实例。 |
 | dsh.npmChannel  | latest    | pkg 模式安装所用的 npm dist-tag，也是 Update 的目标：`latest`、`next`（rc）或 `alpha`。已安装的 dsh 始终按原样启动，通道不会降级或自动升级它。source 模式忽略此项，跟踪最新的官方 `dsh-v…` tag。 |
-| dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空用自管默认位置 |
-| dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则自动 clone |
-| dsh.nodePath    | 空         | node.exe 路径；留空用 PATH 上的 node |
+| dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空用自管默认位置。机器本地路径，不同步。 |
+| dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则自动 clone。机器本地路径，不同步。 |
+| dsh.nodePath    | 空         | node.exe 路径；留空用 PATH 上的 node。机器本地路径，不同步。 |
 | dsh.port        | 3080      | 旧版单实例端口；只在迁移时读取一次，用来创建 `Default` 实例。 |
 | dsh.instancePortBase | 31000 | 新实例五位端口的根：第一个新实例是 base+1，之后 base+2……`Default` 保持 3080。范围 10000–65535；面板里不编辑端口。 |
 | dsh.instances   | `[]`      | 实例列表：`{ id, name, home, profile, port, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。机器本地，不同步。 |
@@ -53,7 +53,7 @@
 
 ## 说明
 
-* pkg 模式用 pnpm（dsh 仓库自己用的工具）安装并直接运行 dsh。不提供 `npx`：npm 的 peer 解析器在 dsh 的依赖图上可能无限挂起。首次安装的位置会写入 `dsh.pkgPath` / `dsh.srcPath`，在设置里可见并保持固定。
+* pkg 模式用 pnpm（dsh 仓库自己用的工具）安装并直接运行 dsh。不提供 `npx`：npm 的 peer 解析器在 dsh 的依赖图上可能无限挂起。首次安装的位置会写入 `dsh.pkgPath` / `dsh.srcPath`，在设置里可见并在本机保持固定。`dsh.pkgPath`、`dsh.srcPath`、`dsh.nodePath` 都是机器本地路径，刻意不参与 Settings Sync 同步；如果 `dsh.pkgPath` 里还留着别的机器同步来的路径、而它的盘符在本机不存在，launcher 会忽略它并改用自管位置。
 * 面板上的模式 pill 用简写：`pkg` 即 pnpm 模式，`src` 即 source 模式。模式是全局的：所有实例共用同一份 dsh 树，切换前须停止全部实例。
 * 实例只描述运行坐标：一个 `DSH_HOME`、其中的 profile、一个自动分配的端口。模型/provider/preset/凭据都在该 home 的 profile 里，launcher 不管理。两个实例可以指向同一个 home，但同一时间只能跑一个（DSH 的 sessions/workspaces/credentials 是共享的）；面板会显示警告。
 * Delete 只从 `dsh.instances` 移除实例，绝不删除 home、sessions 或 workspaces；要清理由你自己处理。

@@ -165,20 +165,23 @@
         "dsh.pkgPath": {
           "order": 3,
           "type": "string",
+          "scope": "machine",
           "default": "",
-          "description": "Optional: custom directory where pkg mode installs dsh. When empty, the extension uses a managed default location."
+          "description": "Optional: custom directory where pkg mode installs dsh. When empty, the extension uses a managed default location. Machine-local path: not synchronized across machines."
         },
         "dsh.srcPath": {
           "order": 4,
           "type": "string",
+          "scope": "machine",
           "default": "",
-          "description": "Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically."
+          "description": "Optional: path to an existing deepseek-harness clone for source mode. When empty, the extension clones the repo automatically. Machine-local path: not synchronized across machines."
         },
         "dsh.nodePath": {
           "order": 5,
           "type": "string",
+          "scope": "machine",
           "default": "",
-          "description": "Path to node.exe. Leave empty to use the node on PATH."
+          "description": "Path to node.exe. Leave empty to use the node on PATH. Machine-local path: not synchronized across machines."
         },
         "dsh.port": {
           "order": 6,

@@ -43,6 +43,7 @@ import {
   findSourceCheckout,
   pkgInstallDir,
   preparePkgStart,
+  unreachablePkgPath as unreachablePkgPathSetting,
   type InstallHost,
 } from './server/install.ts'
 import {
@@ -564,6 +565,13 @@ export class InstanceManager {
   private async prepareInternal(): Promise<PreparedDsh | undefined> {
     const cfg = readConfig()
     await this.ready()
+    // A dsh.pkgPath synchronized from another machine may point at a drive that
+    // does not exist here; pkgInstallDir falls back to the managed location, and
+    // this says so instead of letting the panel show an install in a mystery path.
+    const unreachablePkgPath = cfg.runMode === 'pnpm' ? unreachablePkgPathSetting(cfg) : undefined
+    if (unreachablePkgPath !== undefined) {
+      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachablePkgPath)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
+    }
     const installHost = this.installHost()
     await detectDshVersion(cfg, this.detectHost())
     if (cfg.runMode === 'source') {

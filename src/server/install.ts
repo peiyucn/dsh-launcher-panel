@@ -18,7 +18,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { dshBaseDir, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from '../paths.ts'
+import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from '../paths.ts'
 import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
 import { resolveCommandEntry, runResolved } from '../proc.ts'
@@ -64,9 +64,24 @@ export function managedSourceCheckout(): string {
   return path.join(dshBaseDir(), 'source')
 }
 
-/** The pkg package dir: the user's dsh.pkgPath when set, else the managed default. */
+/**
+ * The pkg package dir: the user's `dsh.pkgPath` when it is usable here, else the
+ * managed default.
+ *
+ * `dsh.pkgPath` used to be synchronized across machines, so a path recorded
+ * elsewhere (e.g. `D:\dsh` on a machine without D:) can still be in this
+ * machine's settings; installing there would fail or scatter files, so the
+ * managed location wins until the setting is fixed.
+ */
 export function pkgInstallDir(cfg: { pkgPath: string }): string {
-  return cfg.pkgPath && cfg.pkgPath.trim() !== '' ? cfg.pkgPath : managedPackageDir()
+  const custom = cfg.pkgPath.trim()
+  return custom !== '' && driveRootExists(custom) ? custom : managedPackageDir()
+}
+
+/** The configured pkg path when this machine cannot reach it, else undefined. */
+export function unreachablePkgPath(cfg: { pkgPath: string }): string | undefined {
+  const custom = cfg.pkgPath.trim()
+  return custom !== '' && !driveRootExists(custom) ? custom : undefined
 }
 
 /** The installed @deepseek-ai/dsh version for the current pkg install dir. */

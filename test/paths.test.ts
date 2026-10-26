@@ -19,6 +19,7 @@ import {
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
   dshBaseDir,
+  driveRootExists,
   installedDshVersion,
   isDshCheckout,
   installManifestRepairable,
@@ -343,4 +344,18 @@ test('checkoutDepsStale compares the lockfile against the install record', () =>
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('driveRootExists accepts a reachable location and never probes a UNC root', () => {
+  // A normal local path always resolves to a reachable root (the drive exists).
+  const root = mkdtempSync(join(tmpdir(), 'dsh-drive-'))
+  try {
+    assert.equal(driveRootExists(join(root, 'package')), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+  // `dsh.pkgPath` used to be synchronized across machines: a path recorded on
+  // another machine may name a drive that does not exist here. UNC roots are
+  // reported as reachable without probing — an offline share could block.
+  assert.equal(driveRootExists('\\\\dsh-test-server\\share\\package'), true)
 })
