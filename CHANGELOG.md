@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.2] - 2026-10-26
+
+- A first run no longer gets stuck when VS Code has not registered the extension's settings yet (typically right after installing or updating it without reloading the window). The `Default` instance stays usable and the panel warns that a window reload is needed to save it, instead of showing an empty instance list and then refusing to create one with "already used".
+- Start now works with pnpm 12: its npm package ships a native `pnpm.exe`, so on Windows the pnpm shim points at that executable instead of a Node script. The launcher runs it directly, and also accepts `%~dp0`-style, unquoted and relative shim paths. When pnpm really cannot be launched, it says why and suggests reinstalling pnpm instead of reporting a registry/network failure.
+
 ## [0.3.1] - 2026-10-26
 
 - The starting status no longer mentions Web UI.
