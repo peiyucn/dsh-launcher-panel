@@ -144,12 +144,13 @@
         "dsh.runMode": {
           "order": 1,
           "type": "string",
+          "scope": "machine",
           "enum": [
             "pnpm",
             "source"
           ],
           "default": "pnpm",
-          "description": "How to run DeepSeek Harness: 'pnpm' installs dsh into a launcher-managed location and runs 'pnpm exec dsh web'; 'source' runs a local checkout via tsx. Normally set with the mode pill in the panel."
+          "description": "How to run DeepSeek Harness: 'pnpm' installs dsh into a launcher-managed location and runs 'pnpm exec dsh web'; 'source' runs a local checkout via tsx. Normally set with the mode pill in the panel. Machine-local: source mode depends on a checkout and toolchain that exist on this machine, so the choice is not synchronized."
         },
         "dsh.npmChannel": {
           "order": 2,
@@ -186,8 +187,9 @@
         "dsh.port": {
           "order": 6,
           "type": "number",
+          "scope": "machine",
           "default": 3080,
-          "description": "Legacy single-instance port. Read once to create the default instance in dsh.instances; ports are otherwise assigned by the launcher.",
+          "description": "Legacy single-instance port. Read once to create the default instance in dsh.instances; ports are otherwise assigned by the launcher. Machine-local: ports belong to one machine and are not synchronized.",
           "deprecationMessage": "Multi-instance management uses dsh.instances; dsh.port is only read once to migrate the default instance."
         },
         "dsh.instancePortBase": {

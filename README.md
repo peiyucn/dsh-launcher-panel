@@ -35,12 +35,12 @@ Settings → search "dsh":
 
 | Key | Default | Description |
 |---|---|---|
-| dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx. Shared by every instance; stop all instances before switching. |
+| dsh.runMode | pnpm | `pnpm` installs dsh into a launcher-managed location and runs `pnpm exec dsh web`; `source` runs a local checkout via tsx. Shared by every instance; stop all instances before switching. Machine-local, not synced: source mode depends on this machine's checkout and toolchain. |
 | dsh.npmChannel | latest | npm dist-tag pkg mode installs from, and what the Update button targets: `latest`, `next` (rc), or `alpha`. An installed dsh always starts as-is — the channel never downgrades or auto-upgrades it. Source mode ignores this and tracks the newest official `dsh-v…` tag instead. |
 | dsh.pkgPath | empty | Optional: custom directory where pkg mode installs dsh. Empty uses a managed default. Machine-local path, not synced. |
 | dsh.srcPath | empty | Optional: path to an existing deepseek-harness clone for source mode. Empty clones automatically. Machine-local path, not synced. |
 | dsh.nodePath | empty | Path to node.exe; empty uses the node on PATH. Machine-local path, not synced. |
-| dsh.port | 3080 | Legacy single-instance port. Read once to create the `Default` instance. |
+| dsh.port | 3080 | Legacy single-instance port. Read once to create the `Default` instance. Machine-local, not synced. |
 | dsh.instancePortBase | 31000 | Five-digit base for ports assigned to new instances: the first gets base+1, the next base+2, and so on. The `Default` instance keeps 3080. Range 10000–65535; ports are not edited in the panel. |
 | dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. Machine-local, not synced. |
 | dsh.activeInstance | empty | Id of the active instance; empty falls back to the first instance. |

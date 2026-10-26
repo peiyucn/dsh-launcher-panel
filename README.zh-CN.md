@@ -35,12 +35,12 @@
 
 | 键               | 默认值       | 说明                                                          |
 | --------------- | --------- | ----------------------------------------------------------- |
-| dsh.runMode     | pnpm      | `pnpm` 把 dsh 装进 launcher 自管目录并运行；`source` 通过 tsx 运行本地检出。所有实例共用这一份 dsh；切换前须停止全部实例。 |
+| dsh.runMode     | pnpm      | `pnpm` 把 dsh 装进 launcher 自管目录并运行；`source` 通过 tsx 运行本地检出。所有实例共用这一份 dsh；切换前须停止全部实例。机器本地，不同步：source 模式依赖本机的检出与工具链。 |
 | dsh.npmChannel  | latest    | pkg 模式安装所用的 npm dist-tag，也是 Update 的目标：`latest`、`next`（rc）或 `alpha`。已安装的 dsh 始终按原样启动，通道不会降级或自动升级它。source 模式忽略此项，跟踪最新的官方 `dsh-v…` tag。 |
 | dsh.pkgPath      | 空         | 可选：pkg 模式安装 dsh 的自定义目录；留空用自管默认位置。机器本地路径，不同步。 |
 | dsh.srcPath     | 空         | 可选：source 模式已有的 deepseek-harness 克隆路径；留空则自动 clone。机器本地路径，不同步。 |
 | dsh.nodePath    | 空         | node.exe 路径；留空用 PATH 上的 node。机器本地路径，不同步。 |
-| dsh.port        | 3080      | 旧版单实例端口；只在迁移时读取一次，用来创建 `Default` 实例。 |
+| dsh.port        | 3080      | 旧版单实例端口；只在迁移时读取一次，用来创建 `Default` 实例。机器本地，不同步。 |
 | dsh.instancePortBase | 31000 | 新实例五位端口的根：第一个新实例是 base+1，之后 base+2……`Default` 保持 3080。范围 10000–65535；面板里不编辑端口。 |
 | dsh.instances   | `[]`      | 实例列表：`{ id, name, home, profile, port, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。机器本地，不同步。 |
 | dsh.activeInstance | 空      | 当前活动实例 id；空则回退到第一个实例 |
