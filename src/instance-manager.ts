@@ -333,14 +333,20 @@ export class InstanceManager {
     }
   }
 
-  /** Recently active instance server output plus the shared launcher feed. */
+  /**
+   * Recently active instance server output plus the shared launcher feed.
+   *
+   * Only the startup output is mirrored (see `InstanceRuntime.consoleLines`):
+   * a running dsh's periodic plugin logging is not a launcher event and does
+   * not belong in the panel console.
+   */
   activityFor(id: string): ActivityEntry[] {
     const result: ActivityEntry[] = getActivity().map((entry) => ({ ...entry }))
     const runtime = this.runtimes.get(id)
     if (runtime) {
-      const lines = runtime.logLines()
+      const lines = runtime.consoleLines()
       if (lines.length > 0) {
-        result.push({ id: --this.logLineSeq, text: `── ${runtime.instance.name} server log ──`, busy: false })
+        result.push({ id: --this.logLineSeq, text: `── ${runtime.instance.name} startup output ──`, busy: false })
         for (const line of lines) result.push({ id: --this.logLineSeq, text: line, busy: false })
       }
     }

@@ -188,6 +188,8 @@ export class InstanceRuntime {
   private logTimer: ReturnType<typeof setInterval> | undefined
   private logWatcher: fs.FSWatcher | undefined
   private logSourcePath = ''
+  /** The startup output frozen when the current start settled; shown by the panel console. */
+  private consoleLog: string[] = []
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -217,6 +219,17 @@ export class InstanceRuntime {
   }
 
   private setState(state: InstanceState): void {
+    // A start's dsh output is captured once, when it settles. After that the
+    // panel console stops following the file: a running dsh writes periodic
+    // plugin chatter (model listings and similar) forever, and mirroring the
+    // tail kept the launcher console scrolling with messages that are not
+    // launcher events. The full log stays in server.log, linked in the panel.
+    if (this.state === 'starting' && state !== 'starting') {
+      // Only what this start captured: reading the file here could surface an
+      // older run's tail when the start failed before it ever spawned.
+      this.consoleLog = this.logLinesCache.slice(-LOG_TAIL_LINES)
+      this.stopLogPump()
+    }
     this.state = state
   }
 
@@ -241,8 +254,10 @@ export class InstanceRuntime {
     if (!url) return false
     this.url = url
     this.error = ''
+    // An adopted run was not started by this host, so there is no startup
+    // output of ours to show; its log stays in the file.
+    this.consoleLog = []
     this.setState('running')
-    this.startLogPump()
     return true
   }
 
@@ -395,6 +410,7 @@ export class InstanceRuntime {
     if (isUpdating()) return this.fail('a dsh update is in progress — wait for it to finish')
 
     this.error = ''
+    this.consoleLog = []
     this.setState('starting')
     const home = this.resolveHome()
     try {
@@ -508,8 +524,6 @@ export class InstanceRuntime {
       this.url = ''
       this.stopLogPump()
       this.setState('stopped')
-    } else if (open && this.state === 'running' && this.logTimer === undefined) {
-      this.startLogPump()
     }
   }
 
@@ -600,10 +614,17 @@ export class InstanceRuntime {
     }
   }
 
-  /** Recent server output for the console. */
-  logLines(maxLines = LOG_TAIL_LINES): string[] {
-    if (this.logLinesCache.length === 0) return readLogTail(this.logSource(), maxLines)
-    return this.logLinesCache.slice(-maxLines)
+  /**
+   * The dsh output the panel console shows right now.
+   *
+   * While starting it follows what this start captured live (that is the wait
+   * the user is watching); once the start settled it shows the frozen startup
+   * output, so a running instance's periodic plugin logging never fills the
+   * launcher console. The full log stays in server.log, linked in the panel.
+   */
+  consoleLines(maxLines = LOG_TAIL_LINES): string[] {
+    if (this.state === 'starting') return this.logLinesCache.slice(-maxLines)
+    return this.consoleLog.slice(-maxLines)
   }
 
   /** Truncate the instance server log (Clear). */
@@ -618,7 +639,10 @@ export class InstanceRuntime {
     this.logLinesCache = []
     this.logBuffer = ''
     this.logOffset = 0
-    if (this.state === 'running' || this.state === 'starting') this.startLogPump()
+    this.consoleLog = []
+    // Only a start in progress feeds the console; a running server's output is
+    // deliberately not mirrored (see consoleLines).
+    if (this.state === 'starting') this.startLogPump()
   }
 
   /** Stop timers/watchers without touching the DSH process. */
