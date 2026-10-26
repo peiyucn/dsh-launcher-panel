@@ -90,7 +90,7 @@ export function panelScript(values: PanelScriptValues): string {
         setStatusDot('working')
         statusText.textContent = stopping
           ? 'Stopping…'
-          : (updating ? 'Updating dsh…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness Web UI…'))
+          : (updating ? 'Updating dsh…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'))
         startBtn.textContent = stopping
           ? 'Stopping…'
           : (updating ? 'Updating…' : (installing ? 'Installing…' : 'Starting…'))
