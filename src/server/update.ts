@@ -143,7 +143,9 @@ async function runDshUpdateInner(host: UpdateHost): Promise<void> {
     if (!pnpm) return
     const latest = await latestDshVersion(cfg.npmChannel, host.dbg, pnpm.command)
     if ('error' in latest) {
-      host.addActivity(`↑ Update check failed (network) — ${latest.error}`)
+      host.addActivity(latest.pnpmUnusable
+        ? `↑ Update check failed — pnpm cannot be launched: ${latest.error}`
+        : `↑ Update check failed (network) — ${latest.error}`)
       return
     }
     if (pkgInstalledVersion(cfg) === latest.version) {

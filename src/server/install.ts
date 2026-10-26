@@ -21,7 +21,7 @@ import * as vscode from 'vscode'
 import { dshBaseDir, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from '../paths.ts'
 import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
-import { runResolved } from '../proc.ts'
+import { resolveCommandEntry, runResolved } from '../proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from '../pnpm.ts'
 
 /**
@@ -121,6 +121,10 @@ export async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string):
  * carries its reason (`pnpm view` stderr / a timeout) so the panel can say why
  * instead of a blanket "could not resolve the latest dsh version".
  *
+ * A failure caused by pnpm itself (missing, or a shim whose Node entry cannot be
+ * resolved) is marked `pnpmUnusable`: blaming the network for a broken pnpm
+ * sends the user down the wrong path.
+ *
  * ⚠️ When `pnpmCmd` is omitted the command is resolved here rather than
  * defaulting to the bare name `pnpm`: on Windows that name cannot be spawned
  * (`ENOENT` — Node does not expand PATHEXT) and would silently report every
@@ -130,10 +134,16 @@ export async function latestDshVersion(
   channel: NpmChannel,
   dbg: (line: string) => void,
   pnpmCmd?: string,
-): Promise<{ version: string } | { error: string }> {
+): Promise<{ version: string } | { error: string; pnpmUnusable?: boolean }> {
   const spec = npmSpecForChannel(channel)
   const command = pnpmCmd ?? await findPnpm()
-  if (command === undefined) return { error: 'pnpm was not found on PATH' }
+  if (command === undefined) return { error: 'pnpm was not found on PATH', pnpmUnusable: true }
+  const resolution = resolveCommandEntry(command)
+  if (!resolution.ok) {
+    const error = `${maskPath(command)} cannot be launched: ${resolution.reason}`
+    dbg(`pnpm shim unresolved: ${error}`)
+    return { error, pnpmUnusable: true }
+  }
   const result = await runResolved(command, ['view', spec, 'version'], PNPM_VIEW_TIMEOUT_MS)
   if (!result.ok) {
     // Keep the failure visible for diagnosis: registry outages and cmd
@@ -219,6 +229,12 @@ export async function preparePkgStart(
   const resolved = await host.withBusy('ℹ Resolving the dsh channel version…', () => latestDshVersion(cfg.npmChannel, host.dbg, pnpmCmd))
   if ('error' in resolved) {
     host.setDshState('missing')
+    if (resolved.pnpmUnusable) {
+      // A broken/odd pnpm shim is not a network problem; say what to do about it.
+      host.addActivity(`✗ pnpm cannot be launched: ${resolved.error} — reinstall it ("npm install -g pnpm"), then try again`)
+      void vscode.window.showErrorMessage('DeepSeek Harness: pnpm is installed but cannot be launched. Run "npm install -g pnpm" in a terminal, then try again.')
+      return undefined
+    }
     host.addActivity(`✗ dsh is not installed and the registry is unreachable (${resolved.error}) — check your network and try again`)
     void vscode.window.showErrorMessage('DeepSeek Harness: unable to reach the registry to install dsh. Check your network connection.')
     return undefined

@@ -37,7 +37,7 @@ import * as vscode from 'vscode'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
 import { NODE_PROBE_TIMEOUT_MS, TASKKILL_TIMEOUT_MS } from '../timing.ts'
-import { decodeChildOutput, isProcessAlive, resolveCommand } from '../proc.ts'
+import { decodeChildOutput, isProcessAlive, resolveCommandEntry } from '../proc.ts'
 import { ensureLogDir, serverLogFile, truncateServerLog } from './activity.ts'
 import { startLogTail, type LogTailHost } from './log-tail.ts'
 
@@ -222,15 +222,15 @@ export function spawnPkg(cfg: { port: number }, pnpmCmd: string, version: string
   // 网络/元数据问题时，会把本可正常运行的已装 dsh 挡在启动之外。
   const execArgs = ['--config.verify-deps-before-run=false', 'exec', 'dsh', ...webArgs]
   // On Windows `pnpm` is a `.cmd` shim, which Node refuses to spawn directly, so
-  // run the Node script that shim wraps (see resolveCommand).
-  const resolved = resolveCommand(pnpmCmd)
-  if (resolved === undefined) {
-    host.addActivity(`✗ ${pnpmCmd} is a Windows batch shim whose Node entry could not be resolved — install pnpm with npm and try again`)
-    void vscode.window.showErrorMessage(`DeepSeek Harness: ${pnpmCmd} cannot be launched safely. Install pnpm with npm and try again.`)
+  // run the Node script that shim wraps (see resolveCommandEntry).
+  const resolution = resolveCommandEntry(pnpmCmd)
+  if (!resolution.ok) {
+    host.addActivity(`✗ pnpm cannot be launched (${resolution.reason}) — reinstall it with "npm install -g pnpm" and try again`)
+    void vscode.window.showErrorMessage('DeepSeek Harness: pnpm cannot be launched. Run "npm install -g pnpm" in a terminal, then try again.')
     host.onLaunchFailed()
     return false
   }
-  return spawnServer(resolved.file, [...resolved.args, ...execArgs], installDir, host)
+  return spawnServer(resolution.command.file, [...resolution.command.args, ...execArgs], installDir, host)
 }
 
 /**

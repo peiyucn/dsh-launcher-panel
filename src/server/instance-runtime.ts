@@ -19,7 +19,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { decodeChildOutput, isProcessAlive, resolveCommand, sleep } from '../proc.ts'
+import { decodeChildOutput, isProcessAlive, resolveCommandEntry, sleep } from '../proc.ts'
 import { extractWebToken } from '../env.ts'
 import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
 import { HTTP_PROBE_TIMEOUT_MS, LOG_TAIL_POLL_MS, PORT_POLL_INTERVAL_MS, STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../timing.ts'
@@ -266,10 +266,10 @@ export class InstanceRuntime {
 
     if (prepared.mode === 'pnpm') {
       if (!prepared.pnpmCmd || !prepared.installDir) return this.fail('profile initialization needs a pnpm install')
-      const resolved = resolveCommand(prepared.pnpmCmd)
-      if (!resolved) return this.fail('pnpm cannot be launched safely (unresolved .cmd shim)')
-      file = resolved.file
-      args = [...resolved.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...initArgs]
+      const resolution = resolveCommandEntry(prepared.pnpmCmd)
+      if (!resolution.ok) return this.fail(`pnpm cannot be launched (${resolution.reason})`)
+      file = resolution.command.file
+      args = [...resolution.command.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...initArgs]
       cwd = prepared.installDir
     } else {
       if (!prepared.checkout) return this.fail('profile initialization needs a source checkout')
@@ -307,10 +307,10 @@ export class InstanceRuntime {
     let cwd: string
     if (prepared.mode === 'pnpm') {
       if (!prepared.pnpmCmd || !prepared.installDir) return this.fail('pkg start has no pnpm install')
-      const resolved = resolveCommand(prepared.pnpmCmd)
-      if (!resolved) return this.fail('pnpm cannot be launched safely (unresolved .cmd shim)')
-      file = resolved.file
-      fullArgs = [...resolved.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...args]
+      const resolution = resolveCommandEntry(prepared.pnpmCmd)
+      if (!resolution.ok) return this.fail(`pnpm cannot be launched (${resolution.reason})`)
+      file = resolution.command.file
+      fullArgs = [...resolution.command.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...args]
       cwd = prepared.installDir
     } else {
       if (!prepared.checkout) return this.fail('source start has no checkout')

@@ -2,10 +2,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { decodeChildOutput, isProcessAlive, resolveCommand, runFile, runResolved } from '../src/proc.ts'
+import { dirname, join, resolve } from 'node:path'
+import { decodeChildOutput, isProcessAlive, resolveCommand, resolveCommandEntry, runFile, runResolved } from '../src/proc.ts'
 import { parseLocalProxySettings } from '../src/git.ts'
 
 /**
@@ -112,6 +112,143 @@ test('resolveCommand reads a .cmd shim and returns its Node entry', () => {
     // It runs the script with the current Node, not the shim through cmd.
     assert.equal(r?.file, process.execPath)
     assert.equal(r?.args[0], entry)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * Shims are written by several tools and they do not agree on how to name the
+ * script: npm's cmd-shim builds it from `%dp0%`, corepack and hand-written shims
+ * use `%~dp0` (including `..\` segments), and some leave the path bare. All of
+ * them must resolve — a fresh machine whose pnpm is a `%~dp0` shim used to fail
+ * with "Node entry could not be resolved", which then read as "the registry is
+ * unreachable".
+ */
+const SHIM_CASES: Array<{ name: string; relative: string; body: string }> = [
+  { name: '%~dp0 (corepack / hand-written shape)', relative: join('sub', 'tool.cjs'), body: '"%~dp0\\sub\\tool.cjs" %*' },
+  { name: 'an unquoted target', relative: join('sub', 'tool.js'), body: '%dp0%\\sub\\tool.js %*' },
+  { name: 'a relative-up target', relative: join('..', 'lib', 'tool.mjs'), body: '"%~dp0\\..\\lib\\tool.mjs" %*' },
+]
+
+for (const shimCase of SHIM_CASES) {
+  test(`resolveCommandEntry resolves a shim using ${shimCase.name}`, () => {
+    if (process.platform !== 'win32') return
+    const root = mkdtempSync(join(tmpdir(), 'dsh-shim-shape-'))
+    try {
+      const dir = join(root, 'bin')
+      mkdirSync(dir, { recursive: true })
+      const entry = resolve(dir, shimCase.relative)
+      mkdirSync(dirname(entry), { recursive: true })
+      writeFileSync(entry, '')
+      const shim = join(dir, 'tool.cmd')
+      writeFileSync(shim, `@echo off\r\nnode ${shimCase.body}\r\n`)
+      const resolution = resolveCommandEntry(shim)
+      assert.equal(resolution.ok, true, resolution.ok ? '' : resolution.reason)
+      if (!resolution.ok) return
+      assert.equal(resolution.command.file, process.execPath)
+      assert.equal(resolution.command.args[0], entry)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+}
+
+test('resolveCommandEntry handles a verbatim Corepack-style shim (IF/ELSE, ~dp0)', () => {
+  if (process.platform !== 'win32') return
+  // The shape Corepack writes for `corepack enable` — quoted `%~dp0` in both
+  // branches, the script named twice, and an interpreter path that is not a
+  // script. This is the shim text that used to come back unresolved.
+  const root = mkdtempSync(join(tmpdir(), 'dsh-corepack-shim-'))
+  try {
+    const nodeDir = join(root, 'nodejs')
+    mkdirSync(nodeDir, { recursive: true })
+    const entry = join(root, 'lib', 'node_modules', 'corepack', 'dist', 'corepack.js')
+    mkdirSync(dirname(entry), { recursive: true })
+    writeFileSync(entry, '')
+    const shim = join(nodeDir, 'pnpm.cmd')
+    writeFileSync(shim, [
+      '@IF EXIST "%~dp0\\node.exe" (',
+      '  "%~dp0\\node.exe"  "%~dp0\\..\\lib\\node_modules\\corepack\\dist\\corepack.js" pnpm %*',
+      ') ELSE (',
+      '  @SETLOCAL',
+      '  @SET PATHEXT=%PATHEXT:;.JS;=;%',
+      '  node  "%~dp0\\..\\lib\\node_modules\\corepack\\dist\\corepack.js" pnpm %*',
+      ')',
+      '',
+    ].join('\r\n'))
+    const resolution = resolveCommandEntry(shim)
+    assert.equal(resolution.ok, true, resolution.ok ? '' : resolution.reason)
+    if (!resolution.ok) return
+    assert.equal(resolution.command.file, process.execPath)
+    assert.deepEqual(resolution.command.args, [entry])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('resolveCommandEntry runs a shim that points straight at an executable', () => {
+  if (process.platform !== 'win32') return
+  // Verbatim shape from a real machine: pnpm's npm package ships a Windows
+  // executable and the npm shim points at it, with no Node script involved.
+  // The old resolver only looked for `.js/.cjs/.mjs` and called this
+  // "Node entry could not be resolved", which read as a network failure.
+  const root = mkdtempSync(join(tmpdir(), 'dsh-exe-shim-'))
+  try {
+    const packageDir = join(root, 'node_modules', 'pnpm')
+    mkdirSync(packageDir, { recursive: true })
+    const exe = join(packageDir, 'pnpm.exe')
+    writeFileSync(exe, '')
+    const shim = join(root, 'pnpm.cmd')
+    writeFileSync(shim, [
+      '@ECHO off',
+      'GOTO start',
+      ':find_dp0',
+      'SET dp0=%~dp0',
+      'EXIT /b',
+      ':start',
+      'SETLOCAL',
+      'CALL :find_dp0',
+      '"%dp0%\\node_modules\\pnpm\\pnpm.exe"   %*',
+      '',
+    ].join('\r\n'))
+    const resolution = resolveCommandEntry(shim)
+    assert.equal(resolution.ok, true, resolution.ok ? '' : resolution.reason)
+    if (!resolution.ok) return
+    assert.equal(resolution.command.file, exe)
+    assert.deepEqual(resolution.command.args, [])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('resolveCommandEntry explains why a shim could not be resolved', async () => {
+  if (process.platform !== 'win32') return
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-shim-broken-'))
+  try {
+    // Named target that does not exist: report it and stop, never fall back to
+    // running the .cmd through a shell.
+    const missingTarget = join(dir, 'missing.cmd')
+    writeFileSync(missingTarget, '@echo off\r\nnode "%~dp0\\gone.cjs" %*\r\n')
+    const missing = resolveCommandEntry(missingTarget)
+    assert.equal(missing.ok, false)
+    if (!missing.ok) assert.match(missing.reason, /does not exist/u)
+    const unresolved = await runResolved(missingTarget, [])
+    assert.equal(unresolved.ok, false)
+    assert.match(unresolved.error ?? '', /does not exist/u)
+
+    // A shim with no script token at all (e.g. it calls another .cmd).
+    const noEntry = join(dir, 'nested.cmd')
+    writeFileSync(noEntry, '@echo off\r\ncall "%~dp0\\inner.cmd" %*\r\n')
+    const empty = resolveCommandEntry(noEntry)
+    assert.equal(empty.ok, false)
+    if (!empty.ok) assert.match(empty.reason, /names no program/u)
+
+    // A shim that cannot be read.
+    assert.equal(resolveCommand(join(dir, 'no-such-file.cmd')), undefined)
+    const unreadable = resolveCommandEntry(join(dir, 'no-such-file.cmd'))
+    assert.equal(unreadable.ok, false)
+    if (!unreadable.ok) assert.match(unreadable.reason, /could not be read/u)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

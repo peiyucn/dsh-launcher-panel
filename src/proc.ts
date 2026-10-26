@@ -108,52 +108,117 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** One command that can be spawned directly, without a shell. */
+export interface ResolvedCommand {
+  file: string
+  args: string[]
+}
+
+/** The outcome of turning a batch shim into a direct command. */
+export type CommandResolution =
+  | { ok: true; command: ResolvedCommand }
+  | { ok: false; reason: string }
+
+/**
+ * Expand the "directory this shim lives in" placeholders batch shims use:
+ * `%dp0%` (npm's cmd-shim) and `%~dp0` (corepack and hand-written shims).
+ */
+function expandShimDir(text: string, dir: string): string {
+  return text.replace(/%~?dp0%?/gi, dir)
+}
+
+/**
+ * The paths a shim names, split by how they must be launched.
+ *
+ * A shim either runs a **script** through an interpreter (`node "…\pnpm.cjs"`,
+ * `"…\node.exe" "…\pnpm.mjs"`) or runs a **program** directly
+ * (`"%dp0%\node_modules\pnpm\pnpm.exe"`). Both are normal: pnpm ships a Windows
+ * executable in its npm package, and its npm shim points straight at it.
+ *
+ * Both quoting styles are accepted: npm's cmd-shim quotes the path, while
+ * corepack-style and hand-written shims may leave it bare.
+ */
+function shimCandidates(text: string, pattern: string): string[] {
+  const candidates: string[] = []
+  for (const match of text.matchAll(new RegExp(`["']([^"'\\r\\n]+?\\.(?:${pattern}))["']`, 'gi'))) {
+    candidates.push(match[1])
+  }
+  for (const match of text.matchAll(new RegExp(`(?:^|[\\s=])([^\\s"'<>|&]+?\\.(?:${pattern}))(?=$|[\\s])`, 'gim'))) {
+    if (!candidates.includes(match[1])) candidates.push(match[1])
+  }
+  return candidates
+}
+
+/**
+ * Resolve a batch shim's target, reporting why when it cannot be found.
+ *
+ * Node's `spawn` refuses to run a `.cmd`/`.bat` (its CVE-2024-27980 guard) and
+ * handing the shim to a shell would let an argument become a second command, so
+ * the shim is read and what it wraps is run directly instead — the arguments
+ * then stay arguments:
+ *
+ * - a script (`.js`/`.cjs`/`.mjs`) runs with the current Node;
+ * - a program (`.exe`/`.com`) is spawned as-is.
+ *
+ * A script always wins over an interpreter named elsewhere in the same shim
+ * (corepack's `"%~dp0\node.exe" "…\corepack.js"`), and the paths are accepted
+ * quoted or bare, absolute or built from the shim's own directory, because real
+ * installations write all of those shapes.
+ */
+export function resolveCommandEntry(command: string): CommandResolution {
+  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(command)) {
+    return { ok: true, command: { file: command, args: [] } }
+  }
+  let text: string
+  try {
+    text = fs.readFileSync(command, 'utf8').replace(/^\uFEFF/u, '')
+  } catch {
+    return { ok: false, reason: 'the shim could not be read' }
+  }
+  const dir = path.dirname(command)
+  const resolveAll = (candidates: string[]): string[] =>
+    candidates.map((candidate) => path.resolve(dir, expandShimDir(candidate, dir)))
+  const scripts = resolveAll(shimCandidates(text, 'mjs|cjs|js'))
+  const programs = resolveAll(shimCandidates(text, 'exe|com'))
+
+  // A script runs with Node; an interpreter named alongside it is not the entry.
+  if (scripts.length > 0) {
+    const script = scripts.find((entry) => fs.existsSync(entry))
+    if (script === undefined) {
+      return { ok: false, reason: `the shim names ${scripts[scripts.length - 1]}, which does not exist` }
+    }
+    return { ok: true, command: { file: process.execPath, args: [script] } }
+  }
+  if (programs.length > 0) {
+    const program = programs.find((entry) => fs.existsSync(entry))
+    if (program === undefined) {
+      return { ok: false, reason: `the shim names ${programs[programs.length - 1]}, which does not exist` }
+    }
+    return { ok: true, command: { file: program, args: [] } }
+  }
+  return { ok: false, reason: 'the shim names no program to run (.js, .cjs, .mjs, .exe or .com)' }
+}
+
 /**
  * How to invoke a command that may be a Windows batch shim.
- *
- * npm installs a CLI on Windows as a `.cmd` wrapper around a Node script,
- * because `cmd.exe` will not run a `.js` from `PATH`. Two things follow, and
- * both are easy to get wrong:
- *
- * - Node's `spawn` **refuses** to run a `.cmd`/`.bat` (`EINVAL`), a deliberate
- *   guard against the argument-injection class CVE-2024-27980 describes.
- * - The usual workaround — `shell: true`, or building a `cmd /c "…"` line — puts
- *   the arguments through cmd's parser, where a quote in a value can end the
- *   command and start another one.
- *
- * A shim is only a wrapper, so the wrapper is read and its target is run with
- * the current Node: same program, no shell, and the arguments stay arguments.
  *
  * @param command - a resolved pnpm path (`…\pnpm.cmd`) or any executable.
  * @returns the executable and leading arguments to use, or undefined when the
  *   command is a batch file whose target could not be determined — the caller
  *   must then report rather than spawn something that cannot work.
  */
-export function resolveCommand(command: string): { file: string; args: string[] } | undefined {
-  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(command)) return { file: command, args: [] }
-  let text: string
-  try {
-    text = fs.readFileSync(command, 'utf8')
-  } catch {
-    return undefined
-  }
-  // npm writes a line of the shape `"…\node.exe" "%dp0%\node_modules\…\entry.js" %*`.
-  // Take the last quoted token ending in a script extension, so a shim that also
-  // quotes its interpreter still resolves to the script.
-  const quoted = [...text.matchAll(/"([^"\r\n]*\.(?:mjs|cjs|js))"/gi)]
-  const target = quoted[quoted.length - 1]?.[1]
-  if (target === undefined) return undefined
-  const expanded = target.replace(/%dp0%/gi, path.dirname(command))
-  if (!fs.existsSync(expanded)) return undefined
-  return { file: process.execPath, args: [expanded] }
+export function resolveCommand(command: string): ResolvedCommand | undefined {
+  const resolution = resolveCommandEntry(command)
+  return resolution.ok ? resolution.command : undefined
 }
 
 /**
  * Run a command, transparently resolving a Windows batch shim first.
  *
  * This is the shell-free equivalent of the old `cmd /c <shim> …` calls: the
- * shim's Node target is executed directly, so a path containing spaces works
- * and no argument can be reinterpreted as a second command.
+ * shim's target (its Node script or the program it points at) is executed
+ * directly, so a path containing spaces works and no argument can be
+ * reinterpreted as a second command.
  *
  * @param command - pnpm (possibly a `.cmd` shim) or any executable.
  * @param args - arguments, passed as an array.
@@ -162,14 +227,16 @@ export function resolveCommand(command: string): { file: string; args: string[] 
  *   as `ok: false` rather than thrown.
  */
 export function runResolved(command: string, args: string[], timeoutMs = 0): Promise<RunFileResult> {
-  const resolved = resolveCommand(command)
-  if (resolved === undefined) {
+  const resolution = resolveCommandEntry(command)
+  if (!resolution.ok) {
     return Promise.resolve({
       ok: false,
       stdout: '',
       stderr: '',
-      error: `${command} is a Windows batch shim whose Node entry could not be resolved`,
+      // Keep the reason: "unresolvable shim" and "registry unreachable" are
+      // different problems, and only one of them is worth retrying later.
+      error: `${command} is a Windows batch shim whose target could not be resolved (${resolution.reason})`,
     })
   }
-  return runFile(resolved.file, [...resolved.args, ...args], timeoutMs)
+  return runFile(resolution.command.file, [...resolution.command.args, ...args], timeoutMs)
 }
