@@ -334,11 +334,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "1.85.0",
     "@vscode/vsce": "^4.0.0",
     "svg2ttf": "^6.1.0",
     "svgicons2svgfont": "^16.0.0",
-    "tsx": "^4.23.12",
     "ttf2woff": "^3.0.0",
     "typescript": "^5.5.0"
   },
