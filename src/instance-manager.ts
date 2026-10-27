@@ -147,7 +147,7 @@ export function getInstanceManager(): InstanceManager | undefined {
 
 export class InstanceManager {
   private settings: NormalizedInstances = { instances: [], activeId: '', issues: [] }
-  private readonly runtimes = new Map<string, InstanceRuntime>()
+  private runtimes = new Map<string, InstanceRuntime>()
   private readonly host: ManagerHost
   private readyPromise: Promise<void> | undefined
   private readyError = ''
@@ -254,7 +254,10 @@ export class InstanceManager {
 
   /** The URL to open for one instance, carrying its launch token when known. */
   uiUrl(id: string): string | undefined {
-    return this.runtimes.get(id)?.status().uiUrl
+    const runtime = this.runtimes.get(id)
+    // The token-bearing URL is a method, never a status field: status objects
+    // are posted to the webview, which must not receive the launch token.
+    return runtime?.uiUrl()
   }
 
   /** Select an instance and persist the choice. */
@@ -456,7 +459,9 @@ export class InstanceManager {
     if (saveError !== undefined) return { issues: [...result.issues, this.saveIssue(saveError)] }
     this.settings.instances = next
     this.settings.activeId = instance.id
-    this.runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
+    // A settings-change reload may already have created this runtime; keep that
+    // object rather than leaking a second one.
+    if (!this.runtimes.has(instance.id)) this.runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
     const activeError = await writeResult(writeActiveInstance(instance.id))
     if (activeError !== undefined) addActivity(`⚠ could not remember the active instance: ${activeError}`)
     return { instance, issues: result.issues }
@@ -523,10 +528,20 @@ export class InstanceManager {
     return runtime.start()
   }
 
-  /** Stop one instance. */
-  async stop(id: string): Promise<boolean> {
+  /** Stop one instance; `killUntracked` must be granted explicitly by the user. */
+  async stop(id: string, killUntracked = false): Promise<boolean> {
     await this.ready()
-    return (await this.runtimes.get(id)?.stop()) ?? false
+    return (await this.runtimes.get(id)?.stop(killUntracked)) ?? false
+  }
+
+  /**
+   * Whether stopping `id` would have to kill a process this window did not
+   * start (an adopted server, or a foreign listener on the instance port).
+   * The UI asks for confirmation exactly then.
+   */
+  async stopNeedsConfirmation(id: string): Promise<boolean> {
+    await this.ready()
+    return (await this.runtimes.get(id)?.needsStopConfirmation()) ?? false
   }
 
   /** Whether any instance is running/starting/stopping. */
@@ -537,13 +552,18 @@ export class InstanceManager {
     })
   }
 
-  /** Another instance with the same normalized home is running. */
+  /**
+   * Another instance with the same normalized home still owns it.
+   *
+   * `running`/`starting` are not enough: a `stopping` runtime still has its
+   * child/home, and an `error` runtime can still hold a live child (failed
+   * Stop) or a listening port. Spec §10 allows one server per home.
+   */
   isHomeRunning(home: string, exceptId: string): boolean {
     for (const [id, runtime] of this.runtimes) {
       if (id === exceptId) continue
-      const status = runtime.status()
-      if (!status.running && !status.starting) continue
-      if (sameHome(status.home, home)) return true
+      if (!runtime.holdsHome()) continue
+      if (sameHome(runtime.status().home, home)) return true
     }
     return false
   }
@@ -614,7 +634,6 @@ export class InstanceManager {
       runInstalling: (task) => task(),
       setDshVersion: (version) => { this.dshVersion = version },
       setDshState: (state) => { this.dshState = state },
-      isStarting: () => this.anyActive(),
       dbg,
     }
   }
@@ -624,7 +643,6 @@ export class InstanceManager {
       addActivity,
       runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
       runInstalling: (task) => task(),
-      isStarting: () => this.anyActive(),
     }
   }
 
@@ -648,10 +666,41 @@ export class InstanceManager {
     this.runtimes.get(id)?.clearLog()
   }
 
-  /** Read settings again after an external settings edit. */
+  /**
+   * Re-read the instance list after an external settings edit (another window,
+   * the Settings UI, or settings sync).
+   *
+   * Runtimes are matched by id and reused: a runtime object owns its tracked
+   * child and log pump, so rebuilding the map would orphan a running DSH
+   * process. Only added instances get a new runtime; removed ones are disposed
+   * (their DSH process is intentionally left running, matching `remove` and
+   * deactivate).
+   */
   async reloadSettings(): Promise<void> {
-    this.settings = readInstanceSettings()
-    this.rebuildRuntimes()
+    // A reload that raced the initial bootstrap would be overwritten by it, so
+    // let the bootstrap finish first; its failure is surfaced through issues().
+    await this.ready().catch(() => undefined)
+    this.applySettings(readInstanceSettings())
+  }
+
+  /** Adopt a freshly read settings snapshot, reusing runtimes by instance id. */
+  private applySettings(next: NormalizedInstances): void {
+    const previous = this.runtimes
+    const runtimes = new Map<string, InstanceRuntime>()
+    for (const instance of next.instances) {
+      const existing = previous.get(instance.id)
+      if (existing) {
+        existing.update(instance)
+        runtimes.set(instance.id, existing)
+      } else {
+        runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
+      }
+    }
+    for (const [id, runtime] of previous) {
+      if (!runtimes.has(id)) runtime.dispose()
+    }
+    this.settings = next
+    this.runtimes = runtimes
   }
 
   /** Normalized options for tests/panel forms. */

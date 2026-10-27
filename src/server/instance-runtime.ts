@@ -12,6 +12,10 @@
  * branding bundle (see `instance-brand.ts`), which is a launcher-generated local
  * client bundle added to the profile's bundle list.
  *
+ * State moves go through the pure table in `instance-state.ts`; command and
+ * environment construction lives in `server/start-spec.ts`, log tail reads in
+ * `server/log-read.ts` (both unit-tested without VS Code).
+ *
  * @module server/instance-runtime
  */
 
@@ -19,16 +23,17 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { decodeChildOutput, isProcessAlive, resolveCommandEntry, sleep } from '../proc.ts'
-import { extractWebToken } from '../env.ts'
-import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
+import { decodeChildOutput, isProcessAlive, sleep } from '../proc.ts'
 import { HTTP_PROBE_TIMEOUT_MS, LOG_TAIL_POLL_MS, PORT_POLL_INTERVAL_MS, STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../timing.ts'
 import { httpOk, isPortOpen, tokenAccepted } from './probes.ts'
 import { findPortOwner, killPid } from './process.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../paths.ts'
 import { instanceHome, instanceLogPath, type DshInstance } from '../instances.ts'
+import { holdsHome, nextState, stopDecision, type InstanceEvent, type InstanceState } from '../instance-state.ts'
 import { readConfig, type DshConfig } from './config.ts'
 import { ensureInstanceBrand, removeInstanceBrand } from './instance-brand.ts'
+import { LOG_READ_BYTES, LOG_TAIL_LINES, readLogTail, readTokenFromLog } from './log-read.ts'
+import { buildProfileInitSpec, buildSpawnSpec } from './start-spec.ts'
 import { isUpdating } from './update.ts'
 
 /** What a prepared shared install supplies to an instance start. */
@@ -49,16 +54,13 @@ export interface RuntimeHost {
   prepare(): Promise<PreparedDsh | undefined>
   /** Whether the shared dsh is currently known to be missing (first-run install). */
   isDshMissing(): boolean
-  /** Whether another instance with the same normalized home is running. */
+  /** Whether another instance with the same normalized home is running or still holding it. */
   isHomeRunning(home: string, exceptId: string): boolean
   /** Append one line to the shared launcher activity feed. */
   addActivity: (line: string, isBusy?: boolean) => number
   /** Diagnostic line to the client log only. */
   dbg: (line: string) => void
 }
-
-/** Coarse lifecycle state; `installing` is a transient flag on top of `starting`. */
-export type InstanceState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
 
 /** The per-instance status the panel renders for one tab. */
 export interface InstanceRuntimeStatus {
@@ -73,11 +75,20 @@ export interface InstanceRuntimeStatus {
   starting: boolean
   installing: boolean
   stopping: boolean
+  /**
+   * A server is answering on the port but this launcher does not track the
+   * process (adopted after an extension restart, or started elsewhere).
+   */
+  adopted: boolean
+  /**
+   * The port is listening while this runtime is not running it. Stopping in
+   * this state would kill a process the launcher did not spawn, so it requires
+   * explicit confirmation (see `needsStopConfirmation`).
+   */
+  untrackedPort: boolean
   error: string
   /** Display URL (never carries the auth token). */
   url: string
-  /** URL to open, carrying the launch token when the run has one. */
-  uiUrl: string
   logPath: string
   logPathShort: string
 }
@@ -88,11 +99,12 @@ const PROFILE_INIT_TIMEOUT_MS = 180_000
 /** A start that never produces an HTTP response must not spin forever. */
 const START_TIMEOUT_MS = 10 * 60_000
 
-/** Read at most this much of a log for the console/token tail. */
-const LOG_READ_BYTES = 256 * 1024
-
-/** The console keeps this many server-log lines. */
-const LOG_TAIL_LINES = 200
+/**
+ * Last-resort bound on a whole start (shared install + profile init + spawn +
+ * readiness wait). The individual steps have their own bounds; this one keeps a
+ * `starting` instance from staying there forever if one of them never settles.
+ */
+const START_WATCHDOG_MS = 20 * 60_000
 
 /** The live buffer keeps this many lines before dropping the oldest. */
 const LOG_BUFFER_LINES = 500
@@ -100,47 +112,6 @@ const LOG_BUFFER_LINES = 500
 /** Build a DshConfig view for one instance: shared settings + its port. */
 function runtimeConfig(instance: DshInstance): DshConfig {
   return { ...readConfig(), port: instance.port }
-}
-
-/** Read the last `maxLines` lines of a file without loading a huge log. */
-export function readLogTail(file: string, maxLines = LOG_TAIL_LINES): string[] {
-  try {
-    const stat = fs.statSync(file)
-    const start = Math.max(0, stat.size - LOG_READ_BYTES)
-    const fd = fs.openSync(file, 'r')
-    try {
-      const buffer = Buffer.alloc(stat.size - start)
-      const read = fs.readSync(fd, buffer, 0, buffer.length, start)
-      const text = buffer.subarray(0, read).toString('utf8')
-      return text.split(/\r?\n/).filter((line) => line.length > 0).slice(-maxLines)
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch {
-    return []
-  }
-}
-
-/** The newest launch token printed in a server log, if any. */
-export function readTokenFromLog(file: string): string | undefined {
-  try {
-    const stat = fs.statSync(file)
-    const start = Math.max(0, stat.size - LOG_READ_BYTES)
-    const fd = fs.openSync(file, 'r')
-    try {
-      const buffer = Buffer.alloc(stat.size - start)
-      const read = fs.readSync(fd, buffer, 0, buffer.length, start)
-      let token: string | undefined
-      for (const line of buffer.subarray(0, read).toString('utf8').split(/\r?\n/)) {
-        token = extractWebToken(line) ?? token
-      }
-      return token
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch {
-    return undefined
-  }
 }
 
 /** Run a short initialization command with a per-instance DSH_HOME, capturing output. */
@@ -181,7 +152,10 @@ export class InstanceRuntime {
   private pid: number | undefined
   private url = ''
   private startPromise: Promise<boolean> | undefined
+  private startWatchdog: ReturnType<typeof setTimeout> | undefined
   private stopPromise: Promise<boolean> | undefined
+  /** Port is listening but this runtime has no tracked child (Stop needs consent). */
+  private untrackedPort = false
   private logBuffer = ''
   private logOffset = 0
   private logLinesCache: string[] = []
@@ -216,6 +190,20 @@ export class InstanceRuntime {
 
   private config(): DshConfig {
     return runtimeConfig(this.instance)
+  }
+
+  /**
+   * Apply one lifecycle event through the pure transition table. An edge that
+   * the table does not allow is a programming error in a failure path; it must
+   * not silently invent a state, so it is logged and skipped.
+   */
+  private transition(event: InstanceEvent): void {
+    const next = nextState(this.state, event)
+    if (next === undefined) {
+      this.host.dbg(`[${this.instance.id}] ignored state transition ${this.state} --${event}-->`)
+      return
+    }
+    this.setState(next)
   }
 
   private setState(state: InstanceState): void {
@@ -257,7 +245,7 @@ export class InstanceRuntime {
     // An adopted run was not started by this host, so there is no startup
     // output of ours to show; its log stays in the file.
     this.consoleLog = []
-    this.setState('running')
+    this.transition('adopt')
     return true
   }
 
@@ -271,29 +259,19 @@ export class InstanceRuntime {
     if (fs.existsSync(profileDir)) return true
 
     this.activity(`ℹ Initializing profile "${this.instance.profile}" in ${home}…`)
-    const initArgs = this.instance.profile === 'web'
-      ? ['web', '--dump-config']
-      : ['--profile', this.instance.profile, '--from-default-profile', 'web', '--dump-config']
-    const env = { ...process.env, DSH_HOME: home }
-    let file: string
-    let args: string[]
-    let cwd: string
+    const built = buildProfileInitSpec({
+      mode: prepared.mode,
+      pnpmCmd: prepared.pnpmCmd,
+      installDir: prepared.installDir,
+      checkout: prepared.checkout,
+      profile: this.instance.profile,
+      home,
+      nodePath: this.config().nodePath,
+      baseEnv: process.env,
+    })
+    if (!built.ok) return this.fail(built.reason)
 
-    if (prepared.mode === 'pnpm') {
-      if (!prepared.pnpmCmd || !prepared.installDir) return this.fail('profile initialization needs a pnpm install')
-      const resolution = resolveCommandEntry(prepared.pnpmCmd)
-      if (!resolution.ok) return this.fail(`pnpm cannot be launched (${resolution.reason})`)
-      file = resolution.command.file
-      args = [...resolution.command.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...initArgs]
-      cwd = prepared.installDir
-    } else {
-      if (!prepared.checkout) return this.fail('profile initialization needs a source checkout')
-      file = this.config().nodePath || 'node'
-      args = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...initArgs]
-      cwd = prepared.checkout
-    }
-
-    const result = await runInitCommand(file, args, cwd, env)
+    const result = await runInitCommand(built.spec.file, built.spec.args, built.spec.cwd, built.spec.env)
     if (!result.ok || !fs.existsSync(profileDir)) {
       return this.fail(`profile initialization failed: ${result.output.split(/\r?\n/).filter(Boolean).slice(-3).join(' ') || 'no output'}`)
     }
@@ -304,37 +282,49 @@ export class InstanceRuntime {
   /** Record a user-visible failure and leave the runtime in `error`. */
   private fail(message: string): false {
     this.error = message
-    this.setState('error')
+    // A failure can surface after the child already died (e.g. "exited before
+    // opening port"); drop the stale pid so `holdsHome` does not reserve the
+    // home for a process that no longer exists.
+    if (this.pid !== undefined && !isProcessAlive(this.pid)) this.pid = undefined
+    this.transition('fail')
     this.activity(`✗ ${message}`)
     return false
   }
 
-  /** Spawn the DSH web app with the instance's DSH_HOME and port. */
+  /** Whether this host is tracking a child process for the instance. */
+  private hasTrackedChild(): boolean {
+    return this.child !== undefined || this.pid !== undefined
+  }
+
+  /**
+   * Spawn the DSH web app with the instance's DSH_HOME and port.
+   *
+   * Any failure here is reported through `fail` (including the log directory):
+   * silently rejecting out of `startInternal` left the instance stuck in
+   * `starting` forever (spec §8 requires an error instead).
+   */
   private async spawnServer(prepared: PreparedDsh, home: string): Promise<boolean> {
     const cfg = this.config()
-    const args = [this.instance.profile, '--port', String(this.instance.port)]
-    if (prepared.version && dshVersionAtLeast(prepared.version, DSH_NO_OPEN_MIN_VERSION)) args.push('--no-open')
-    const env: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: home }
-    if (cfg.runMode === 'source' && cfg.sourceDebug) env.NODE_DEBUG = 'module'
+    const built = buildSpawnSpec({
+      mode: prepared.mode,
+      version: prepared.version,
+      pnpmCmd: prepared.pnpmCmd,
+      installDir: prepared.installDir,
+      checkout: prepared.checkout,
+      profile: this.instance.profile,
+      port: this.instance.port,
+      home,
+      nodePath: cfg.nodePath,
+      sourceDebug: cfg.sourceDebug,
+      baseEnv: process.env,
+    })
+    if (!built.ok) return this.fail(built.reason)
 
-    let file: string
-    let fullArgs: string[]
-    let cwd: string
-    if (prepared.mode === 'pnpm') {
-      if (!prepared.pnpmCmd || !prepared.installDir) return this.fail('pkg start has no pnpm install')
-      const resolution = resolveCommandEntry(prepared.pnpmCmd)
-      if (!resolution.ok) return this.fail(`pnpm cannot be launched (${resolution.reason})`)
-      file = resolution.command.file
-      fullArgs = [...resolution.command.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...args]
-      cwd = prepared.installDir
-    } else {
-      if (!prepared.checkout) return this.fail('source start has no checkout')
-      file = cfg.nodePath || 'node'
-      fullArgs = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', ...args]
-      cwd = prepared.checkout
+    try {
+      fs.mkdirSync(path.dirname(this.logPath), { recursive: true })
+    } catch (error) {
+      return this.fail(`cannot create the instance log directory: ${error instanceof Error ? error.message : String(error)}`)
     }
-
-    fs.mkdirSync(path.dirname(this.logPath), { recursive: true })
     if (cfg.clearServerLogOnStart ?? true) {
       try { fs.writeFileSync(this.logPath, '') } catch { /* best effort */ }
     }
@@ -346,9 +336,9 @@ export class InstanceRuntime {
     }
 
     try {
-      const child = spawn(file, fullArgs, {
-        cwd,
-        env,
+      const child = spawn(built.spec.file, built.spec.args, {
+        cwd: built.spec.cwd,
+        env: built.spec.env,
         windowsHide: cfg.hideConsole ?? true,
         detached: process.platform !== 'win32',
         stdio: ['ignore', logFd, logFd],
@@ -359,11 +349,11 @@ export class InstanceRuntime {
       child.once('error', (error) => {
         if (this.state === 'starting') this.fail(`failed to start: ${error.message}`)
       })
-      child.once('close', () => {
+      child.once('close', (code, signal) => {
         this.child = undefined
         // While starting, waitForReady owns the diagnosis (it checks the pid);
         // while stopping, stopInternal owns the transition.
-        if (this.state === 'running') this.setState('stopped')
+        if (this.state === 'running') this.handleUnexpectedExit(code, signal)
       })
     } catch (error) {
       return this.fail(`failed to start: ${error instanceof Error ? error.message : String(error)}`)
@@ -372,6 +362,23 @@ export class InstanceRuntime {
     }
     this.startLogPump()
     return true
+  }
+
+  /**
+   * A tracked child died without a Stop asking for it. Report the exit code
+   * with the log path, clear the stale pid/URL, and return to `stopped` with the
+   * reason kept visible — the process is gone, so claiming `running` or a bare
+   * idle state would both be dishonest (spec §8 "意外退出").
+   */
+  private handleUnexpectedExit(code: number | null, signal: NodeJS.Signals | null): void {
+    const detail = code !== null ? `exit code ${code}` : signal !== null ? `signal ${signal}` : 'no exit code'
+    this.pid = undefined
+    this.url = ''
+    this.untrackedPort = false
+    this.stopLogPump()
+    this.error = `dsh exited unexpectedly (${detail}) — see ${this.logPath}`
+    this.transition('exit')
+    this.activity(`✗ ${this.error}`)
   }
 
   private async waitForReady(port: number): Promise<boolean> {
@@ -387,7 +394,7 @@ export class InstanceRuntime {
       if (url) {
         if (this.state !== 'starting') return false
         this.url = url
-        this.setState('running')
+        this.transition('ready')
         this.activity(`✓ Started ${url.replace(/\?token=.*$/, '')}`)
         return true
       }
@@ -398,7 +405,26 @@ export class InstanceRuntime {
     }
   }
 
+  /**
+   * The start flow proper. Split from `start()` so the whole flow — not only
+   * the readiness wait — is guarded: an exception anywhere (profile init, log
+   * directory, spawn) must surface as `error`, never leave `starting` behind.
+   */
   private async startInternal(): Promise<boolean> {
+    try {
+      return await this.startFlow()
+    } catch (error) {
+      this.installing = false
+      if (this.state === 'starting') {
+        // Do not leak a child the failed flow may already have spawned.
+        this.killTracked()
+        this.stopLogPump()
+      }
+      return this.fail(`start failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private async startFlow(): Promise<boolean> {
     const cfg = this.config()
     if (await isPortOpen('127.0.0.1', cfg.port)) {
       if (await this.adopt(cfg.port)) return true
@@ -411,7 +437,8 @@ export class InstanceRuntime {
 
     this.error = ''
     this.consoleLog = []
-    this.setState('starting')
+    this.untrackedPort = false
+    this.transition('start')
     const home = this.resolveHome()
     try {
       fs.mkdirSync(home, { recursive: true })
@@ -455,11 +482,30 @@ export class InstanceRuntime {
       return Promise.resolve(true)
     }
     if (this.state === 'stopping') return Promise.resolve(false)
+    // Independent watchdog: every phase above has its own bound, but a hung
+    // install/detection must still not leave the instance in `starting` forever.
+    this.clearStartWatchdog()
+    this.startWatchdog = setTimeout(() => {
+      this.startWatchdog = undefined
+      if (this.state !== 'starting') return
+      this.installing = false
+      this.killTracked()
+      this.stopLogPump()
+      this.fail(`start timed out after ${Math.round(START_WATCHDOG_MS / 60_000)} minutes — the launcher stopped waiting for DSH`)
+    }, START_WATCHDOG_MS)
     this.startPromise = this.startInternal().finally(() => {
+      this.clearStartWatchdog()
       this.startPromise = undefined
       this.installing = false
     })
     return this.startPromise
+  }
+
+  private clearStartWatchdog(): void {
+    if (this.startWatchdog) {
+      clearTimeout(this.startWatchdog)
+      this.startWatchdog = undefined
+    }
   }
 
   private killTracked(): void {
@@ -471,15 +517,59 @@ export class InstanceRuntime {
     if (pid !== undefined) killPid(pid, this.host.dbg)
   }
 
+  /**
+   * Whether Stop would have to terminate a process this host did not spawn.
+   *
+   * True for an adopted server (running without a tracked child) and for a
+   * stopped/error instance whose configured port is still held by someone.
+   * Spec §8/§12 require explicit consent before any port-owner kill.
+   */
+  async needsStopConfirmation(): Promise<boolean> {
+    if (this.hasTrackedChild()) return false
+    return isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS)
+  }
+
+  /** Finish a Stop that was allowed to kill/see the port close. */
+  private finishStopped(): true {
+    this.url = ''
+    this.error = ''
+    this.untrackedPort = false
+    this.transition('stop-complete')
+    this.activity('■ Stopped')
+    return true
+  }
+
   private async stopInternal(killUntracked: boolean): Promise<boolean> {
-    if (this.state === 'stopped') {
-      if (await isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS)) {
-        // An adopted/foreign server is still listening.
-      } else {
-        return false
-      }
+    this.clearStartWatchdog()
+    // A Stop during the shared install interrupts that phase from the user's
+    // point of view; do not leave "Installing…" painted over a stopped state.
+    this.installing = false
+    const tracked = this.hasTrackedChild()
+    const portOpen = tracked ? false : await isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS)
+    const decision = stopDecision({ hasTrackedChild: tracked, portOpen, killUntracked })
+    if (decision === 'ask') {
+      // P0-1: the port may belong to anything (the user's own server, another
+      // launcher, a stale dsh). Kill only after explicit confirmation.
+      this.untrackedPort = true
+      this.error = `port ${this.instance.port} is held by a process the launcher did not start — confirm before stopping it`
+      this.activity(`⚠ ${this.error}`)
+      return false
     }
-    this.setState('stopping')
+    if (decision === 'cleanup') {
+      this.untrackedPort = false
+      if (this.state === 'stopped') return false
+      // Nothing is tracked and nothing listens: a manual Stop clears a failed
+      // start/stop (or interrupts a start still waiting for the shared install)
+      // without touching any process.
+      this.url = ''
+      this.error = ''
+      this.stopLogPump()
+      this.transition('cleanup')
+      this.activity('■ Stopped')
+      return true
+    }
+
+    this.transition('stop')
     this.killTracked()
     this.stopLogPump()
     if (killUntracked) {
@@ -488,25 +578,23 @@ export class InstanceRuntime {
     }
     for (let i = 0; i < STOP_POLL_ATTEMPTS; i++) {
       await sleep(STOP_POLL_INTERVAL_MS)
-      if (!(await isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS))) {
-        this.url = ''
-        this.error = ''
-        this.setState('stopped')
-        this.activity('■ Stopped')
-        return true
-      }
+      if (!(await isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS))) return this.finishStopped()
     }
     const stillOpen = await isPortOpen('127.0.0.1', this.instance.port, STOP_POLL_PROBE_MS)
     if (stillOpen) {
+      this.untrackedPort = true
       return this.fail(`could not stop: port ${this.instance.port} is still in use`)
     }
-    this.url = ''
-    this.setState('stopped')
-    return true
+    return this.finishStopped()
   }
 
-  /** Stop the instance; repeated calls coalesce. */
-  stop(killUntracked = true): Promise<boolean> {
+  /**
+   * Stop the instance; repeated calls coalesce.
+   *
+   * Defaults to not killing a process this runtime does not track: the caller
+   * must first ask the user (see `needsStopConfirmation`) and pass `true`.
+   */
+  stop(killUntracked = false): Promise<boolean> {
     if (this.stopPromise) return this.stopPromise
     this.stopPromise = this.stopInternal(killUntracked).finally(() => {
       this.stopPromise = undefined
@@ -518,12 +606,22 @@ export class InstanceRuntime {
   async refresh(): Promise<void> {
     if (this.state === 'starting' || this.state === 'stopping') return
     const open = await isPortOpen('127.0.0.1', this.instance.port)
-    if (open && this.state !== 'running') {
-      await this.adopt(this.instance.port)
-    } else if (!open && this.state === 'running') {
+    if (open) {
+      if (this.state === 'running') {
+        this.untrackedPort = false
+        return
+      }
+      // A server that outlived the extension host (or another window's) is
+      // adopted when its URL/token answers; otherwise it is a foreign listener.
+      const adopted = await this.adopt(this.instance.port)
+      this.untrackedPort = !adopted
+      return
+    }
+    this.untrackedPort = false
+    if (this.state === 'running') {
       this.url = ''
       this.stopLogPump()
-      this.setState('stopped')
+      this.transition('lost')
     }
   }
 
@@ -647,6 +745,7 @@ export class InstanceRuntime {
 
   /** Stop timers/watchers without touching the DSH process. */
   dispose(): void {
+    this.clearStartWatchdog()
     this.stopLogPump()
   }
 
@@ -665,16 +764,31 @@ export class InstanceRuntime {
       starting: this.state === 'starting',
       installing: this.installing,
       stopping: this.state === 'stopping',
+      adopted: this.isAdopted(),
+      untrackedPort: this.untrackedPort,
       error: this.error,
       url: display,
-      uiUrl: this.url || display,
       logPath: this.logPath,
       logPathShort: maskPath(this.logPath),
     }
   }
 
+  /**
+   * The URL to open for this instance (carries the launch token when the
+   * current run printed one). Deliberately a method, not a status field: the
+   * status object is posted to the webview and must never carry a token.
+   */
+  uiUrl(): string {
+    return this.url || `http://127.0.0.1:${this.instance.port}`
+  }
+
   /** The port is open but the runtime has no child (adopted server). */
   isAdopted(): boolean {
     return this.state === 'running' && this.child === undefined
+  }
+
+  /** Whether this runtime still reserves its DSH home (see `instance-state.ts`). */
+  holdsHome(): boolean {
+    return holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
   }
 }

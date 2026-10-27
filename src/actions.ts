@@ -2,7 +2,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './env.ts'
-import { getInstanceManager } from './instance-manager.ts'
+import { getInstanceManager, type InstanceManager } from './instance-manager.ts'
 import type { DshInstance, InstanceIssue } from './instances.ts'
 
 /** Open a URL per dsh.browser (or one instance's override). */
@@ -65,7 +65,66 @@ export async function actionStop(id?: string): Promise<void> {
   if (!manager) return
   await manager.ready()
   const target = id ?? manager.activeInstance()?.id
-  if (target) await manager.stop(target)
+  if (target) await stopInstance(manager, target)
+}
+
+/** Stop → start one instance (the active one when no id is supplied). */
+export async function actionRestart(id?: string): Promise<void> {
+  const manager = getInstanceManager()
+  if (!manager) return
+  await manager.ready()
+  const target = id ?? manager.activeInstance()?.id
+  if (!target) return
+  const status = manager.statusOf(target)
+  const occupied = status !== undefined
+    && (status.running || status.starting || status.stopping || status.adopted || status.untrackedPort)
+  if (occupied) {
+    // Restart is stop → start. A refused or failed stop leaves the port taken,
+    // so starting would only report "port already in use"; keep the stop report.
+    if (!(await stopInstance(manager, target))) return
+  }
+  await actionStart(target)
+}
+
+/** The explicit consent label for terminating a port owner the launcher does not track. */
+const STOP_PORT_OWNER = 'Stop and kill the port owner'
+
+/**
+ * Stop `target`, asking first when the port is held by a process this window did
+ * not spawn.
+ *
+ * Spec §8/§12: a tracked child is ours to kill, but a process behind an adopted
+ * or foreign listener is not — silently terminating it could kill an unrelated
+ * server. The default Stop path therefore never kills untracked port owners.
+ */
+async function stopInstance(manager: InstanceManager, target: string): Promise<boolean> {
+  if (await manager.stopNeedsConfirmation(target)) {
+    const instance = manager.instance(target)
+    const name = instance?.name ?? target
+    const port = instance?.port ?? manager.statusOf(target)?.port ?? '?'
+    const confirmed = await vscode.window.showWarningMessage(
+      `Stop "${name}"? Port ${port} is held by a process the launcher did not start. `
+        + 'Continue only if that process is this instance\'s DSH server.',
+      { modal: true },
+      STOP_PORT_OWNER,
+    )
+    if (confirmed !== STOP_PORT_OWNER) return false
+    const stopped = await manager.stop(target, true)
+    if (!stopped) {
+      void vscode.window.showWarningMessage(`"${name}" was not stopped: port ${port} is still in use.`)
+    }
+    return stopped
+  }
+  const stopped = await manager.stop(target)
+  if (!stopped) {
+    const status = manager.statusOf(target)
+    if (status?.running || status?.starting || status?.stopping) {
+      // The runtime records the reason in the activity feed; say so where the
+      // user clicked instead of leaving the click looking ignored.
+      void vscode.window.showWarningMessage(`"${manager.instance(target)?.name ?? target}" was not stopped — see the launcher activity log for the reason.`)
+    }
+  }
+  return stopped
 }
 
 /** Open the active (or named) instance's Web UI without starting it. */
@@ -237,7 +296,7 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
   const status = manager.statusOf(target)
   if (status?.running || status?.starting || status?.stopping || status?.installing) {
     const stop = await vscode.window.showWarningMessage('Stop the instance before deleting it.', 'Stop')
-    if (stop === 'Stop') await manager.stop(target)
+    if (stop === 'Stop') await stopInstance(manager, target)
     return
   }
   const home = manager.homeOf(current)

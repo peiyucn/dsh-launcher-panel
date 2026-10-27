@@ -5,12 +5,14 @@ import {
   actionDeleteInstance,
   actionEditInstance,
   actionOpen,
+  actionRestart,
   actionSelectInstance,
   actionStart,
   actionStop,
 } from './actions.ts'
 import { DshPanelProvider } from './panel.ts'
 import { getInstanceManager, InstanceManager, setInstanceManager } from './instance-manager.ts'
+import type { InstanceRuntimeStatus } from './server/instance-runtime.ts'
 import { dshBaseDir } from './paths.ts'
 import { STATUS_BAR_REFRESH_INTERVAL_MS } from './timing.ts'
 import { dbg, setLogPath } from './server/activity.ts'
@@ -29,8 +31,90 @@ const STATUS_TEXT = '$(dsh-whale)'
 const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
 const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
-/** A quick-pick row; only the action rows carry an action. */
-type MenuPick = vscode.QuickPickItem & { action?: StatusMenuAction; instanceId?: string }
+/** Per-instance actions offered after picking an instance row. */
+type InstanceAction = 'start' | 'stop' | 'restart' | 'open' | 'select'
+
+/** A quick-pick row; action rows carry either a global or an instance action. */
+type MenuPick = vscode.QuickPickItem & {
+  action?: StatusMenuAction
+  instanceId?: string
+  instanceAction?: InstanceAction
+}
+
+/** A command argument that should be an instance id (command palette passes none). */
+function instanceIdArg(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
+}
+
+/** The state word shown for one instance, including adopted/untracked servers. */
+function instanceStateLabel(status: InstanceRuntimeStatus): string {
+  if (status.adopted) return 'running (external)'
+  if (status.untrackedPort) return 'port held by an untracked process'
+  return status.state
+}
+
+/** Codicon for one instance row. */
+function instanceStateIcon(status: InstanceRuntimeStatus): string {
+  if (status.adopted || status.untrackedPort) return 'warning'
+  if (status.state === 'running') return 'globe'
+  if (status.state === 'starting' || status.installing) return 'sync~spin'
+  if (status.state === 'stopping') return 'sync'
+  if (status.state === 'error') return 'error'
+  return 'circle-outline'
+}
+
+/**
+ * The actions that make sense for one instance's current state.
+ *
+ * Every row carries the instance id, so the action never depends on which tab
+ * happens to be active (spec §9: panel buttons must not rely on implicit state).
+ */
+function instanceMenuItems(status: InstanceRuntimeStatus, activeId: string): MenuPick[] {
+  const items: MenuPick[] = []
+  if (status.running) {
+    items.push({
+      label: `Open ${status.name} Web UI`,
+      iconPath: new vscode.ThemeIcon('globe'),
+      instanceId: status.id,
+      instanceAction: 'open',
+    })
+  }
+  if (status.state !== 'stopping') {
+    if (!status.running) {
+      items.push({
+        label: `Start ${status.name}`,
+        description: status.state === 'error' ? 'retry after the failure' : undefined,
+        iconPath: new vscode.ThemeIcon('play'),
+        instanceId: status.id,
+        instanceAction: 'start',
+      })
+    } else {
+      items.push({
+        label: `Restart ${status.name}`,
+        iconPath: new vscode.ThemeIcon('debug-restart'),
+        instanceId: status.id,
+        instanceAction: 'restart',
+      })
+    }
+    if (status.running || status.starting || status.adopted || status.untrackedPort) {
+      items.push({
+        label: `Stop ${status.name}`,
+        iconPath: new vscode.ThemeIcon('debug-stop'),
+        instanceId: status.id,
+        instanceAction: 'stop',
+      })
+    }
+  }
+  if (status.id !== activeId) {
+    items.push({
+      label: `Make ${status.name} Active`,
+      iconPath: new vscode.ThemeIcon('star'),
+      instanceId: status.id,
+      instanceAction: 'select',
+    })
+  }
+  return items
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   setLogPath(path.join(dshBaseDir(), 'logs', 'client.log'))
@@ -42,6 +126,18 @@ export function activate(context: vscode.ExtensionContext): void {
   void manager.ready().then(() => manager.refresh()).catch((error) => {
     dbg(`manager initialization failed: ${error instanceof Error ? error.message : String(error)}`)
   })
+
+  // Settings edits from another window, the Settings UI or settings sync must
+  // reach this manager; reloading reuses running runtimes by id (never rebuilds
+  // them), so a tracked DSH child is not orphaned. See InstanceManager.reloadSettings.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration('dsh.instances') && !event.affectsConfiguration('dsh.activeInstance')) return
+      void manager.reloadSettings().catch((error) => {
+        dbg(`instance settings reload failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }),
+  )
 
   const panelProvider = new DshPanelProvider(context.extension.packageJSON.version ?? '0.0.0')
   context.subscriptions.push(
@@ -127,27 +223,51 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  /** Run one instance-scoped action, then repaint the status bar. */
+  const runInstanceAction = async (id: string, action: InstanceAction): Promise<void> => {
+    switch (action) {
+      case 'start':
+        await actionStart(id)
+        break
+      case 'stop':
+        await actionStop(id)
+        break
+      case 'restart':
+        await actionRestart(id)
+        break
+      case 'open':
+        await actionOpen(id)
+        break
+      case 'select':
+        await manager.select(id)
+        break
+    }
+    void refreshStatusBar().catch(() => {})
+  }
+
   context.subscriptions.push(
     statusBar,
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
     vscode.commands.registerCommand('dsh.statusMenu', async () => {
       const dashboard = await manager.dashboard()
       const active = dashboard.active
-      const running = dashboard.instances.filter((instance) => instance.running)
-      const showRunning = running.length > 1 || (running.length === 1 && !active?.running)
       const items: MenuPick[] = [
         { label: buildStatusMenuSummary(dashboard.status, active?.name), kind: vscode.QuickPickItemKind.Separator },
       ]
-      if (showRunning) {
-        items.push({ label: running.length > 1 ? `${running.length} running instances` : 'Running instance', kind: vscode.QuickPickItemKind.Separator })
-        for (const instance of running) {
+      // Every instance is selectable, not just the running ones (spec §9): the
+      // menu is also how a stopped instance gets started without the panel.
+      if (dashboard.instances.length > 0) {
+        items.push({ label: dashboard.instances.length > 1 ? 'Instances' : 'Instance', kind: vscode.QuickPickItemKind.Separator })
+        for (const instance of dashboard.instances) {
           items.push({
             label: instance.name,
-            description: `:${instance.port}${instance.id === active?.id ? ' · active' : ''}`,
-            iconPath: new vscode.ThemeIcon('globe'),
+            description: `:${instance.port} · ${instanceStateLabel(instance)}${instance.id === dashboard.activeId ? ' · active' : ''}`,
+            detail: instance.homeShort,
+            iconPath: new vscode.ThemeIcon(instanceStateIcon(instance)),
             instanceId: instance.id,
           })
         }
+        items.push({ label: 'Actions', kind: vscode.QuickPickItemKind.Separator })
       }
       items.push(...buildStatusMenuItems(dashboard.status, active?.name).map((item) => ({
         label: item.label,
@@ -156,15 +276,29 @@ export function activate(context: vscode.ExtensionContext): void {
       })))
       const picked = await vscode.window.showQuickPick(items, {
         title: 'DSH Launcher Panel',
-        placeHolder: active?.name ? `${active.name} — choose an action` : 'Choose an action',
+        placeHolder: active?.name ? `${active.name} — choose an instance or an action` : 'Choose an instance or an action',
       })
-      if (picked?.instanceId) {
-        await manager.select(picked.instanceId)
-        await actionOpen(picked.instanceId)
-        void refreshStatusBar().catch(() => {})
+      if (!picked) return
+      if (picked.instanceId !== undefined && picked.instanceAction !== undefined) {
+        await runInstanceAction(picked.instanceId, picked.instanceAction)
         return
       }
-      if (picked?.action) {
+      if (picked.instanceId !== undefined) {
+        const instance = dashboard.instances.find((entry) => entry.id === picked.instanceId)
+        if (!instance) return
+        const actions = instanceMenuItems(instance, dashboard.activeId)
+        if (actions.length === 0) {
+          void vscode.window.showInformationMessage(`"${instance.name}" has no action right now.`)
+          return
+        }
+        const actionPick = await vscode.window.showQuickPick(actions, {
+          title: instance.name,
+          placeHolder: `${instanceStateLabel(instance)} — choose an action`,
+        })
+        if (actionPick?.instanceAction) await runInstanceAction(instance.id, actionPick.instanceAction)
+        return
+      }
+      if (picked.action) {
         await runMenuAction(picked.action)
         void refreshStatusBar().catch(() => {})
       }
@@ -177,11 +311,23 @@ export function activate(context: vscode.ExtensionContext): void {
       await actionStop()
       void refreshStatusBar().catch(() => {})
     }),
+    vscode.commands.registerCommand('dsh.instance.start', async (id?: unknown) => {
+      await actionStart(instanceIdArg(id))
+      void refreshStatusBar().catch(() => {})
+    }),
+    vscode.commands.registerCommand('dsh.instance.stop', async (id?: unknown) => {
+      await actionStop(instanceIdArg(id))
+      void refreshStatusBar().catch(() => {})
+    }),
+    vscode.commands.registerCommand('dsh.instance.restart', async (id?: unknown) => {
+      await actionRestart(instanceIdArg(id))
+      void refreshStatusBar().catch(() => {})
+    }),
     vscode.commands.registerCommand('dsh.instance.new', () => actionCreateInstance()),
-    vscode.commands.registerCommand('dsh.instance.edit', () => actionEditInstance()),
-    vscode.commands.registerCommand('dsh.instance.delete', () => actionDeleteInstance()),
+    vscode.commands.registerCommand('dsh.instance.edit', (id?: unknown) => actionEditInstance(instanceIdArg(id))),
+    vscode.commands.registerCommand('dsh.instance.delete', (id?: unknown) => actionDeleteInstance(instanceIdArg(id))),
     vscode.commands.registerCommand('dsh.instance.select', () => actionSelectInstance()),
-    vscode.commands.registerCommand('dsh.instance.open', () => actionOpen()),
+    vscode.commands.registerCommand('dsh.instance.open', (id?: unknown) => actionOpen(instanceIdArg(id))),
   )
 }
 

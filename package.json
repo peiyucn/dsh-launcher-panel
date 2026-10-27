@@ -113,6 +113,21 @@
         "category": "DSH Launcher Panel"
       },
       {
+        "command": "dsh.instance.start",
+        "title": "Start Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.stop",
+        "title": "Stop Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.instance.restart",
+        "title": "Restart Instance",
+        "category": "DSH Launcher Panel"
+      },
+      {
         "command": "dsh.instance.new",
         "title": "New Instance",
         "category": "DSH Launcher Panel"
