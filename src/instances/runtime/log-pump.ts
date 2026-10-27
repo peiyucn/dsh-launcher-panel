@@ -1,0 +1,92 @@
+import * as fs from 'node:fs'
+import { LOG_TAIL_POLL_MS } from '../../shared/timing.ts'
+import { LOG_READ_BYTES, readRange } from '../../shared/logs.ts'
+
+const LOG_BUFFER_LINES = 500
+
+/**
+ * Live tail of one instance log. The source path is re-resolved on every pump
+ * because an adopted default instance can switch to the legacy log mid-run.
+ */
+export class LogTailPump {
+  private buffer = ''
+  private offset = 0
+  private lines: string[] = []
+  private timer: ReturnType<typeof setInterval> | undefined
+  private watcher: fs.FSWatcher | undefined
+  private sourcePath = ''
+
+  private readonly resolveSource: () => string
+
+  constructor(resolveSource: () => string) {
+    this.resolveSource = resolveSource
+  }
+
+  start(): void {
+    this.stop()
+    this.buffer = ''
+    this.lines = []
+    this.sourcePath = this.resolveSource()
+    this.offset = Math.max(0, (this.stat(this.sourcePath)?.size ?? 0) - LOG_READ_BYTES)
+    this.pump()
+    try {
+      this.watcher = fs.watch(this.sourcePath, () => this.pump())
+      this.watcher.on('error', () => {})
+    } catch {
+      this.watcher = undefined
+    }
+    this.timer = setInterval(() => this.pump(), LOG_TAIL_POLL_MS)
+  }
+
+  stop(): void {
+    if (this.timer !== undefined) {
+      clearInterval(this.timer)
+      this.timer = undefined
+    }
+    this.watcher?.close()
+    this.watcher = undefined
+  }
+
+  reset(): void {
+    this.stop()
+    this.buffer = ''
+    this.offset = 0
+    this.lines = []
+    this.sourcePath = ''
+  }
+
+  tail(maxLines: number): string[] {
+    return this.lines.slice(-maxLines)
+  }
+
+  private stat(file: string): fs.Stats | undefined {
+    try {
+      return fs.statSync(file)
+    } catch {
+      return undefined
+    }
+  }
+
+  private pump(): void {
+    const source = this.resolveSource()
+    if (source !== this.sourcePath) {
+      this.sourcePath = source
+      this.offset = 0
+      this.buffer = ''
+      this.lines = []
+    }
+    const stat = this.stat(source)
+    if (stat === undefined) return
+    if (stat.size < this.offset) this.offset = 0
+    if (stat.size <= this.offset) return
+    const chunk = readRange(source, this.offset, stat.size - this.offset)
+    if (chunk === undefined) return
+    this.offset += chunk.length
+    this.buffer += chunk.toString('utf8')
+    const lines = this.buffer.split(/\r?\n/)
+    this.buffer = lines.pop() ?? ''
+    for (const line of lines) if (line.length > 0) this.lines.push(line)
+    const overflow = this.lines.length - LOG_BUFFER_LINES
+    if (overflow > 0) this.lines.splice(0, overflow)
+  }
+}

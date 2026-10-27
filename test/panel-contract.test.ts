@@ -29,7 +29,7 @@ const sorted = (values: Iterable<string>): string[] => [...values].sort()
 
 const body = panelBody({ version: '0.0.0-test' })
 const script = panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrowser: 'built-in' })
-const panelSource = readFileSync(new URL('../src/panel/panel.ts', import.meta.url), 'utf8')
+const messagesSource = readFileSync(new URL('../src/panel/messages.ts', import.meta.url), 'utf8')
 const contractSource = readFileSync(new URL('../src/panel/webview/panel-contract.ts', import.meta.url), 'utf8')
 
 const UPDATE_KEYS = [
@@ -103,8 +103,8 @@ test('the client command set, the host switch and PANEL_COMMANDS are the same se
     ...uniqueMatches(/command:\s*'([^']+)'/g, script),
     ...uniqueMatches(/data-cmd="([^"]+)"/g, body),
   ])
-  const hostCommands = new Set(uniqueMatches(/case\s+'([^']+)':/g, panelSource))
-  if (/PANEL_COMMANDS\.ready/.test(panelSource)) hostCommands.add('ready')
+  const hostCommands = new Set(uniqueMatches(/case\s+'([^']+)':/g, messagesSource))
+  if (/PANEL_COMMANDS\.ready/.test(messagesSource)) hostCommands.add('ready')
   const contractCommands = new Set(Object.values(PANEL_COMMANDS))
 
   assert.deepEqual(sorted(clientCommands), sorted(contractCommands), 'client posts a different command set')
@@ -117,9 +117,9 @@ test('the client command set, the host switch and PANEL_COMMANDS are the same se
 
 test('the host message types and the client handlers are the same set', () => {
   const hostTypes = new Set([
-    ...uniqueMatches(/PANEL_MESSAGE_TYPES\.([A-Za-z]+)/g, panelSource),
+    ...uniqueMatches(/PANEL_MESSAGE_TYPES\.([A-Za-z]+)/g, messagesSource),
     ...uniqueMatches(/PANEL_MESSAGE_TYPES\.([A-Za-z]+)/g, contractSource),
-    ...uniqueMatches(/type:\s*'([^']+)'/g, panelSource),
+    ...uniqueMatches(/type:\s*'([^']+)'/g, messagesSource),
   ])
   const clientTypes = new Set(uniqueMatches(/m\.type\s*(?:===|!==)\s*'([^']+)'/g, script))
   const contractTypes = new Set(Object.values(PANEL_MESSAGE_TYPES))

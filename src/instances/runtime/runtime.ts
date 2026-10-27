@@ -1,42 +1,28 @@
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { decodeChildOutput, isProcessAlive, sleep } from '../../shared/proc.ts'
-import {
-  HTTP_PROBE_TIMEOUT_MS,
-  PORT_POLL_INTERVAL_MS,
-  STOP_POLL_ATTEMPTS,
-  STOP_POLL_INTERVAL_MS,
-  STOP_POLL_PROBE_MS,
-} from '../../shared/timing.ts'
-import { httpOk, isPortOpen, tokenAccepted } from '../../dsh/probes.ts'
-import { findPortOwner, killPid } from '../../dsh/process.ts'
+import type { ChildProcess } from 'node:child_process'
+import { isProcessAlive, sleep } from '../../shared/proc.ts'
+import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
 import { instanceHome, instanceLogPath, type DshInstance } from '../model.ts'
 import { holdsHome, nextState, stopDecision, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
-import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
-import { LOG_TAIL_LINES, LogTailPump, readLogTail, readTokenFromLog } from '../../shared/logs.ts'
-import { buildProfileInitSpec, buildSpawnSpec } from '../../dsh/start-spec.ts'
 import { isUpdating } from '../../dsh/update.ts'
+import { buildSpawnSpec } from '../../dsh/start-spec.ts'
+import { LOG_TAIL_LINES } from '../../shared/logs.ts'
+import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
+import { adoptServer, isListening, loopbackUrl, waitForReady } from './health.ts'
+import { LogTailPump } from './log-pump.ts'
+import { ensureProfile } from './profile.ts'
+import { findPortOwner, killPid } from './process.ts'
+import { killTrackedProcess, spawnServer } from './spawn.ts'
+import type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts'
 
-const LOOPBACK = '127.0.0.1'
-
-const PROFILE_INIT_TIMEOUT_MS = 180_000
-
-const START_TIMEOUT_MS = 10 * 60_000
+export type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts'
 
 /** Whole-start bound: a hung install must surface as error, never leave `starting` behind. */
 const START_WATCHDOG_MS = 20 * 60_000
-
-function loopbackUrl(port: number): string {
-  return `http://${LOOPBACK}:${port}`
-}
-
-function isListening(port: number, probeMs?: number): Promise<boolean> {
-  return isPortOpen(LOOPBACK, port, probeMs)
-}
 
 function statOrUndefined(file: string): fs.Stats | undefined {
   try {
@@ -44,71 +30,6 @@ function statOrUndefined(file: string): fs.Stats | undefined {
   } catch {
     return undefined
   }
-}
-
-export interface PreparedDsh {
-  mode: 'pnpm' | 'source'
-  version: string
-  /** pnpm may be a `.cmd` shim; resolve it before spawning. */
-  pnpmCmd?: string
-  installDir?: string
-  checkout?: string
-}
-
-export interface RuntimeHost {
-  prepare(): Promise<PreparedDsh | undefined>
-  isDshMissing(): boolean
-  isHomeRunning(home: string, exceptId: string): boolean
-  addActivity: (line: string, isBusy?: boolean) => number
-  dbg: (line: string) => void
-}
-
-export interface InstanceRuntimeStatus {
-  id: string
-  name: string
-  home: string
-  homeShort: string
-  profile: string
-  port: number
-  state: InstanceState
-  running: boolean
-  starting: boolean
-  installing: boolean
-  stopping: boolean
-  /** A server answers on the port but this window does not track its process. */
-  adopted: boolean
-  /** The port listens while this runtime does not run it: Stop needs consent. */
-  untrackedPort: boolean
-  error: string
-  url: string
-  logPath: string
-  logPathShort: string
-}
-
-function runInitCommand(
-  file: string,
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-): Promise<{ ok: boolean; output: string }> {
-  return new Promise((resolve) => {
-    execFile(file, args, {
-      cwd,
-      env,
-      windowsHide: true,
-      timeout: PROFILE_INIT_TIMEOUT_MS,
-      encoding: 'buffer',
-      maxBuffer: 4 * 1024 * 1024,
-    }, (error, stdout, stderr) => {
-      const output = `${decodeChildOutput(stdout ?? Buffer.alloc(0))}\n${decodeChildOutput(stderr ?? Buffer.alloc(0))}`.trim()
-      if (!error) {
-        resolve({ ok: true, output })
-        return
-      }
-      const timedOut = (error as { killed?: boolean }).killed === true
-      resolve({ ok: false, output: `${timedOut ? 'timed out' : error.message}\n${output}`.trim() })
-    })
-  })
 }
 
 export class InstanceRuntime {
@@ -168,49 +89,26 @@ export class InstanceRuntime {
     this.state = next
   }
 
-  private async probeUrl(): Promise<string | undefined> {
-    const plain = `${loopbackUrl(this.instance.port)}/`
-    if (await httpOk(plain, HTTP_PROBE_TIMEOUT_MS)) return plain
-    const token = readTokenFromLog(this.logPath) ?? readTokenFromLog(this.legacyLogPath)
-    if (token === undefined) return undefined
-    const tokenUrl = `${plain}?token=${token}`
-    return (await tokenAccepted(tokenUrl, HTTP_PROBE_TIMEOUT_MS)) ? tokenUrl : undefined
-  }
-
   /** Pre-multi-instance server log; only an adopted default instance can have one. */
   private get legacyLogPath(): string {
     return path.join(dshBaseDir(), 'logs', 'server.log')
   }
 
-  private async adopt(): Promise<boolean> {
-    const url = await this.probeUrl()
-    if (url === undefined) return false
-    this.url = url
-    this.error = ''
-    this.consoleLog = []
-    this.transition('adopt')
-    return true
+  private adopt(): Promise<boolean> {
+    return adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
+      setUrl: (url) => { this.url = url },
+      clearError: () => { this.error = '' },
+      clearConsoleLog: () => { this.consoleLog = [] },
+      adopt: () => this.transition('adopt'),
+    })
   }
 
-  /** DSH owns profile creation: `--dump-config` composes the tree and exits. */
-  private async ensureProfile(prepared: PreparedDsh, home: string): Promise<boolean> {
-    const profileDir = path.join(home, 'profiles', this.instance.profile)
-    if (fs.existsSync(profileDir)) return true
-    this.activity(`ℹ Initializing profile "${this.instance.profile}" in ${home}…`)
-    const built = buildProfileInitSpec({
-      ...prepared,
-      profile: this.instance.profile,
-      home,
-      nodePath: this.config().nodePath,
-      baseEnv: process.env,
+  private ensureProfile(prepared: PreparedDsh, home: string): Promise<boolean> {
+    return ensureProfile(this.instance, prepared, home, {
+      activity: (line) => { this.activity(line) },
+      fail: (message) => this.fail(message),
+      nodePath: () => this.config().nodePath,
     })
-    if (!built.ok) return this.fail(built.reason)
-    const result = await runInitCommand(built.spec.file, built.spec.args, built.spec.cwd, built.spec.env)
-    if (!result.ok || !fs.existsSync(profileDir)) {
-      return this.fail(`profile initialization failed: ${result.output.split(/\r?\n/).filter(Boolean).slice(-3).join(' ') || 'no output'}`)
-    }
-    this.activity(`✓ Profile "${this.instance.profile}" initialized`)
-    return true
   }
 
   private fail(message: string): false {
@@ -226,7 +124,7 @@ export class InstanceRuntime {
     return this.child !== undefined || this.pid !== undefined
   }
 
-  private async spawnServer(prepared: PreparedDsh, home: string): Promise<boolean> {
+  private spawnServer(prepared: PreparedDsh, home: string): boolean {
     const cfg = this.config()
     const built = buildSpawnSpec({
       ...prepared,
@@ -238,78 +136,42 @@ export class InstanceRuntime {
       baseEnv: process.env,
     })
     if (!built.ok) return this.fail(built.reason)
-    try {
-      fs.mkdirSync(path.dirname(this.logPath), { recursive: true })
-    } catch (error) {
-      return this.fail(`cannot create the instance log directory: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    if (cfg.clearServerLogOnStart ?? true) {
-      try { fs.writeFileSync(this.logPath, '') } catch { /* best effort */ }
-    }
-    let logFd: number
-    try {
-      logFd = fs.openSync(this.logPath, 'a')
-    } catch (error) {
-      return this.fail(`cannot open the instance log: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    try {
-      const child = spawn(built.spec.file, built.spec.args, {
-        cwd: built.spec.cwd,
-        env: built.spec.env,
-        windowsHide: cfg.hideConsole ?? true,
-        detached: process.platform !== 'win32',
-        stdio: ['ignore', logFd, logFd],
-      })
-      this.child = child
-      this.pid = child.pid
-      child.unref()
-      child.once('error', (error) => {
-        if (this.state === 'starting') this.fail(`failed to start: ${error.message}`)
-      })
-      child.once('close', (code, signal) => {
-        this.child = undefined
-        // Starting is diagnosed by waitForReady; stopping by stopInternal.
-        if (this.state !== 'running') return
-        const detail = code !== null ? `exit code ${code}` : signal !== null ? `signal ${signal}` : 'no exit code'
-        this.pid = undefined
-        this.url = ''
-        this.untrackedPort = false
-        this.logPump.stop()
-        this.error = `dsh exited unexpectedly (${detail}) — see ${this.logPath}`
-        this.transition('exit')
-        this.activity(`✗ ${this.error}`)
-      })
-    } catch (error) {
-      return this.fail(`failed to start: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      try { fs.closeSync(logFd) } catch { /* child owns the duplicate */ }
-    }
-    this.logPump.start()
-    return true
+    return spawnServer(built.spec, {
+      state: () => this.state,
+      logPath: () => this.logPath,
+      clearServerLogOnStart: () => cfg.clearServerLogOnStart ?? true,
+      hideConsole: () => cfg.hideConsole ?? true,
+      fail: (message) => this.fail(message),
+      setChild: (child) => { this.child = child },
+      setPid: (pid) => { this.pid = pid },
+      handleUnexpectedExit: (code, signal) => this.handleUnexpectedExit(code, signal),
+      startLogPump: () => this.logPump.start(),
+    })
   }
 
-  private async waitForReady(): Promise<boolean> {
-    const startedAt = Date.now()
-    for (;;) {
-      await sleep(PORT_POLL_INTERVAL_MS)
-      if (this.state !== 'starting') return false
-      if (Date.now() - startedAt > START_TIMEOUT_MS) {
-        this.killTracked()
-        return this.fail(`start timed out after ${Math.round(START_TIMEOUT_MS / 60_000)} minutes`)
-      }
-      const url = await this.probeUrl()
-      if (url !== undefined) {
-        if (this.state !== 'starting') return false
-        this.url = url
-        this.transition('ready')
-        this.activity(`✓ Started ${url.replace(/\?token=.*$/, '')}`)
-        return true
-      }
-      if (this.pid !== undefined && !isProcessAlive(this.pid)) {
-        const tail = readLogTail(this.logPath, 5).join(' ')
-        return this.fail(`exited before opening port${tail ? `: ${tail}` : ''}`)
-      }
-    }
+  private handleUnexpectedExit(code: number | null, signal: NodeJS.Signals | null): void {
+    const detail = code !== null ? `exit code ${code}` : signal !== null ? `signal ${signal}` : 'no exit code'
+    this.pid = undefined
+    this.url = ''
+    this.untrackedPort = false
+    this.logPump.stop()
+    this.error = `dsh exited unexpectedly (${detail}) — see ${this.logPath}`
+    this.transition('exit')
+    this.activity(`✗ ${this.error}`)
+  }
+
+  private waitForReady(): Promise<boolean> {
+    return waitForReady(this.instance.port, {
+      state: () => this.state,
+      pid: () => this.pid,
+      logPath: () => this.logPath,
+      legacyLogPath: () => this.legacyLogPath,
+      activity: (line) => { this.activity(line) },
+      fail: (message) => this.fail(message),
+      transition: (event) => this.transition(event),
+      setUrl: (url) => { this.url = url },
+      killTracked: () => this.killTracked(),
+    })
   }
 
   private async startInternal(): Promise<boolean> {
@@ -402,8 +264,7 @@ export class InstanceRuntime {
     const pid = this.pid
     this.child = undefined
     this.pid = undefined
-    if (child?.pid) killPid(child.pid, this.host.dbg)
-    if (pid !== undefined) killPid(pid, this.host.dbg)
+    killTrackedProcess(child, pid, this.host.dbg)
   }
 
   /** Whether Stop would have to kill a process this window did not spawn. */

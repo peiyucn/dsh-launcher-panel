@@ -45,3 +45,8 @@ test('readTokenFromLog is undefined when the log has no token', (t) => {
   const file = tempLog(t, 'plain startup output with no launch URL\n')
   assert.equal(readTokenFromLog(file), undefined)
 })
+
+test('the shared log helpers stay free of the live tail pump', () => {
+  const source = fs.readFileSync(new URL('../src/shared/logs.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /class LogTailPump/, 'the stateful pump lives in the instance runtime')
+})

@@ -73,16 +73,29 @@ test('Stop asks before killing a port owner this runtime does not track', () => 
   assert.equal(stopDecision({ hasTrackedChild: false, portOpen: false, killUntracked: false }), 'cleanup')
 })
 
+function runtimeSource(): string {
+  return readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
+}
+
 test('Stop no longer kills an untracked port owner by default', () => {
-  const source = readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
+  const source = runtimeSource()
   assert.match(source, /stop\(killUntracked = false\)/, 'InstanceRuntime.stop must default to not killing untracked owners')
   assert.match(source, /stopDecision\(\{/, 'the untracked-port rule must be the tested pure decision')
   assert.match(source, /needsStopConfirmation\(\)/, 'the UI needs a way to ask before the untracked kill')
 })
 
-test('log tail reads live in the vscode-free log-read module', () => {
-  const source = readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
-  assert.match(source, /from '\.\.\/\.\.\/shared\/logs\.ts'/)
+test('runtime delegates spawn, health, profile and process handling to their own modules', () => {
+  const source = runtimeSource()
+  for (const module of ['spawn', 'health', 'profile', 'process', 'log-pump']) {
+    assert.match(source, new RegExp(`from '\\./${module}\\.ts'`), `runtime must use ./${module}.ts`)
+  }
   assert.doesNotMatch(source, /function readLogTail\(/, 'the duplicated tail reader must not come back')
   assert.doesNotMatch(source, /function readTokenFromLog\(/, 'the duplicated token reader must not come back')
+})
+
+test('log tail reads live in the shared helpers and the live pump outside them', () => {
+  const pump = readFileSync(new URL('../src/instances/runtime/log-pump.ts', import.meta.url), 'utf8')
+  assert.match(pump, /from '\.\.\/\.\.\/shared\/logs\.ts'/)
+  const logs = readFileSync(new URL('../src/shared/logs.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(logs, /class LogTailPump/, 'the live pump belongs to the instance runtime, not the pure log helpers')
 })

@@ -13,87 +13,21 @@ import {
   type NormalizedInstances,
 } from './model.ts'
 import type { ActivityEntry } from '../shared/activity.ts'
-import { addActivity, activityLogFile, dbg, fileSizeSafe, getActivity, withBusy } from '../shared/activity.ts'
-import type { CheckoutHost } from '../dsh/checkout.ts'
-import { ensureCheckoutReady } from '../dsh/checkout.ts'
+import { addActivity, dbg, getActivity } from '../shared/activity.ts'
 import { readConfig } from '../dsh/config.ts'
-import { detectDsh, detectDshVersion, type DetectHost } from '../dsh/detect.ts'
-import { probeNodeVersion } from '../dsh/node-check.ts'
-import { runInTerminal as runInTerminalInner, type TerminalHost } from '../dsh/terminal.ts'
-import {
-  ensurePnpmAvailable,
-  ensureSourceCheckout,
-  findSourceCheckout,
-  pkgInstallDir,
-  preparePkgStart,
-  unreachablePkgPath as unreachablePkgPathSetting,
-  type InstallHost,
-} from '../dsh/install.ts'
-import {
-  InstanceRuntime,
-  type InstanceRuntimeStatus,
-  type PreparedDsh,
-  type RuntimeHost,
-} from './runtime/runtime.ts'
+import type { DshUpdate } from '../dsh/update.ts'
+import { InstanceRuntime } from './runtime/runtime.ts'
+import type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './runtime/types.ts'
 import { settingsWriteFailure } from './bootstrap.ts'
-import {
-  instanceModelOptions,
-  markInstancesAuthoritative,
-  readInitialInstances,
-  readInstanceSettings,
-  writeActiveInstance,
-  writeInstances,
-} from './store.ts'
-import { maskPath } from '../dsh/paths.ts'
-import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from '../shared/timing.ts'
-import { versionFromDescribe } from '../dsh/versions.ts'
-import { checkDshUpdateStatus, isUpdating, runDshUpdate, type DshUpdate, type UpdateHost } from '../dsh/update.ts'
+import { instanceModelOptions, markInstancesAuthoritative, readInitialInstances, readInstanceSettings, writeActiveInstance, writeInstances } from './store.ts'
+import { SharedDsh } from './shared-dsh.ts'
+import { buildDashboard, type DashboardFacts, type InstanceDashboard } from './dashboard.ts'
 
-interface InstanceDashboard {
-  status: {
-    running: boolean
-    starting: boolean
-    installing: boolean
-    stopping: boolean
-    checking: boolean
-    updating: boolean
-    url: string
-    dsh: 'unknown' | 'ok' | 'missing'
-    dshVersion: string
-    dshPath: string
-    dshHome: string
-    dshPathShort: string
-    dshHomeShort: string
-    nodeVersion: string
-    mode: 'pnpm' | 'source'
-    update: DshUpdate | undefined
-    consoleLogPath: string
-    consoleLogPathShort: string
-    serverLogPath: string
-    serverLogPathShort: string
-    consoleLogSize: number
-    serverLogSize: number
-    sourceDebug: boolean
-  }
-  instances: InstanceRuntimeStatus[]
-  active: InstanceRuntimeStatus | undefined
-  activeId: string
-  issues: InstanceIssue[]
-}
+export type { InstanceDashboard } from './dashboard.ts'
 
 interface InstanceMutation {
   instance?: DshInstance
   issues: InstanceIssue[]
-}
-
-const terminalHost: TerminalHost = { addActivity }
-
-/** Host members shared by the install/checkout/update builders. */
-const flowHost = {
-  addActivity,
-  withBusy,
-  runInTerminal: (title: string, command: string, args: string[], env?: Record<string, string>) =>
-    runInTerminalInner(title, command, args, terminalHost, env),
 }
 
 let activeManager: InstanceManager | undefined
@@ -110,24 +44,16 @@ export class InstanceManager {
   private settings: NormalizedInstances = { instances: [], activeId: '', issues: [] }
   private runtimes = new Map<string, InstanceRuntime>()
   private readonly host: RuntimeHost
+  private readonly shared: SharedDsh
   private readyPromise: Promise<void> | undefined
   private readyError = ''
-  private preparePromise: Promise<PreparedDsh | undefined> | undefined
-  private dshVersion = ''
-  private dshPath = ''
-  private dshState: 'unknown' | 'ok' | 'missing' = 'unknown'
-  private nodeVersion = ''
-  private detectionAt = 0
   private logLineSeq = 0
-  private updateCache: { update: DshUpdate; at: number } | undefined
-  private updateCheckedAt = 0
-  private checkPromise: Promise<DshUpdate | undefined> | undefined
-  private checkingUpdate = false
 
   constructor(private readonly context: Pick<vscode.ExtensionContext, 'globalState'>) {
+    this.shared = new SharedDsh(() => !this.anyActive())
     this.host = {
       prepare: () => this.prepare(),
-      isDshMissing: () => this.dshState === 'missing',
+      isDshMissing: () => this.shared.isDshMissing(),
       isHomeRunning: (home, exceptId) => this.isHomeRunning(home, exceptId),
       addActivity,
       dbg,
@@ -149,7 +75,7 @@ export class InstanceManager {
   private async initialize(): Promise<void> {
     this.readyError = ''
     this.applySettings(await readInitialInstances(this.context))
-    this.nodeVersion = await probeNodeVersion(readConfig().nodePath).catch(() => '')
+    await this.shared.loadNodeVersion()
     for (const issue of this.settings.issues) addActivity(`⚠ ${issue.message}`)
   }
 
@@ -221,61 +147,15 @@ export class InstanceManager {
 
   async refresh(): Promise<void> {
     for (const runtime of this.runtimes.values()) await runtime.refresh()
-    const now = Date.now()
-    if (now - this.detectionAt > DETECTION_CACHE_TTL_MS) {
-      this.detectionAt = now
-      const cfg = readConfig()
-      try {
-        const detection = await detectDsh(cfg, this.detectHost())
-        this.dshState = detection.state
-        this.dshPath = detection.path
-        await detectDshVersion(cfg, this.detectHost())
-      } catch {
-        this.dshState = 'unknown'
-      }
-    }
-    const lastUpdateCheck = this.updateCache?.at ?? this.updateCheckedAt
-    if (!this.checkingUpdate && Date.now() - lastUpdateCheck > UPDATE_CHECK_TTL_MS) void this.checkUpdate()
+    await this.shared.refreshDetection()
   }
 
   invalidateDetection(): void {
-    this.detectionAt = 0
+    this.shared.invalidateDetection()
   }
 
   checkUpdate(force = false): Promise<DshUpdate | undefined> {
-    if (this.checkPromise) return this.checkPromise
-    if (!force && this.updateCache && Date.now() - this.updateCache.at < UPDATE_CHECK_TTL_MS) {
-      return Promise.resolve(this.updateCache.update)
-    }
-    this.checkingUpdate = true
-    this.checkPromise = checkDshUpdateStatus(this.updateHost())
-      .then((update) => {
-        this.updateCache = { update, at: Date.now() }
-        return update
-      })
-      .catch((error) => {
-        addActivity(`⚠ Update check failed: ${errorMessage(error)}`)
-        return this.updateCache?.update
-      })
-      .finally(() => {
-        this.checkingUpdate = false
-        this.updateCheckedAt = Date.now()
-        this.checkPromise = undefined
-      })
-    return this.checkPromise
-  }
-
-  private updateHost(): UpdateHost {
-    return {
-      ...flowHost,
-      readConfig: () => readConfig(),
-      findSourceCheckout: () => findSourceCheckout(readConfig()),
-      dbg,
-      isStopped: () => !this.anyActive(),
-      invalidateUpdateCache: () => { this.updateCache = undefined },
-      installHost: this.installHost(),
-      checkoutHost: this.checkoutHost(),
-    }
+    return this.shared.checkUpdate(force)
   }
 
   activityFor(id: string): ActivityEntry[] {
@@ -290,47 +170,24 @@ export class InstanceManager {
   }
 
   async dashboard(): Promise<InstanceDashboard> {
-    try {
-      await this.ready()
-    } catch {
-      // readyError is reported through issues() below.
-    }
-    await this.refresh()
-    const cfg = readConfig()
-    const instances = this.instanceStatuses()
-    const activeId = this.activeId
-    const active = instances.find((instance) => instance.id === activeId)
-    const consoleLogPath = activityLogFile()
+    return buildDashboard({
+      ready: () => this.ready(),
+      refresh: () => this.refresh(),
+      facts: () => this.dashboardFacts(),
+    })
+  }
+
+  private dashboardFacts(): DashboardFacts {
     return {
-      status: {
-        running: active?.running ?? false,
-        starting: active?.starting ?? false,
-        installing: active?.installing ?? false,
-        stopping: active?.stopping ?? false,
-        checking: this.checkingUpdate,
-        updating: isUpdating(),
-        url: active?.url ?? '',
-        dsh: this.dshState,
-        dshVersion: this.dshVersion,
-        dshPath: this.dshPath,
-        dshHome: active?.home ?? '',
-        dshPathShort: maskPath(this.dshPath),
-        dshHomeShort: maskPath(active?.home ?? ''),
-        nodeVersion: this.nodeVersion,
-        mode: cfg.runMode,
-        update: this.updateCache?.update,
-        consoleLogPath,
-        consoleLogPathShort: maskPath(consoleLogPath),
-        serverLogPath: active?.logPath ?? '',
-        serverLogPathShort: active?.logPathShort ?? '',
-        consoleLogSize: fileSizeSafe(consoleLogPath),
-        serverLogSize: active ? fileSizeSafe(active.logPath) : 0,
-        sourceDebug: cfg.sourceDebug,
-      },
-      instances,
-      active,
-      activeId,
+      instances: this.instanceStatuses(),
+      activeId: this.activeId,
       issues: this.issues(),
+      checking: this.shared.checkingUpdate,
+      update: this.shared.update,
+      dsh: this.shared.dshState,
+      dshVersion: this.shared.dshVersion,
+      dshPath: this.shared.dshPath,
+      nodeVersion: this.shared.nodeVersion,
     }
   }
 
@@ -444,75 +301,13 @@ export class InstanceManager {
   }
 
   prepare(): Promise<PreparedDsh | undefined> {
-    if (this.preparePromise) return this.preparePromise
-    this.preparePromise = this.prepareInternal().finally(() => {
-      this.preparePromise = undefined
-    })
-    return this.preparePromise
-  }
-
-  private async prepareInternal(): Promise<PreparedDsh | undefined> {
-    const cfg = readConfig()
-    await this.ready()
-    // A pkgPath synced from another machine may not exist here; say so instead of
-    // silently installing into the managed location.
-    const unreachable = cfg.runMode === 'pnpm' ? unreachablePkgPathSetting(cfg) : undefined
-    if (unreachable !== undefined) {
-      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
-    }
-    const installHost = this.installHost()
-    await detectDshVersion(cfg, this.detectHost())
-    if (cfg.runMode === 'source') {
-      const checkout = await ensureSourceCheckout(cfg, installHost)
-      if (!checkout) return undefined
-      if (!(await ensureCheckoutReady(checkout.path, this.checkoutHost(), checkout.cloned))) {
-        this.dshState = 'missing'
-        return undefined
-      }
-      this.dshPath = checkout.path
-      await detectDshVersion(cfg, this.detectHost())
-      const version = versionFromDescribe(this.dshVersion) ?? this.dshVersion
-      this.dshVersion = version
-      this.dshState = 'ok'
-      return { mode: 'source', version, checkout: checkout.path }
-    }
-
-    const pnpm = await ensurePnpmAvailable(installHost)
-    if (!pnpm) return undefined
-    const version = await preparePkgStart(cfg, pnpm.command, pnpm.allowBuild, installHost)
-    if (!version) return undefined
-    this.dshVersion = version
-    this.dshPath = pkgInstallDir(cfg)
-    this.dshState = 'ok'
-    return { mode: 'pnpm', version, pnpmCmd: pnpm.command, installDir: this.dshPath }
-  }
-
-  private detectHost(): DetectHost {
-    return {
-      findSourceCheckout: (cfg) => findSourceCheckout(cfg),
-      setDshVersion: (version) => { this.dshVersion = version },
-    }
-  }
-
-  private installHost(): InstallHost {
-    return {
-      ...flowHost,
-      runInstalling: (task) => task(),
-      setDshVersion: (version) => { this.dshVersion = version },
-      setDshState: (state) => { this.dshState = state },
-      dbg,
-    }
-  }
-
-  private checkoutHost(): CheckoutHost {
-    return { ...flowHost, runInstalling: (task) => task() }
+    return this.shared.prepare()
   }
 
   async updateDsh(): Promise<void> {
     if (this.anyActive()) throw new Error('Stop all instances before updating dsh')
-    await runDshUpdate(this.updateHost())
-    this.updateCache = undefined
-    this.invalidateDetection()
+    await this.shared.runUpdate()
+    this.shared.invalidateDetection()
     await this.refresh()
     await this.checkUpdate(true)
   }

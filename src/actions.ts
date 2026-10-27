@@ -1,10 +1,10 @@
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { normalizeBrowser, shouldOpenBrowser } from '../shared/env.ts'
-import { getInstanceManager, type InstanceManager } from '../instances/manager.ts'
-import type { InstanceIssue } from '../instances/model.ts'
-import type { InstanceRuntimeStatus } from '../instances/runtime/runtime.ts'
+import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
+import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
+import type { InstanceIssue } from './instances/model.ts'
+import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
 
 /** Run `task` with the ready manager; no-op before activation. */
 async function withManager<T>(task: (manager: InstanceManager) => Promise<T>): Promise<T | undefined> {
