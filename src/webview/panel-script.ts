@@ -1,18 +1,9 @@
 /**
- * Dashboard client script (runs inside the webview).
+ * Dashboard client script, inlined into the nonce-guarded script tag.
  *
- * Extracted verbatim from the webview template. It is a *function* rather than
- * a constant because two values are substituted at render time:
- *
- * - `peakWindows` — the peak windows, serialized from `PEAK_WINDOWS_BJ_HOURS`
- *   (`pricing.ts`)
- * - `defaultBrowser` — the fallback browser mode from `DEFAULT_BROWSER`
- *   (`env.ts`), JSON-serialized by this function before injection
- *
- * Keeping them as parameters makes each substitution site explicit; the rest of
- * the script is untouched text. The script is a plain string that the host
- * inlines into a nonce-guarded `<script>` tag, so it must stay free of
- * backticks and `${}` beyond these two placeholders.
+ * It is a function because two values are substituted at render time:
+ * `peakWindows` (host-serialized) and `defaultBrowser` (JSON-encoded here). The
+ * text must stay free of backticks and `${}` beyond those placeholders.
  *
  * @module webview/panel-script
  */
@@ -20,40 +11,54 @@
 export interface PanelScriptValues {
   /** Peak windows as Beijing hours, already serialized into a JS literal. */
   peakWindows: string
-  /**
-   * Default browser mode, used when none is reported. Injected through
-   * `JSON.stringify` (not string concatenation) so a value with quotes cannot
-   * break out of the generated JS string literal.
-   */
+  /** Browser fallback; JSON-encoded so a quoted value cannot escape its literal. */
   defaultBrowser: string
 }
 
 export function panelScript(values: PanelScriptValues): string {
-  // JSON.stringify keeps the value inside its JS string literal; escaping `<`
-  // additionally keeps a value containing "</script>" from closing the host's
-  // inline <script> element (JSON.parse still yields the original character).
+  // JSON.stringify keeps the value inside its literal; escaping `<` also stops a
+  // value containing "</script>" from closing the host's inline script element.
   const defaultBrowserLiteral = JSON.stringify(values.defaultBrowser).replace(/</g, '\\u003c')
   return `    const vscode = acquireVsCodeApi()
     vscode.postMessage({ command: 'ready' })
     const LOADING_TIMEOUT_MS = 6000
     const ELAPSED_INTERVAL_MS = 1000
-    // dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
-    // 几何 / 时长 / 减动效兜底逐字照 StateDot.module.css（1.5s 匀速旋转 + arc 的
-    // stroke-dasharray 呼吸，两者同相），上色用面板自己的 --lap-fg2；class 与
-    // keyframes 在 panel-styles.ts。
-    // ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix 分支），官方早在
-    // 4937343a5e 就换成了圆弧 spinner，本次跟进 —— 面板与两个插件面板同时统一。
+    // Mirrors dsh's StateDot geometry and timing; panel-styles.ts carries the CSS.
     const SPINNER_SVG = '<svg class="state-spinner" viewBox="0 0 24 24" aria-hidden="true">'
       + '<g class="state-spinner-motion">'
       + '<circle class="state-spinner-track" cx="12" cy="12" r="9.5"></circle>'
       + '<circle class="state-spinner-arc" cx="12" cy="12" r="9.5"></circle>'
       + '</g></svg>'
     document.getElementById('loadingSpinner').innerHTML = SPINNER_SVG
+    // One lookup per repeatedly used element: the markup is static.
+    const el = {
+      loadingOverlay: document.getElementById('loadingOverlay'),
+      statusText: document.getElementById('statusText'),
+      statusSub: document.getElementById('statusSub'),
+      startBtn: document.getElementById('startBtn'),
+      instanceTabs: document.getElementById('instanceTabs'),
+      editInstanceBtn: document.getElementById('editInstanceBtn'),
+      deleteInstanceBtn: document.getElementById('deleteInstanceBtn'),
+      updateBtn: document.getElementById('updateBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      debugToggle: document.getElementById('debugToggle'),
+      log: document.getElementById('log'),
+      balanceValue: document.getElementById('balanceValue'),
+      balanceBtn: document.getElementById('balanceBtn'),
+      instanceFormName: document.getElementById('instanceFormName'),
+      instanceFormHome: document.getElementById('instanceFormHome'),
+      instanceFormAuto: document.getElementById('instanceFormAuto'),
+      instanceFormBrowser: document.getElementById('instanceFormBrowser'),
+      instanceFormSave: document.getElementById('instanceFormSave'),
+      instanceFormError: document.getElementById('instanceFormError'),
+      instanceModal: document.getElementById('instanceModal'),
+    }
+    const modeOptions = document.querySelectorAll('.mode-option')
+    const whenRunning = document.querySelectorAll('.when-running')
     let gotUpdate = false
     let instanceList = []
     let currentInstanceId = ''
-    // Last rendered activity: text drives auto-scroll, HTML avoids repainting an
-    // unchanged 200-line log on every refresh tick.
+    // Last rendered activity: text drives auto-scroll, HTML avoids needless repaints.
     let lastActivityText = ''
     let lastLogHtml = ''
     let formMode = 'new'
@@ -61,11 +66,8 @@ export function panelScript(values: PanelScriptValues): string {
     let formHomePrefix = ''
     let formHomeAuto = true
     setTimeout(() => {
-      if (!gotUpdate) {
-        const st = document.getElementById('statusText')
-        if (st && st.textContent === 'Checking…') st.textContent = '⚠ No status updates received'
-      }
-      document.getElementById('loadingOverlay').classList.add('hidden')
+      if (!gotUpdate && el.statusText.textContent === 'Checking…') el.statusText.textContent = '⚠ No status updates received'
+      el.loadingOverlay.classList.add('hidden')
     }, LOADING_TIMEOUT_MS)
 
     function esc(s) {
@@ -85,47 +87,33 @@ export function panelScript(values: PanelScriptValues): string {
     }
     function renderRunning(status) {
       status = status || {}
-      const running = !!(status.running)
-      const starting = !!(status.starting)
-      const installing = !!(status.installing)
-      const stopping = !!(status.stopping)
-      // An update rewrites the tree before any spawn; Start must stay greyed for
-      // the whole run, not just for the setup step a later Start would trigger.
-      const updating = !!(status.updating)
-      // Stop must be reachable while starting/installing too, so a slow start
-      // or first-run install can be interrupted.
-      document.querySelectorAll('.when-running').forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
-      const statusText = document.getElementById('statusText')
-      const statusSub = document.getElementById('statusSub')
-      const startBtn = document.getElementById('startBtn')
+      const running = !!status.running
+      const starting = !!status.starting
+      const installing = !!status.installing
+      const stopping = !!status.stopping
+      const updating = !!status.updating
+      whenRunning.forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
       if (starting || installing || stopping || updating) {
-        const justStarted = startElapsed()
-        if (justStarted) statusSub.textContent = 'Waited 0s'
-        statusText.textContent = stopping
-          ? 'Stopping…'
-          : (updating ? 'Updating dsh…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'))
-        startBtn.textContent = stopping
-          ? 'Stopping…'
-          : (updating ? 'Updating…' : (installing ? 'Installing…' : 'Starting…'))
-        startBtn.disabled = true
+        if (startElapsed()) el.statusSub.textContent = 'Waited 0s'
+        el.statusText.textContent = stopping ? 'Stopping…' : updating ? 'Updating dsh…' : installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'
+        el.startBtn.textContent = stopping ? 'Stopping…' : updating ? 'Updating…' : installing ? 'Installing…' : 'Starting…'
+        el.startBtn.disabled = true
       } else if (status.unknown) {
-        // The host could not build a fresh snapshot and is reusing the last
-        // good one. Saying "Stopped" here would lie about a server that may be
-        // running; say what is actually known.
+        // A stale snapshot must not be reported as "Stopped" while the server may run.
         stopElapsed()
-        startBtn.disabled = false
-        startBtn.textContent = '▶ Start'
-        statusText.textContent = 'Status unknown'
-        statusSub.textContent = 'Status refresh failed — retrying…'
+        el.startBtn.disabled = false
+        el.startBtn.textContent = '▶ Start'
+        el.statusText.textContent = 'Status unknown'
+        el.statusSub.textContent = 'Status refresh failed — retrying…'
       } else {
         stopElapsed()
-        startBtn.disabled = false
-        statusText.textContent = running ? 'Running' : 'Stopped'
-        statusSub.textContent = running ? (status.url || '') : ''
-        startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
+        el.startBtn.disabled = false
+        el.statusText.textContent = running ? 'Running' : 'Stopped'
+        el.statusSub.textContent = running ? (status.url || '') : ''
+        el.startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
       }
       const mode = status.mode === 'source' ? 'source' : 'pnpm'
-      document.querySelectorAll('.mode-option').forEach((b) => {
+      modeOptions.forEach((b) => {
         const active = b.dataset.mode === mode
         b.classList.toggle('active', active)
         b.setAttribute('aria-pressed', String(active))
@@ -135,84 +123,50 @@ export function panelScript(values: PanelScriptValues): string {
     function instanceDot(state) {
       if (state === 'running') return '<span class="dot running"></span>'
       if (state === 'starting' || state === 'installing' || state === 'stopping') return '<span class="dot matrix">' + SPINNER_SVG + '</span>'
-      if (state === 'error') return '<span class="dot"></span>'
-      return '<span class="dot stopped"></span>'
+      return '<span class="dot' + (state === 'error' ? '' : ' stopped') + '"></span>'
     }
     function renderTabs(list, activeId) {
-      const host = document.getElementById('instanceTabs')
-      if (!host) return
-      host.innerHTML = ''
-      if (!Array.isArray(list) || list.length === 0) {
-        const empty = document.createElement('span')
-        empty.className = 'instance-tabs-empty'
-        empty.textContent = 'No instances — click + to create one'
-        host.appendChild(empty)
-      } else {
-        list.forEach((item) => {
-          const tab = document.createElement('button')
-          tab.type = 'button'
-          tab.className = 'instance-tab'
-          tab.setAttribute('role', 'tab')
-          tab.setAttribute('aria-selected', String(item.id === activeId))
-          tab.dataset.id = item.id
-          tab.title = 'Instance: ' + (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '')
-          tab.setAttribute('aria-label', 'Instance ' + (item.name || '') + ', ' + (item.state || 'stopped'))
-          tab.innerHTML = instanceDot(item.state) + '<span class="tab-name"></span>'
-          tab.querySelector('.tab-name').textContent = item.name || 'Instance'
-          tab.addEventListener('click', () => vscode.postMessage({ command: 'selectInstance', value: item.id }))
-          host.appendChild(tab)
-          if (item.id === activeId) window.requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
-        })
-      }
+      const items = Array.isArray(list) ? list : []
+      el.instanceTabs.innerHTML = items.length === 0
+        ? '<span class="instance-tabs-empty">No instances — click + to create one</span>'
+        : items.map((item) => {
+          const selected = item.id === activeId
+          return '<button type="button" class="instance-tab" role="tab" aria-selected="' + selected + '" data-id="' + esc(item.id) + '"'
+            + ' title="' + esc('Instance: ' + (item.name || '') + ' · ' + (item.state || 'stopped') + ' · ' + (item.home || '')) + '"'
+            + ' aria-label="' + esc('Instance ' + (item.name || '') + ', ' + (item.state || 'stopped')) + '">'
+            + instanceDot(item.state) + '<span class="tab-name">' + esc(item.name || 'Instance') + '</span></button>'
+        }).join('')
+      const activeTab = el.instanceTabs.querySelector('.instance-tab[aria-selected="true"]')
+      if (activeTab) window.requestAnimationFrame(() => activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
     }
     function renderInstanceSummary(list) {
-      const el = document.getElementById('instanceSummary')
-      if (!el) return
       const items = Array.isArray(list) ? list : []
-      if (items.length === 0) {
-        el.textContent = 'No instances'
-        return
-      }
       const running = items.filter((item) => item.running).length
-      el.textContent = items.length + ' instance' + (items.length === 1 ? '' : 's') + (running ? ' · ' + running + ' running' : '')
+      document.getElementById('instanceSummary').textContent = items.length === 0
+        ? 'No instances'
+        : items.length + ' instance' + (items.length === 1 ? '' : 's') + (running ? ' · ' + running + ' running' : '')
     }
-    // Settings/bootstrap problems (invalid entries, a settings write VS Code
-    // refused) must be visible: an empty instance list without a reason reads as
-    // "there is no instance", which is how a failed first-run save ended up
-    // looking like a broken launcher.
     function renderIssues(list) {
-      const host = document.getElementById('instanceIssues')
-      if (!host) return
-      host.innerHTML = ''
-      const items = Array.isArray(list) ? list : []
-      for (const issue of items) {
-        if (!issue || typeof issue.message !== 'string' || issue.message === '') continue
-        const line = document.createElement('div')
-        const isError = issue.severity === 'error'
-        line.className = 'instance-issue ' + (isError ? 'error' : 'warning')
-        line.textContent = (isError ? '⚠ ' : 'ℹ ') + issue.message
-        host.appendChild(line)
-      }
+      const issues = (Array.isArray(list) ? list : []).filter((issue) => issue && typeof issue.message === 'string' && issue.message !== '')
+      document.getElementById('instanceIssues').innerHTML = issues.map((issue) => {
+        const error = issue.severity === 'error'
+        return '<div class="instance-issue ' + (error ? 'error' : 'warning') + '">' + (error ? '⚠ ' : 'ℹ ') + esc(issue.message) + '</div>'
+      }).join('')
     }
     function renderInstanceMeta(status) {
       status = status || {}
       const active = !!status.id
       const busy = !!(status.running || status.starting || status.installing || status.stopping)
+      const showHome = active && !!status.home
       const home = document.getElementById('instanceHome')
-      const edit = document.getElementById('editInstanceBtn')
-      const del = document.getElementById('deleteInstanceBtn')
-      if (home) {
-        home.textContent = active && status.home ? (status.homeShort || status.home) : '—'
-        home.title = active && status.home ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
-        home.dataset.path = active && status.home ? status.home : ''
-      }
-      if (edit) edit.disabled = !active || busy
-      if (del) del.disabled = !active || busy
-      const err = document.getElementById('instanceError')
-      if (err) err.textContent = active && status.error ? status.error : ''
+      home.textContent = showHome ? (status.homeShort || status.home) : '—'
+      home.title = showHome ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
+      home.dataset.path = showHome ? status.home : ''
+      el.editInstanceBtn.disabled = el.deleteInstanceBtn.disabled = !active || busy
+      document.getElementById('instanceError').textContent = active && status.error ? status.error : ''
       if (!active) {
-        const start = document.getElementById('startBtn')
-        if (start) { start.disabled = true; start.textContent = '+ New' }
+        el.startBtn.disabled = true
+        el.startBtn.textContent = '+ New'
       }
     }
 
@@ -229,32 +183,29 @@ export function panelScript(values: PanelScriptValues): string {
       formId = form.id || ''
       formHomePrefix = form.homePrefix || ''
       document.getElementById('instanceModalTitle').textContent = formMode === 'edit' ? 'Edit instance' : 'New instance'
-      document.getElementById('instanceFormName').value = form.name || ''
-      document.getElementById('instanceFormHome').value = form.home || ''
-      formHomeAuto = formMode === 'new' || document.getElementById('instanceFormHome').value === autoHomeFor(form.name || '')
-      document.getElementById('instanceFormAuto').value = form.autoOpenBrowser === true ? 'true' : form.autoOpenBrowser === false ? 'false' : 'global'
-      document.getElementById('instanceFormBrowser').value = form.browser === 'built-in' || form.browser === 'external' ? form.browser : 'global'
-      document.getElementById('instanceFormError').textContent = ''
-      const save = document.getElementById('instanceFormSave')
-      save.disabled = false
-      save.textContent = formMode === 'edit' ? 'Save' : 'Create'
-      const modal = document.getElementById('instanceModal')
-      modal.hidden = false
-      document.getElementById('instanceFormName').focus()
+      el.instanceFormName.value = form.name || ''
+      el.instanceFormHome.value = form.home || ''
+      formHomeAuto = formMode === 'new' || el.instanceFormHome.value === autoHomeFor(form.name || '')
+      el.instanceFormAuto.value = form.autoOpenBrowser === true ? 'true' : form.autoOpenBrowser === false ? 'false' : 'global'
+      el.instanceFormBrowser.value = form.browser === 'built-in' || form.browser === 'external' ? form.browser : 'global'
+      el.instanceFormError.textContent = ''
+      el.instanceFormSave.disabled = false
+      el.instanceFormSave.textContent = formMode === 'edit' ? 'Save' : 'Create'
+      el.instanceModal.hidden = false
+      el.instanceFormName.focus()
     }
     function closeInstanceForm() {
-      document.getElementById('instanceModal').hidden = true
+      el.instanceModal.hidden = true
     }
     function saveInstanceForm() {
-      const name = document.getElementById('instanceFormName').value
-      const home = document.getElementById('instanceFormHome').value
-      const autoText = document.getElementById('instanceFormAuto').value
-      const browserText = document.getElementById('instanceFormBrowser').value
+      const name = el.instanceFormName.value
+      const home = el.instanceFormHome.value
+      const autoText = el.instanceFormAuto.value
+      const browserText = el.instanceFormBrowser.value
       const autoOpenBrowser = autoText === 'true' ? true : autoText === 'false' ? false : undefined
       const browser = browserText === 'built-in' || browserText === 'external' ? browserText : undefined
-      const save = document.getElementById('instanceFormSave')
-      save.disabled = true
-      document.getElementById('instanceFormError').textContent = ''
+      el.instanceFormSave.disabled = true
+      el.instanceFormError.textContent = ''
       vscode.postMessage({
         command: 'saveInstanceForm',
         value: JSON.stringify({ mode: formMode, id: formId, name, home, autoOpenBrowser, browser }),
@@ -264,96 +215,60 @@ export function panelScript(values: PanelScriptValues): string {
     function renderRuntime(status) {
       status = status || {}
       const dshMissingText = status.dsh === 'missing' ? (status.mode === 'pnpm' ? 'pnpm not found' : 'not found') : '—'
-      // 服务端两种模式都给**裸版本号**（pkg = npm 版本号，source = git tag 去掉 dsh-v
-      // 前缀，不在 tag 上时带 -N-gsha 后缀）；v 只在这里补一次，服务端别再补。
-      document.getElementById('dshVersion').textContent = status.dshVersion
-        ? 'v' + status.dshVersion
-        : dshMissingText
-
+      document.getElementById('dshVersion').textContent = status.dshVersion ? 'v' + status.dshVersion : dshMissingText
       const upd = status.update
-      const updateBtn = document.getElementById('updateBtn')
       if (upd && upd.hasUpdate) {
-        updateBtn.style.display = ''
-        updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
-        // The update rewrites the one shared dsh tree, so it requires every
-        // instance stopped, not just the active one.
+        el.updateBtn.style.display = ''
+        el.updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
         const anyActive = Array.isArray(instanceList) && instanceList.some((i) => i.running || i.starting || i.installing || i.stopping)
-        updateBtn.disabled = anyActive || !!(status.updating)
+        el.updateBtn.disabled = anyActive || !!status.updating
       } else {
-        updateBtn.style.display = 'none'
+        el.updateBtn.style.display = 'none'
       }
-
-      // Check updates button mirrors Start: disabled while the server-side
-      // check is in flight, re-enabled by the next status update.
-      const checkBtn = document.getElementById('refreshBtn')
-      if (checkBtn) {
-        checkBtn.disabled = !!status.checking
-        checkBtn.classList.toggle('spinning', !!status.checking)
-        checkBtn.textContent = '⟳'
-      }
-
-      // The row label follows the mode: package (published dsh) or source
-      // (checkout). It is grouped with home in the instance card.
-      const runtimeLabel = document.getElementById('runtimeLabel')
-      if (runtimeLabel) runtimeLabel.textContent = status.mode === 'source' ? 'source' : 'package'
+      el.refreshBtn.disabled = !!status.checking
+      el.refreshBtn.classList.toggle('spinning', !!status.checking)
+      document.getElementById('runtimeLabel').textContent = status.mode === 'source' ? 'source' : 'package'
       const runtimePath = document.getElementById('runtimePath')
       runtimePath.textContent = status.dshPathShort || '—'
       runtimePath.title = status.dshPath || ''
-
-      // node + launcher versions live at the very bottom.
       document.getElementById('nodeVersionFooter').textContent = status.nodeVersion ? ('node v' + status.nodeVersion) : 'node —'
     }
 
     function renderLogFiles(status) {
       status = status || {}
       const launcher = document.getElementById('launcherLogPath')
+      launcher.textContent = status.consoleLogPathShort || ''
+      launcher.title = status.consoleLogPath || ''
       const server = document.getElementById('serverLogPath')
-      if (launcher) {
-        launcher.textContent = status.consoleLogPathShort || ''
-        launcher.title = status.consoleLogPath || ''
-      }
-      if (server) {
-        server.textContent = status.serverLogPathShort || ''
-        server.title = status.serverLogPath || ''
-      }
-      const launcherSize = document.getElementById('launcherLogSize')
-      const serverSize = document.getElementById('serverLogSize')
-      if (launcherSize) launcherSize.textContent = fmtSize(status.consoleLogSize)
-      if (serverSize) serverSize.textContent = fmtSize(status.serverLogSize)
+      server.textContent = status.serverLogPathShort || ''
+      server.title = status.serverLogPath || ''
+      document.getElementById('launcherLogSize').textContent = fmtSize(status.consoleLogSize)
+      document.getElementById('serverLogSize').textContent = fmtSize(status.serverLogSize)
     }
 
     function renderDebug(status) {
-      const pill = document.getElementById('debugToggle')
-      if (!pill) return
-      // NODE_DEBUG=module only applies to source mode; hide the pill under pnpm.
       if (status && status.mode !== 'source') {
-        pill.style.display = 'none'
+        el.debugToggle.style.display = 'none'
         return
       }
-      pill.style.display = ''
+      el.debugToggle.style.display = ''
       const on = !!(status && status.sourceDebug)
-      pill.textContent = on ? 'debug on' : 'debug off'
-      pill.className = 'debug-pill' + (on ? ' on' : '')
+      el.debugToggle.textContent = on ? 'debug on' : 'debug off'
+      el.debugToggle.className = 'debug-pill' + (on ? ' on' : '')
     }
 
     function renderDs(ds) {
       ds = ds || {}
-      const modelList = document.getElementById('dsComponents')
-      const otherList = document.getElementById('dsComponentsOther')
       const comps = ds.components || []
       const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
       const renderGroup = (list, items, empty) => {
-        if (!list) return
         list.innerHTML = items.map((c) => {
-          const st = c.status || 'operational'
-          const stCls = compStateClass(st)
+          const stCls = compStateClass(c.status || 'operational')
           return '<div class="ds-comp"><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>'
         }).join('') || '<div class="ds-empty">' + empty + '</div>'
       }
-      // Model services carry the deepseek-* label; search/fetch and any future
-      // auxiliary APIs stay in the right column.
-      renderGroup(modelList, comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
-      renderGroup(otherList, comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
+      renderGroup(document.getElementById('dsComponents'), comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
+      renderGroup(document.getElementById('dsComponentsOther'), comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')
@@ -361,182 +276,149 @@ export function panelScript(values: PanelScriptValues): string {
     }
 
     function renderBalance(bal) {
-      const val = document.getElementById('balanceValue')
-      if (!bal) { val.textContent = ''; return }
-      if (bal.balance) {
-        val.textContent = bal.balance.total + ' ' + bal.balance.currency
-      } else if (bal.error) {
-        val.textContent = '⚠ ' + bal.error
+      if (!bal) {
+        el.balanceValue.textContent = ''
+        return
       }
+      if (bal.balance) el.balanceValue.textContent = bal.balance.total + ' ' + bal.balance.currency
+      else if (bal.error) el.balanceValue.textContent = '⚠ ' + bal.error
     }
 
-    // Peak/off-peak is decided by the extension host (pricing.ts
-    // pricingWindowAt) and only rendered here: the holiday table belongs to the
-    // shipped build, and a second copy in the webview would be one more thing to
-    // keep in step. A year without a calendar has no holiday override, so a
-    // peak-window weekday is simply Peak.
+    // Peak/off-peak is decided by the host; the webview only renders it.
     const PEAK_WINDOWS_BJ = ${values.peakWindows}
-    // Serialized with JSON.stringify, never interpolated as a bare quoted
-    // literal: the value ends up inside a nonce-guarded script element, so a
-    // string containing a quote must not be able to terminate the literal and
-    // inject code (see the webview audit's S2). The '<' character is escaped
-    // so the value cannot close the surrounding script element either.
+    // JSON-encoded so a quoted value cannot escape this literal.
     const DEFAULT_BROWSER = ${defaultBrowserLiteral}
     function renderPricing(pricing) {
-      const el = document.getElementById('dsPricing')
-      el.textContent = pricing === 'peak' ? 'Peak' : 'Off-peak'
-      el.className = 'ds-pricing ' + pricing
+      const elPricing = document.getElementById('dsPricing')
+      elPricing.textContent = pricing === 'peak' ? 'Peak' : 'Off-peak'
+      elPricing.className = 'ds-pricing ' + pricing
       const now = new Date()
       const local = (h) => {
         const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, 0))
         return String(d.getHours()).padStart(2, '0') + ':00'
       }
-      // Beijing hour H is UTC hour H-8; local() renders that instant at the
-      // viewer's own offset.
+      // Beijing hour H is UTC hour H-8; local() renders that instant at the viewer's offset.
       const windows = PEAK_WINDOWS_BJ.map(([from, to]) => local(from - 8) + '–' + local(to - 8)).join(', ')
-      el.title = 'Peak: 09:00–12:00, 14:00–18:00 Beijing (your time ' + windows + '); off-peak is half the peak rate; weekends and Chinese public holidays are all off-peak'
+      elPricing.title = 'Peak: 09:00–12:00, 14:00–18:00 Beijing (your time ' + windows + '); off-peak is half the peak rate; weekends and Chinese public holidays are all off-peak'
     }
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
       b.addEventListener('click', () => {
-        // Gray the Start button instantly; the next status update re-enables it.
+        // Start is greyed instantly; the next status update re-enables it.
         if (b.dataset.cmd === 'start') b.disabled = true
         vscode.postMessage({ command: b.dataset.cmd, value: currentInstanceId })
       })
     })
-    document.getElementById('newInstanceBtn').addEventListener('click', () => {
-      vscode.postMessage({ command: 'instanceForm', value: 'new' })
+    el.instanceTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.instance-tab')
+      if (tab) vscode.postMessage({ command: 'selectInstance', value: tab.dataset.id })
     })
-    document.getElementById('editInstanceBtn').addEventListener('click', () => {
+    document.getElementById('newInstanceBtn').addEventListener('click', () => vscode.postMessage({ command: 'instanceForm', value: 'new' }))
+    el.editInstanceBtn.addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'instanceForm', value: currentInstanceId })
     })
-    document.getElementById('deleteInstanceBtn').addEventListener('click', () => {
+    el.deleteInstanceBtn.addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'deleteInstance', value: currentInstanceId })
     })
     document.getElementById('instanceFormCancel').addEventListener('click', closeInstanceForm)
     document.getElementById('instanceFormSave').addEventListener('click', saveInstanceForm)
-    const instanceNameField = document.getElementById('instanceFormName')
-    const instanceHomeField = document.getElementById('instanceFormHome')
-    instanceNameField.addEventListener('input', () => {
-      if (formHomeAuto) instanceHomeField.value = autoHomeFor(instanceNameField.value)
+    el.instanceFormName.addEventListener('input', () => {
+      if (formHomeAuto) el.instanceFormHome.value = autoHomeFor(el.instanceFormName.value)
     })
-    instanceHomeField.addEventListener('input', () => {
-      formHomeAuto = instanceHomeField.value === autoHomeFor(instanceNameField.value)
+    el.instanceFormHome.addEventListener('input', () => {
+      formHomeAuto = el.instanceFormHome.value === autoHomeFor(el.instanceFormName.value)
     })
-    document.getElementById('instanceModal').addEventListener('click', (e) => {
+    el.instanceModal.addEventListener('click', (e) => {
       if (e.target.id === 'instanceModal') closeInstanceForm()
     })
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !document.getElementById('instanceModal').hidden) closeInstanceForm()
-    })
-    document.getElementById('updateBtn').addEventListener('click', () => {
-      const btn = document.getElementById('updateBtn')
-      if (btn.disabled) return
-      btn.disabled = true
+    el.updateBtn.addEventListener('click', () => {
+      el.updateBtn.disabled = true
       vscode.postMessage({ command: 'updateDsh' })
     })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
     const dsToggle = document.getElementById('dsToggle')
     const dsBody = document.getElementById('dsBody')
-    if (dsToggle && dsBody) {
-      const setDsOpen = (open) => {
-        dsToggle.setAttribute('aria-expanded', String(open))
-        dsBody.hidden = !open
-      }
-      dsToggle.addEventListener('click', () => setDsOpen(dsBody.hidden))
-      setDsOpen(false)
+    const setDsOpen = (open) => {
+      dsToggle.setAttribute('aria-expanded', String(open))
+      dsBody.hidden = !open
     }
+    dsToggle.addEventListener('click', () => setDsOpen(dsBody.hidden))
+    setDsOpen(false)
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))
-    document.getElementById('debugToggle').addEventListener('click', () => vscode.postMessage({ command: 'toggleDebug' }))
+    el.debugToggle.addEventListener('click', () => vscode.postMessage({ command: 'toggleDebug' }))
     const browserSelectBtn = document.getElementById('browserSelectBtn')
     const browserSelectMenu = document.getElementById('browserSelectMenu')
     const browserSelectLabel = document.getElementById('browserSelectLabel')
+    const browserOptions = Array.from(browserSelectMenu.querySelectorAll('.lap-select-option'))
     function setBrowserUI(value) {
       const v = value === 'external' ? 'external' : DEFAULT_BROWSER
       browserSelectLabel.textContent = v === 'external' ? 'External' : 'Built-in'
-      browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
-        o.setAttribute('aria-selected', String(o.dataset.value === v))
-      })
+      browserOptions.forEach((o) => o.setAttribute('aria-selected', String(o.dataset.value === v)))
     }
-    function closeBrowserMenu() {
-      browserSelectMenu.hidden = true
-      browserSelectBtn.setAttribute('aria-expanded', 'false')
+    function setBrowserMenuOpen(open) {
+      browserSelectMenu.hidden = !open
+      browserSelectBtn.setAttribute('aria-expanded', String(open))
     }
     browserSelectBtn.addEventListener('click', (e) => {
       e.stopPropagation()
-      if (browserSelectMenu.hidden) {
-        browserSelectMenu.hidden = false
-        browserSelectBtn.setAttribute('aria-expanded', 'true')
-      } else {
-        closeBrowserMenu()
-      }
+      setBrowserMenuOpen(browserSelectMenu.hidden)
     })
-    browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
+    browserOptions.forEach((o) => {
       o.addEventListener('click', () => {
         setBrowserUI(o.dataset.value)
-        closeBrowserMenu()
+        setBrowserMenuOpen(false)
         browserSelectBtn.focus()
         vscode.postMessage({ command: 'setBrowser', value: o.dataset.value })
       })
     })
     document.addEventListener('click', (e) => {
-      if (browserSelectMenu.hidden) return
-      if (e.target.closest('.lap-select')) return
-      closeBrowserMenu()
+      if (!browserSelectMenu.hidden && !e.target.closest('.lap-select')) setBrowserMenuOpen(false)
     })
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeBrowserMenu()
+      if (e.key === 'Escape' && !el.instanceModal.hidden) closeInstanceForm()
+      if (e.key === 'Escape' && !browserSelectMenu.hidden) {
+        setBrowserMenuOpen(false)
         return
       }
-      // Leaving the open menu with Tab closes it instead of stranding focus.
-      if (e.key === 'Tab' && !browserSelectMenu.hidden) closeBrowserMenu()
-      // Roving-focus keyboard navigation while the menu is open; Enter/Space
-      // pick the focused option via the button's native click.
+      if (e.key === 'Tab' && !browserSelectMenu.hidden) setBrowserMenuOpen(false)
       if (browserSelectMenu.hidden) return
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
-      const opts = Array.from(browserSelectMenu.querySelectorAll('.lap-select-option'))
-      if (opts.length === 0) return
-      let idx = opts.findIndex((o) => o === document.activeElement)
-      if (idx === -1) idx = opts.findIndex((o) => o.getAttribute('aria-selected') === 'true')
-      if (idx === -1) idx = 0
       e.preventDefault()
-      const next = e.key === 'ArrowDown' ? (idx + 1) % opts.length
-        : e.key === 'ArrowUp' ? (idx - 1 + opts.length) % opts.length
+      let idx = browserOptions.findIndex((o) => o === document.activeElement)
+      if (idx === -1) idx = browserOptions.findIndex((o) => o.getAttribute('aria-selected') === 'true')
+      if (idx === -1) idx = 0
+      const next = e.key === 'ArrowDown' ? (idx + 1) % browserOptions.length
+        : e.key === 'ArrowUp' ? (idx - 1 + browserOptions.length) % browserOptions.length
         : e.key === 'Home' ? 0
-        : opts.length - 1
-      opts[next].focus()
+        : browserOptions.length - 1
+      browserOptions[next].focus()
     })
-    document.querySelectorAll('.mode-option').forEach((b) => {
+    modeOptions.forEach((b) => {
       b.addEventListener('click', () => {
-        // No optimistic highlight: the pill only moves once the mode is
-        // actually applied (confirmed), via the next status update.
+        // No optimistic highlight: the next status update confirms the mode.
         vscode.postMessage({ command: 'setMode', value: b.dataset.mode })
       })
     })
-    document.querySelectorAll('.runtime-path, .runtime-data').forEach((el) => {
-      el.addEventListener('click', () => {
-        const full = el.dataset.path || el.getAttribute('title')
+    document.querySelectorAll('.runtime-path, .runtime-data').forEach((node) => {
+      node.addEventListener('click', () => {
+        const full = node.dataset.path || node.getAttribute('title')
         if (!full) return
-        if (el.dataset.log) vscode.postMessage({ command: 'openLog', value: full })
+        if (node.dataset.log) vscode.postMessage({ command: 'openLog', value: full })
         else vscode.postMessage({ command: 'revealPath', value: full })
       })
     })
 
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-      const btn = document.getElementById('refreshBtn')
-      if (btn.disabled) return
-      btn.disabled = true
-      btn.classList.add('spinning')
+    el.refreshBtn.addEventListener('click', () => {
+      el.refreshBtn.disabled = true
+      el.refreshBtn.classList.add('spinning')
       vscode.postMessage({ command: 'refreshRequirements' })
-      // Re-enabled by renderRuntime once status.checking goes false (same as Start).
     })
     let refreshingBalance = false
-    document.getElementById('balanceBtn').addEventListener('click', () => {
+    el.balanceBtn.addEventListener('click', () => {
       refreshingBalance = true
-      document.getElementById('balanceBtn').disabled = true
-      document.getElementById('balanceValue').textContent = 'querying…'
+      el.balanceBtn.disabled = true
+      el.balanceValue.textContent = 'querying…'
       vscode.postMessage({ command: 'balance' })
     })
 
@@ -549,10 +431,28 @@ export function panelScript(values: PanelScriptValues): string {
       if (elapsedTimer) return false
       since = Date.now()
       elapsedTimer = setInterval(() => {
-        const e = document.getElementById('statusSub')
-        if (e) e.textContent = 'Waited ' + Math.round((Date.now() - since) / 1000) + 's'
+        el.statusSub.textContent = 'Waited ' + Math.round((Date.now() - since) / 1000) + 's'
       }, ELAPSED_INTERVAL_MS)
       return true
+    }
+
+    function renderLog(entries) {
+      const list = Array.isArray(entries) ? entries : []
+      const newline = String.fromCharCode(10)
+      const text = list.map((e) => e.text).join(newline)
+      const hasNew = lastActivityText !== text
+      lastActivityText = text
+      let html = list.map((e) => {
+        const txt = esc(e.text)
+        if (!e.busy) return txt
+        const close = txt.indexOf('] ')
+        return close === -1 ? txt : txt.slice(0, close + 2) + SPINNER_SVG + txt.slice(close + 3)
+      }).join(newline) || '(no activity yet)'
+      // Compare rendered HTML, not just text: busy flags can flip without a text change.
+      if (html === lastLogHtml) return
+      lastLogHtml = html
+      el.log.innerHTML = html
+      if (hasNew) el.log.scrollTop = el.log.scrollHeight
     }
 
     window.addEventListener('message', (e) => {
@@ -560,51 +460,27 @@ export function panelScript(values: PanelScriptValues): string {
       if (!m) return
       if (m.type === 'instanceForm') { openInstanceForm(m.form); return }
       if (m.type === 'instanceFormError') {
-        document.getElementById('instanceFormError').textContent = m.message || 'Instance was not saved'
-        document.getElementById('instanceFormSave').disabled = false
+        el.instanceFormError.textContent = m.message || 'Instance was not saved'
+        el.instanceFormSave.disabled = false
         return
       }
       if (m.type === 'instanceFormSaved') { closeInstanceForm(); return }
       if (m.type !== 'update') {
-        // Surface protocol drift in the (hidden) webview console instead of
-        // dropping the message without a trace.
+        // Surface protocol drift in the webview console instead of dropping it.
         console.debug('[dsh] ignored unknown panel message type: ' + String(m.type))
         return
       }
       gotUpdate = true
-      document.getElementById('loadingOverlay').classList.add('hidden')
+      el.loadingOverlay.classList.add('hidden')
       if (refreshingBalance) {
         refreshingBalance = false
-        document.getElementById('balanceBtn').disabled = false
+        el.balanceBtn.disabled = false
       }
       setBrowserUI(m.browser || DEFAULT_BROWSER)
       instanceList = Array.isArray(m.instances) ? m.instances : []
       currentInstanceId = typeof m.activeId === 'string' ? m.activeId : ''
-      const log = document.getElementById('log')
-      const entries = Array.isArray(m.activity) ? m.activity : []
-      const newline = String.fromCharCode(10)
-      const text = entries.map((e) => e.text).join(newline)
-      const hasNew = lastActivityText !== text
-      lastActivityText = text
-      let logHtml = entries.map((e) => {
-        const txt = esc(e.text)
-        if (!e.busy) return txt
-        // Swap the leading icon (the char right after the timestamp) for the dsh spinner.
-        const close = txt.indexOf('] ')
-        if (close === -1) return txt
-        return txt.slice(0, close + 2) + SPINNER_SVG + txt.slice(close + 3)
-      }).join(newline)
-      logHtml = logHtml || '(no activity yet)'
-      // Compare the rendered HTML, not just the text: a busy flag can flip while
-      // the text stays identical. Only re-parse when something actually changed
-      // (the log is repainted on every 4s update otherwise).
-      if (logHtml !== lastLogHtml) {
-        lastLogHtml = logHtml
-        log.innerHTML = logHtml
-        if (hasNew) log.scrollTop = log.scrollHeight
-      }
-      const dsCard = document.getElementById('dsCard')
-      if (dsCard) dsCard.style.display = m.showDs === false ? 'none' : ''
+      renderLog(m.activity)
+      document.getElementById('dsCard').style.display = m.showDs === false ? 'none' : ''
       renderRunning(m.status)
       renderTabs(instanceList, currentInstanceId)
       renderInstanceSummary(instanceList)

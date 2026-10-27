@@ -20,40 +20,30 @@ import { migrateLegacyDshConfig } from './server/config.ts'
 import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
-// Running state paints its own background + foreground as theme colors
-// (contributed in package.json), so the item stays readable on any theme.
 const RUNNING_BACKGROUND_COLOR = 'dsh.statusBar.runningBackground'
 const RUNNING_FOREGROUND_COLOR = 'dsh.statusBar.runningForeground'
-// Status bar uses the launcher's own icon font (resources/dsh-icon.woff,
-// derived from the 🐳 artwork — see NOTICE): a whale glyph plus two splash
-// frames that are alternated while starting/installing, so the spout pulses.
 const STATUS_TEXT = '$(dsh-whale)'
 const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
 const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
-/** Per-instance actions offered after picking an instance row. */
 type InstanceAction = 'start' | 'stop' | 'restart' | 'open' | 'select'
 
-/** A quick-pick row; action rows carry either a global or an instance action. */
 type MenuPick = vscode.QuickPickItem & {
   action?: StatusMenuAction
   instanceId?: string
   instanceAction?: InstanceAction
 }
 
-/** A command argument that should be an instance id (command palette passes none). */
 function instanceIdArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
 }
 
-/** The state word shown for one instance, including adopted/untracked servers. */
 function instanceStateLabel(status: InstanceRuntimeStatus): string {
   if (status.adopted) return 'running (external)'
   if (status.untrackedPort) return 'port held by an untracked process'
   return status.state
 }
 
-/** Codicon for one instance row. */
 function instanceStateIcon(status: InstanceRuntimeStatus): string {
   if (status.adopted || status.untrackedPort) return 'warning'
   if (status.state === 'running') return 'globe'
@@ -63,56 +53,41 @@ function instanceStateIcon(status: InstanceRuntimeStatus): string {
   return 'circle-outline'
 }
 
-/**
- * The actions that make sense for one instance's current state.
- *
- * Every row carries the instance id, so the action never depends on which tab
- * happens to be active (spec §9: panel buttons must not rely on implicit state).
- */
+function menuItem(
+  status: InstanceRuntimeStatus,
+  label: string,
+  icon: string,
+  instanceAction: InstanceAction,
+  description?: string,
+): MenuPick {
+  return { label, description, iconPath: new vscode.ThemeIcon(icon), instanceId: status.id, instanceAction }
+}
+
+function instanceRow(instance: InstanceRuntimeStatus, activeId: string): MenuPick {
+  return {
+    label: instance.name,
+    description: `:${instance.port} · ${instanceStateLabel(instance)}${instance.id === activeId ? ' · active' : ''}`,
+    detail: instance.homeShort,
+    iconPath: new vscode.ThemeIcon(instanceStateIcon(instance)),
+    instanceId: instance.id,
+  }
+}
+
+/** Rows carry the instance id so an action never depends on which tab is active. */
 function instanceMenuItems(status: InstanceRuntimeStatus, activeId: string): MenuPick[] {
   const items: MenuPick[] = []
-  if (status.running) {
-    items.push({
-      label: `Open ${status.name} Web UI`,
-      iconPath: new vscode.ThemeIcon('globe'),
-      instanceId: status.id,
-      instanceAction: 'open',
-    })
-  }
+  if (status.running) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
   if (status.state !== 'stopping') {
-    if (!status.running) {
-      items.push({
-        label: `Start ${status.name}`,
-        description: status.state === 'error' ? 'retry after the failure' : undefined,
-        iconPath: new vscode.ThemeIcon('play'),
-        instanceId: status.id,
-        instanceAction: 'start',
-      })
+    if (status.running) {
+      items.push(menuItem(status, `Restart ${status.name}`, 'debug-restart', 'restart'))
     } else {
-      items.push({
-        label: `Restart ${status.name}`,
-        iconPath: new vscode.ThemeIcon('debug-restart'),
-        instanceId: status.id,
-        instanceAction: 'restart',
-      })
+      items.push(menuItem(status, `Start ${status.name}`, 'play', 'start', status.state === 'error' ? 'retry after the failure' : undefined))
     }
     if (status.running || status.starting || status.adopted || status.untrackedPort) {
-      items.push({
-        label: `Stop ${status.name}`,
-        iconPath: new vscode.ThemeIcon('debug-stop'),
-        instanceId: status.id,
-        instanceAction: 'stop',
-      })
+      items.push(menuItem(status, `Stop ${status.name}`, 'debug-stop', 'stop'))
     }
   }
-  if (status.id !== activeId) {
-    items.push({
-      label: `Make ${status.name} Active`,
-      iconPath: new vscode.ThemeIcon('star'),
-      instanceId: status.id,
-      instanceAction: 'select',
-    })
-  }
+  if (status.id !== activeId) items.push(menuItem(status, `Make ${status.name} Active`, 'star', 'select'))
   return items
 }
 
@@ -127,9 +102,7 @@ export function activate(context: vscode.ExtensionContext): void {
     dbg(`manager initialization failed: ${error instanceof Error ? error.message : String(error)}`)
   })
 
-  // Settings edits from another window, the Settings UI or settings sync must
-  // reach this manager; reloading reuses running runtimes by id (never rebuilds
-  // them), so a tracked DSH child is not orphaned. See InstanceManager.reloadSettings.
+  // External settings edits reach this manager; reloading reuses running runtimes.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('dsh.instances') && !event.affectsConfiguration('dsh.activeInstance')) return
@@ -158,43 +131,31 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  const setStatusBar = (text: string, tooltip: string, running = false): void => {
+    stopSpinner()
+    statusBar.text = text
+    statusBar.backgroundColor = running ? new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR) : undefined
+    statusBar.color = running ? new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR) : undefined
+    statusBar.tooltip = tooltip
+  }
+
   const refreshStatusBar = async (): Promise<void> => {
     if (!getInstanceManager()) return
     const dashboard = await manager.dashboard()
-    const status = dashboard.status
-    const active = dashboard.active
+    const { status, active } = dashboard
     const runningCount = dashboard.instances.filter((instance) => instance.running).length
-    const multiRunning = runningCount > 1 ? ` · ${runningCount} instances running` : ''
-    const label = active?.name ? ` · ${active.name}` : ''
+    const suffix = `${runningCount > 1 ? ` · ${runningCount} instances running` : ''} — click for options`
+    const label = `DSH Launcher Panel${active?.name ? ` · ${active.name}` : ''}`
     if (status.running) {
-      stopSpinner()
-      statusBar.text = STATUS_TEXT
-      statusBar.backgroundColor = new vscode.ThemeColor(RUNNING_BACKGROUND_COLOR)
-      statusBar.color = new vscode.ThemeColor(RUNNING_FOREGROUND_COLOR)
-      statusBar.tooltip = `DSH Launcher Panel${label} running at ${status.url}${multiRunning} — click for options`
+      setStatusBar(STATUS_TEXT, `${label} running at ${status.url}${suffix}`, true)
     } else if (status.starting || status.installing || status.updating) {
-      stopSpinner()
-      statusBar.text = STATUS_SPLASH_SMALL
-      statusBar.backgroundColor = undefined
-      statusBar.color = undefined
-      statusBar.tooltip = status.updating
-        ? `DSH Launcher Panel${label} updating${multiRunning} — click for options`
-        : (status.installing ? `DSH Launcher Panel${label} installing${multiRunning} — click for options` : `DSH Launcher Panel${label} starting${multiRunning} — click for options`)
+      const state = status.updating ? 'updating' : status.installing ? 'installing' : 'starting'
+      setStatusBar(STATUS_SPLASH_SMALL, `${label} ${state}${suffix}`)
       spinnerTimer = setInterval(() => {
         statusBar.text = statusBar.text === STATUS_SPLASH_SMALL ? STATUS_SPLASH_LARGE : STATUS_SPLASH_SMALL
       }, STATUS_SPIN_INTERVAL_MS)
-    } else if (status.stopping) {
-      stopSpinner()
-      statusBar.text = STATUS_TEXT
-      statusBar.backgroundColor = undefined
-      statusBar.color = undefined
-      statusBar.tooltip = `DSH Launcher Panel${label} stopping${multiRunning} — click for options`
     } else {
-      stopSpinner()
-      statusBar.text = STATUS_TEXT
-      statusBar.backgroundColor = undefined
-      statusBar.color = undefined
-      statusBar.tooltip = `DSH Launcher Panel${label} stopped${multiRunning} — click for options`
+      setStatusBar(STATUS_TEXT, `${label} ${status.stopping ? 'stopping' : 'stopped'}${suffix}`)
     }
   }
 
@@ -223,7 +184,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
-  /** Run one instance-scoped action, then repaint the status bar. */
   const runInstanceAction = async (id: string, action: InstanceAction): Promise<void> => {
     switch (action) {
       case 'start':
@@ -245,6 +205,12 @@ export function activate(context: vscode.ExtensionContext): void {
     void refreshStatusBar().catch(() => {})
   }
 
+  const command = (id: string, run: (instanceId?: string) => Promise<void>, refresh = false) =>
+    vscode.commands.registerCommand(id, async (value?: unknown) => {
+      await run(instanceIdArg(value))
+      if (refresh) void refreshStatusBar().catch(() => {})
+    })
+
   context.subscriptions.push(
     statusBar,
     { dispose: () => { clearInterval(statusTimer); stopSpinner() } },
@@ -254,19 +220,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const items: MenuPick[] = [
         { label: buildStatusMenuSummary(dashboard.status, active?.name), kind: vscode.QuickPickItemKind.Separator },
       ]
-      // Every instance is selectable, not just the running ones (spec §9): the
-      // menu is also how a stopped instance gets started without the panel.
       if (dashboard.instances.length > 0) {
         items.push({ label: dashboard.instances.length > 1 ? 'Instances' : 'Instance', kind: vscode.QuickPickItemKind.Separator })
-        for (const instance of dashboard.instances) {
-          items.push({
-            label: instance.name,
-            description: `:${instance.port} · ${instanceStateLabel(instance)}${instance.id === dashboard.activeId ? ' · active' : ''}`,
-            detail: instance.homeShort,
-            iconPath: new vscode.ThemeIcon(instanceStateIcon(instance)),
-            instanceId: instance.id,
-          })
-        }
+        for (const instance of dashboard.instances) items.push(instanceRow(instance, dashboard.activeId))
         items.push({ label: 'Actions', kind: vscode.QuickPickItemKind.Separator })
       }
       items.push(...buildStatusMenuItems(dashboard.status, active?.name).map((item) => ({
@@ -279,10 +235,6 @@ export function activate(context: vscode.ExtensionContext): void {
         placeHolder: active?.name ? `${active.name} — choose an instance or an action` : 'Choose an instance or an action',
       })
       if (!picked) return
-      if (picked.instanceId !== undefined && picked.instanceAction !== undefined) {
-        await runInstanceAction(picked.instanceId, picked.instanceAction)
-        return
-      }
       if (picked.instanceId !== undefined) {
         const instance = dashboard.instances.find((entry) => entry.id === picked.instanceId)
         if (!instance) return
@@ -303,37 +255,19 @@ export function activate(context: vscode.ExtensionContext): void {
         void refreshStatusBar().catch(() => {})
       }
     }),
-    vscode.commands.registerCommand('dsh.start', async () => {
-      await actionStart()
-      void refreshStatusBar().catch(() => {})
-    }),
-    vscode.commands.registerCommand('dsh.stop', async () => {
-      await actionStop()
-      void refreshStatusBar().catch(() => {})
-    }),
-    vscode.commands.registerCommand('dsh.instance.start', async (id?: unknown) => {
-      await actionStart(instanceIdArg(id))
-      void refreshStatusBar().catch(() => {})
-    }),
-    vscode.commands.registerCommand('dsh.instance.stop', async (id?: unknown) => {
-      await actionStop(instanceIdArg(id))
-      void refreshStatusBar().catch(() => {})
-    }),
-    vscode.commands.registerCommand('dsh.instance.restart', async (id?: unknown) => {
-      await actionRestart(instanceIdArg(id))
-      void refreshStatusBar().catch(() => {})
-    }),
-    vscode.commands.registerCommand('dsh.instance.new', () => actionCreateInstance()),
-    vscode.commands.registerCommand('dsh.instance.edit', (id?: unknown) => actionEditInstance(instanceIdArg(id))),
-    vscode.commands.registerCommand('dsh.instance.delete', (id?: unknown) => actionDeleteInstance(instanceIdArg(id))),
-    vscode.commands.registerCommand('dsh.instance.select', () => actionSelectInstance()),
-    vscode.commands.registerCommand('dsh.instance.open', (id?: unknown) => actionOpen(instanceIdArg(id))),
+    command('dsh.start', () => actionStart(), true),
+    command('dsh.stop', () => actionStop(), true),
+    command('dsh.instance.start', (id) => actionStart(id), true),
+    command('dsh.instance.stop', (id) => actionStop(id), true),
+    command('dsh.instance.restart', (id) => actionRestart(id), true),
+    command('dsh.instance.new', () => actionCreateInstance()),
+    command('dsh.instance.edit', (id) => actionEditInstance(id)),
+    command('dsh.instance.delete', (id) => actionDeleteInstance(id)),
+    command('dsh.instance.select', () => actionSelectInstance()),
+    command('dsh.instance.open', (id) => actionOpen(id)),
   )
 }
 
 export function deactivate(): void {
-  // The servers are intentionally left running; Stop them from the panel or the
-  // DSH Launcher Panel: Stop command. Log pumps belong to this host and stop with
-  // it; each server keeps writing its own log file regardless.
   getInstanceManager()?.dispose()
 }

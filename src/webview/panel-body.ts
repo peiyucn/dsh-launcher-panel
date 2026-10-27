@@ -1,10 +1,7 @@
 /**
- * Dashboard markup (the webview body).
+ * Dashboard markup for the webview body.
  *
- * Extracted verbatim from the webview template. One value is substituted: the
- * extension version shown in the footer. Element ids here are the contract with
- * the client script (`panel-script.ts`) — `test/panel-contract.test.ts` checks
- * that every id the script looks up exists here.
+ * Element ids are the contract with the client script (`panel-script.ts`).
  *
  * @module webview/panel-body
  */
@@ -17,19 +14,12 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": '&#39;',
 }
 
-/**
- * Escape one HTML text/attribute value.
- *
- * The client script has its own `esc` for runtime values; this module cannot
- * share it (the script must stay a self-contained string), so the footer value
- * is escaped here.
- */
+/** Escape the substituted footer version: it is the only interpolated value. */
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
 }
 
 export interface PanelBodyValues {
-  /** Extension version shown in the footer line. */
   version: string
 }
 
@@ -38,10 +28,10 @@ export function panelBody(values: PanelBodyValues): string {
   return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>
   </div>
-  <section class="section" id="runtimeSection">
+  <section class="section">
     <div class="section-head">
       <span class="section-title">Runtime</span>
-      <div class="mode-toggle" id="modeToggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
+      <div class="mode-toggle" role="group" aria-label="dsh run mode" title="Global run mode: all instances share one dsh tree; stop all instances before switching.">
         <button class="mode-option" data-mode="pnpm" aria-pressed="true" title="Install & run the published dsh via pnpm">pkg</button>
         <button class="mode-option" data-mode="source" aria-pressed="false" title="Clone & run the deepseek-harness source">src</button>
       </div>
@@ -53,7 +43,7 @@ export function panelBody(values: PanelBodyValues): string {
       <button class="icon-btn" id="refreshBtn" title="Check for shared dsh updates">⟳</button>
     </div>
   </section>
-  <section class="section" id="instancesSection">
+  <section class="section">
     <div class="section-head">
       <span class="section-title">Instances</span>
       <span class="instance-summary" id="instanceSummary"></span>
@@ -136,7 +126,7 @@ export function panelBody(values: PanelBodyValues): string {
       </div>
     </div>
   </section>
-  <section class="settings-area" id="settingsSection">
+  <section class="settings-area">
     <div class="settings-row">
       <button class="icon-btn" id="settingsBtn" title="Open the global extension settings">⚙ Global Settings</button>
       <div class="lap-select">
@@ -155,7 +145,7 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="version-spacer"></span>
       <span class="plugin-version" id="nodeVersionFooter">node —</span>
       <span class="plugin-version">·</span>
-      <span class="plugin-version" id="pluginVersion">dsh-launcher-panel v${esc(values.version)}</span>
+      <span class="plugin-version">dsh-launcher-panel v${esc(values.version)}</span>
     </div>
   </section>
   <div class="instance-modal" id="instanceModal" hidden>

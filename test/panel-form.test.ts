@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseInstanceFormPayload } from '../src/panel-form.ts'
 
-/** Build the raw `value` string the client posts for a form submission. */
 function rawForm(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)
 }
@@ -51,8 +50,6 @@ test('parseInstanceFormPayload treats a missing or unknown mode as a create', ()
 })
 
 test('parseInstanceFormPayload keeps the create path for an edit form without an id', () => {
-  // The host reports "Instance was not found" for an empty id, exactly as it did
-  // when it checked `payload.mode === 'edit'` directly.
   const result = parseInstanceFormPayload(rawForm({ mode: 'edit', name: 'N', home: 'H' }))
   assert.equal(result.ok, true)
   assert.equal(result.ok ? result.form.mode : '', 'edit')
@@ -86,8 +83,7 @@ test('parseInstanceFormPayload requires string name and home', () => {
       message: 'Name and home are required',
     })
   }
-  // Empty strings are accepted here: the manager validates the real rules and
-  // returns a field-specific issue (same behaviour as before the extraction).
+  // Empty strings pass here; the manager owns the real field rules.
   const empty = parseInstanceFormPayload(rawForm({ name: '', home: '' }))
   assert.equal(empty.ok, true)
 })

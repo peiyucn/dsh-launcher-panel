@@ -1,105 +1,61 @@
-/**
- * Where the launcher keeps things, and how it reads what dsh puts there.
- *
- * Two different homes are involved and the distinction matters: dsh's own
- * user-data root (`~/.dsh`, shared with every other dsh entry point) and the
- * launcher's managed base dir (only this extension writes it).
- *
- * @module paths
- */
-
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-/** Manifest name the launcher writes into its managed pkg install dir (a private marker). */
 export const DSH_INSTALL_MANIFEST_NAME = 'dsh-install'
 
-/** Relative path of dsh's client build record inside a checkout. */
 export const CLIENT_BUILD_RECORD_REL = path.join('.dsh-build', 'client-build-environment.json')
 
-/** Marker path that identifies a deepseek-harness source checkout. */
 const DSH_CLI_BIN = path.join('apps', 'cli', 'src', 'bin.ts')
 
-/**
- * The DSH user-data root (matches dsh-home-paths precedence: `$DSH_HOME`,
- * else `~/.dsh`).
- */
+// Must match dsh-home-paths precedence so every dsh entry point resolves the same root.
 export function resolveDshHome(): string {
   const env = process.env.DSH_HOME
   if (env && env.trim() !== '') return env
   return path.join(os.homedir(), '.dsh')
 }
 
-/**
- * The launcher's managed base dir: directly under the user's home directory
- * (%USERPROFILE% on Windows), dot-prefixed like dsh's own `~/.dsh`. It lives
- * outside the platform data dirs (LOCALAPPDATA / Library/Application Support /
- * XDG data home) because those are frequent targets of enterprise policy and
- * permission problems.
- */
+// Deliberately outside LOCALAPPDATA/Application Support/XDG data: enterprise policy hits those.
 export function dshBaseDir(
   platform: NodeJS.Platform = process.platform,
   env: Record<string, string | undefined> = process.env,
   home: string = os.homedir(),
 ): string {
-  if (platform === 'win32') {
-    const base = env.USERPROFILE && env.USERPROFILE.trim() !== '' ? env.USERPROFILE : home
-    return path.join(base, '.dsh-launcher-panel')
-  }
-  return path.join(home, '.dsh-launcher-panel')
+  const base = platform === 'win32' && env.USERPROFILE && env.USERPROFILE.trim() !== '' ? env.USERPROFILE : home
+  return path.join(base, '.dsh-launcher-panel')
 }
 
-/**
- * Whether `dir` is a deepseek-harness source checkout (or the cli package itself).
- *
- * The argument is usually a user setting, so normalize it before looking at it:
- * surrounding whitespace and trailing separators are ignored, and `path.resolve`
- * both strips a trailing separator and resolves a relative path against the cwd
- * exactly as the fs calls below would. The trailing separator matters on
- * Windows: without normalization `…\apps\cli\` fails the `apps/cli` regex used
- * by the cli-package branch, so a perfectly valid checkout read as "not a
- * checkout".
- */
+// The value is a user setting, so trim and resolve it: a trailing separator would defeat the apps/cli regex.
 export function isDshCheckout(dir: string | undefined): boolean {
   if (!dir) return false
   try {
     const trimmed = dir.trim()
-    // A whitespace-only setting is not a path. Reject it before path.resolve,
-    // which would turn '' into the cwd and could then match a checkout there.
     if (trimmed === '') return false
     const root = path.resolve(trimmed)
     if (fs.existsSync(path.join(root, DSH_CLI_BIN))) return true
-    // Also accept pointing directly at the cli package (e.g. .../apps/cli).
-    if (fs.existsSync(path.join(root, 'src', 'bin.ts')) && /apps[\\/]cli$/.test(root)) return true
-    return false
+    return fs.existsSync(path.join(root, 'src', 'bin.ts')) && /apps[\\/]cli$/.test(root)
   } catch {
     return false
   }
 }
 
-/** Read and parse a JSON file, or undefined when it is absent or unreadable. */
 function readJson<T>(file: string): T | undefined {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8')) as T
   } catch {
-    // absent, unreadable, or not JSON
+    return undefined
   }
-  return undefined
 }
 
-/** The installed @deepseek-ai/dsh version under a managed install dir (undefined when absent). */
+function manifestName(dir: string): string | undefined {
+  return readJson<{ name?: string }>(path.join(dir, 'package.json'))?.name
+}
+
 export function installedDshVersion(installDir: string): string | undefined {
   const pkg = readJson<{ version?: string }>(path.join(installDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'))
   return pkg?.version || undefined
 }
 
-/**
- * Whether a directory may be used as a managed dsh install target: absent,
- * empty, already a launcher-written manifest (`dsh-install`), or already an
- * installed dsh. Anything else may hold the user's own files, and installing
- * into it would overwrite them.
- */
 export function isDshInstallDirUsable(dir: string): boolean {
   if (!fs.existsSync(dir)) return true
   try {
@@ -107,58 +63,23 @@ export function isDshInstallDirUsable(dir: string): boolean {
   } catch {
     return false
   }
-  const pkg = readJson<{ name?: string }>(path.join(dir, 'package.json'))
-  if (pkg?.name === DSH_INSTALL_MANIFEST_NAME) return true
-  return installedDshVersion(dir) !== undefined
+  return manifestName(dir) === DSH_INSTALL_MANIFEST_NAME || installedDshVersion(dir) !== undefined
 }
 
-/**
- * Whether the launcher may write this directory's `package.json`.
- *
- * `isDshInstallDirUsable` answers "is this directory a sensible install target"
- * — a different, weaker question: it accepts a folder that merely *contains* a
- * dsh install, which is exactly what `dsh.pkgPath` normally points at. Such a
- * folder can still carry a package.json the user owns, and replacing it would
- * destroy their file. Ownership is only ever one of:
- *
- * - no manifest at all (nothing of the user's to lose),
- * - the launcher's own manifest, recognised by its name, or
- * - unreadable/corrupt → not ours → never touched.
- */
+// An unreadable manifest cannot be proven ours, so it is left untouched.
 export function installManifestRepairable(dir: string): boolean {
-  const manifestPath = path.join(dir, 'package.json')
-  if (!fs.existsSync(manifestPath)) return true
-  const pkg = readJson<{ name?: string }>(manifestPath)
-  // readJson returns undefined for a missing *or* unparsable file; both mean the
-  // ownership cannot be confirmed, and an unconfirmed file is left alone.
-  return pkg?.name === DSH_INSTALL_MANIFEST_NAME
+  const manifest = path.join(dir, 'package.json')
+  return !fs.existsSync(manifest) || manifestName(dir) === DSH_INSTALL_MANIFEST_NAME
 }
 
-/**
- * Write the launcher-owned install manifest pinning `@deepseek-ai/dsh` to a
- * version.
- *
- * The ownership check and the write are deliberately one function: the Update
- * path once called a writer that had no guard (while the Start path used a
- * guarded one), so a folder holding the *user's* package.json got replaced by
- * ours — silently, and with their scripts and dependencies gone. Keeping the two
- * together means a caller cannot bypass the check, and keeping them here (rather
- * than in the vscode-importing install module) means a test can prove it.
- *
- * @returns true when the launcher's manifest is in place afterwards; false when
- *   the existing manifest is not ours, or the write failed.
- */
+// The ownership check lives in the writer so no caller can bypass it.
 export function writeInstallManifest(version: string, dir: string): boolean {
   if (!installManifestRepairable(dir)) return false
   try {
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(
       path.join(dir, 'package.json'),
-      JSON.stringify({
-        name: DSH_INSTALL_MANIFEST_NAME,
-        private: true,
-        dependencies: { '@deepseek-ai/dsh': version },
-      }, null, 2) + '\n',
+      JSON.stringify({ name: DSH_INSTALL_MANIFEST_NAME, private: true, dependencies: { '@deepseek-ai/dsh': version } }, null, 2) + '\n',
     )
     return true
   } catch {
@@ -166,109 +87,62 @@ export function writeInstallManifest(version: string, dir: string): boolean {
   }
 }
 
-/** The scripts block of a checkout's root package.json, or undefined when unreadable. */
 function checkoutScripts(checkout: string): Record<string, string> | undefined {
   return readJson<{ scripts?: Record<string, string> }>(path.join(checkout, 'package.json'))?.scripts
 }
 
-/** Whether a checkout's root build ships the official profile (`build:official` script). */
 export function checkoutSupportsOfficialBuild(checkout: string): boolean {
   return typeof checkoutScripts(checkout)?.[BUILD_OFFICIAL_SCRIPT] === 'string'
 }
 
-/** Whether a checkout's root build ships the `clean` script (dsh's residue cleaner). */
 export function checkoutSupportsClean(checkout: string): boolean {
   return typeof checkoutScripts(checkout)?.[BUILD_CLEAN_SCRIPT] === 'string'
 }
 
-/** The environment record dsh writes into its client build record. */
-interface ClientBuildRecord {
-  environment?: Record<string, string | undefined>
-}
-
-/** Read a checkout's client build record, or undefined when it is absent. */
 function clientBuildEnvironment(checkout: string): Record<string, string | undefined> | undefined {
-  return readJson<ClientBuildRecord>(path.join(checkout, CLIENT_BUILD_RECORD_REL))?.environment
+  return readJson<{ environment?: Record<string, string | undefined> }>(path.join(checkout, CLIENT_BUILD_RECORD_REL))?.environment
 }
 
-/** Whether a checkout's web client was built with the official DeepSeek Harness brand. */
 export function checkoutHasOfficialBrand(checkout: string): boolean {
   return clientBuildEnvironment(checkout)?.[DSH_CLIENT_BUILD_PROFILE_KEY] === DSH_BUILD_PROFILE_OFFICIAL
 }
 
-/** The commit hash dsh's client build record was built from (undefined when absent). */
 export function clientBuildCommit(checkout: string): string | undefined {
-  const hash = clientBuildEnvironment(checkout)?.[DSH_CLIENT_COMMIT_HASH]?.trim()
-  return hash ? hash : undefined
+  return clientBuildEnvironment(checkout)?.[DSH_CLIENT_COMMIT_HASH]?.trim() || undefined
 }
 
-/** Whether a checkout has its dependencies installed (`tsx` is the source-launch hook). */
 export function checkoutReady(checkout: string): boolean {
   return fs.existsSync(path.join(checkout, 'node_modules', 'tsx'))
     || fs.existsSync(path.join(checkout, 'node_modules', '.bin', 'tsx'))
 }
 
-/**
- * Whether the checkout's installed deps predate its lockfile (a stale install).
- *
- * Compares two mtimes that pnpm writes: the lockfile and its record of what was
- * installed. An unreadable marker means "not stale" — a missing file is not
- * evidence of an outdated install.
- */
+// A missing marker is not evidence of a stale install.
 export function checkoutDepsStale(checkout: string): boolean {
   try {
-    const lock = fs.statSync(path.join(checkout, 'pnpm-lock.yaml')).mtimeMs
-    const installed = fs.statSync(path.join(checkout, 'node_modules', '.pnpm', 'lock.yaml')).mtimeMs
-    return lock > installed
+    return fs.statSync(path.join(checkout, 'pnpm-lock.yaml')).mtimeMs
+      > fs.statSync(path.join(checkout, 'node_modules', '.pnpm', 'lock.yaml')).mtimeMs
   } catch {
-    // Can't compare (missing marker): treat as not stale.
     return false
   }
 }
 
-/** Abbreviate a path for display: keep the drive and the last segment, mask the middle. */
 export function maskPath(p: string): string {
   if (!p) return ''
   const segs = p.split(/[\\/]+/).filter(Boolean)
   if (segs.length <= 3) return p
-  if (/^[A-Za-z]:$/.test(segs[0])) return segs[0] + '\\…\\' + segs[segs.length - 1]
-  return '…/' + segs[segs.length - 1]
+  return /^[A-Za-z]:$/.test(segs[0]) ? segs[0] + '\\…\\' + segs[segs.length - 1] : '…/' + segs[segs.length - 1]
 }
 
-/**
- * Whether the drive a configured path lives on exists on this machine.
- *
- * `dsh.pkgPath` / `dsh.srcPath` / `dsh.nodePath` are machine-local paths, but
- * older versions let VS Code synchronize them, so a value recorded on another
- * machine (`D:\dsh`, a home directory that does not exist here) can still sit in
- * local settings. Treating it as usable sends an install to a missing drive;
- * the callers fall back to a machine-local default instead.
- *
- * Only local drive roots are probed: an UNC root may point at an offline share,
- * and a filesystem probe there could block for a long time.
- */
+// Only local drive roots are probed; an offline UNC share could block the probe.
 export function driveRootExists(target: string): boolean {
   const root = path.parse(path.resolve(target)).root
-  if (!/^[A-Za-z]:[\\/]$/.test(root)) return true
-  return fs.existsSync(root)
+  return !/^[A-Za-z]:[\\/]$/.test(root) || fs.existsSync(root)
 }
 
-// --- Official client build (the web UI brand shipped by published dsh) ---
-
-/** Build selector env var: dsh's root build embeds the official brand when set to the official profile. */
+// Keys and values dsh's root build writes into .dsh-build; keep in sync with upstream.
 export const DSH_BUILD_PROFILE_SELECTOR = 'DSH_BUILD_CLIENT_PROFILE'
-
-/** Public value dsh records in the client build record for official-profile builds. */
 export const DSH_CLIENT_BUILD_PROFILE_KEY = 'DSH_CLIENT_BUILD_PROFILE'
-
-/** Public key dsh records in the client build record for official-profile builds (built commit). */
 export const DSH_CLIENT_COMMIT_HASH = 'DSH_CLIENT_COMMIT_HASH'
-
-/** The profile value that produces the official DeepSeek Harness brand. */
 export const DSH_BUILD_PROFILE_OFFICIAL = 'official'
-
-/** The root package.json script that builds with the official client profile. */
 export const BUILD_OFFICIAL_SCRIPT = 'build:official'
-
-/** The root package.json script that clears generated build state and orphan package residue. */
 export const BUILD_CLEAN_SCRIPT = 'clean'

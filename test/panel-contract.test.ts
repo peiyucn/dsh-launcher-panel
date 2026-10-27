@@ -1,17 +1,5 @@
-/**
- * Contract tests for the host ⇄ panel boundary.
- *
- * The webview is three strings (body markup, CSS, client script) plus a host
- * class that cannot be imported from a test (it needs VS Code). These tests are
- * therefore string-level: they extract the literals that matter from the
- * generated HTML/script and from `panel.ts`'s source, then assert they agree
- * with each other and with `panel-contract.ts`. That is the only mechanical
- * guard against the host switch, the markup and the script drifting apart.
- *
- * They also pin the two injection regressions from the webview audit: the footer
- * version must be HTML-escaped (S1) and the browser default must be injected
- * through JSON.stringify, not string concatenation (S2).
- */
+// The webview is three strings plus a host class that needs VS Code, so these
+// tests compare the generated literals against the contract module.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -28,7 +16,6 @@ import { panelBody } from '../src/webview/panel-body.ts'
 import { panelScript } from '../src/webview/panel-script.ts'
 import { PEAK_WINDOWS_BJ_HOURS } from '../src/pricing.ts'
 
-/** Every capture of `group` for the matches of `pattern`, de-duplicated. */
 function uniqueMatches(pattern: RegExp, text: string, group = 1): string[] {
   const found = new Set<string>()
   for (const match of text.matchAll(pattern)) {
@@ -45,7 +32,6 @@ const script = panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS),
 const panelSource = readFileSync(new URL('../src/panel.ts', import.meta.url), 'utf8')
 const contractSource = readFileSync(new URL('../src/webview/panel-contract.ts', import.meta.url), 'utf8')
 
-/** The fields the client reads off one `update` message (serverStatusFixture below). */
 const UPDATE_KEYS = [
   'active',
   'activeId',
@@ -61,7 +47,6 @@ const UPDATE_KEYS = [
   'type',
 ]
 
-/** A complete status block, with no field left undefined by accident. */
 function statusFixture(unknown = false): Record<string, unknown> {
   return {
     running: false,
@@ -114,21 +99,16 @@ test('every element id the client script looks up exists in the body', () => {
 })
 
 test('the client command set, the host switch and PANEL_COMMANDS are the same set', () => {
-  // start/stop come from the generic `data-cmd` buttons, so body attributes are
-  // part of the client's command set too.
   const clientCommands = new Set([
     ...uniqueMatches(/command:\s*'([^']+)'/g, script),
     ...uniqueMatches(/data-cmd="([^"]+)"/g, body),
   ])
   const hostCommands = new Set(uniqueMatches(/case\s+'([^']+)':/g, panelSource))
-  // `ready` is answered before the switch (it decides whether an initial
-  // refresh is needed), so it is not a case label.
   if (/PANEL_COMMANDS\.ready/.test(panelSource)) hostCommands.add('ready')
   const contractCommands = new Set(Object.values(PANEL_COMMANDS))
 
   assert.deepEqual(sorted(clientCommands), sorted(contractCommands), 'client posts a different command set')
   assert.deepEqual(sorted(hostCommands), sorted(contractCommands), 'host switch handles a different command set')
-  // The dead protocol branches from the old template must stay gone.
   for (const dead of ['newInstance', 'editInstance']) {
     assert.ok(!hostCommands.has(dead), `dead command "${dead}" is back in the host switch`)
     assert.ok(!clientCommands.has(dead), `dead command "${dead}" is back in the client script`)
@@ -136,8 +116,6 @@ test('the client command set, the host switch and PANEL_COMMANDS are the same se
 })
 
 test('the host message types and the client handlers are the same set', () => {
-  // `update` is assembled inside panel-contract.ts (the builder), the other
-  // three are posted from panel.ts — the host side spans both files.
   const hostTypes = new Set([
     ...uniqueMatches(/PANEL_MESSAGE_TYPES\.([A-Za-z]+)/g, panelSource),
     ...uniqueMatches(/PANEL_MESSAGE_TYPES\.([A-Za-z]+)/g, contractSource),
@@ -204,7 +182,6 @@ test('pricing window classes exist for every value the host can send', () => {
   for (const value of ['peak', 'offpeak']) {
     assert.match(PANEL_CSS, new RegExp(`\\.ds-pricing\\.${value}\\b`), `PANEL_CSS lacks .ds-pricing.${value}`)
   }
-  // The client switches on the same two literals in renderPricing.
   assert.match(script, /pricing === 'peak'/)
 })
 
@@ -213,7 +190,6 @@ test('the footer version is HTML-escaped (S1 regression)', () => {
   assert.ok(!markup.includes('<img'), 'raw markup from the version value must not be emitted')
   assert.match(markup, /&lt;img/, 'the version value must be escaped')
   assert.match(markup, /&quot;&gt;/, 'quotes in the version value must be escaped')
-  // The benign case must still render as the user-facing footer.
   assert.match(body, /dsh-launcher-panel v0\.0\.0-test/)
 })
 
@@ -229,11 +205,9 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
   const normal = panelScript({ peakWindows: '[]', defaultBrowser: 'built-in' })
   assert.match(normal, /const DEFAULT_BROWSER = "built-in"/)
   assert.match(normal, /setBrowserUI\(m\.browser \|\| DEFAULT_BROWSER\)/)
-  // No host-side placeholder may survive into the webview.
   assert.ok(!normal.includes('${'), 'unfilled template placeholder left in the client script')
 
-  // A value containing "</script>" must not be able to close the inline script
-  // element that wraps this text; it still round-trips through JSON.parse.
+  // `</script>` must not close the inline element that wraps this text.
   const closing = panelScript({ peakWindows: '[]', defaultBrowser: '</script><img>' })
   assert.ok(!closing.includes('</script>'), 'the injected literal must not contain a raw </script>')
   const closingLiteral = /const DEFAULT_BROWSER = (.*)/.exec(closing)?.[1]
@@ -242,11 +216,8 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
 })
 
 test('the generated client script is syntactically valid JavaScript', () => {
-  // Guards the hand-maintained template as a whole: an unbalanced quote or a
-  // hostile injected value must fail here instead of in the webview console.
   assert.equal(typeof script, 'string')
-  // The template itself must stay free of backticks: one inside the embedded
-  // text would terminate the host string literal at render time.
+  // One backtick inside the embedded text would end the host string literal.
   assert.ok(!script.includes('`'), 'the client script text must not contain a backtick')
   assert.doesNotThrow(() => new Function(script), 'the normal script must parse')
   assert.doesNotThrow(

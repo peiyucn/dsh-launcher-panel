@@ -1,4 +1,3 @@
-/** Tests for dsh version ordering and release-tag parsing in `src/versions.ts`. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -38,8 +37,6 @@ test('dshVersionAtLeast compares prerelease versions numerically', () => {
 })
 
 test('dshVersionAtLeast ranks a stable release above its own prereleases', () => {
-  // The release-after-rc case: segment-by-segment comparison read the shorter
-  // stable version as *older*, which hid every stable dsh release after an rc.
   assert.equal(dshVersionAtLeast('0.1.5', '0.1.5-rc.1'), true)
   assert.equal(dshVersionAtLeast('0.1.5-rc.1', '0.1.5'), false)
   assert.equal(dshVersionAtLeast('0.1.5', '0.1.5'), true)
@@ -53,7 +50,6 @@ test('dshVersionAtLeast ranks a stable release above its own prereleases', () =>
 test('versionFromDescribe extracts the base version', () => {
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
-  // 规整后的写法（dshVersionFromDescribe 的产物）同样认得。
   assert.equal(versionFromDescribe('0.1.2-rc.1'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1')
   assert.equal(versionFromDescribe('v0.1.2-rc.1'), '0.1.2-rc.1')
@@ -64,16 +60,12 @@ test('dshVersionFromDescribe normalises the describe into a bare version', () =>
   assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1'), '0.1.2-rc.1')
   assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), '0.1.2-rc.1-99-g76fda72')
   assert.equal(dshVersionFromDescribe('dsh-v0.1.2-rc.1\n'), '0.1.2-rc.1')
-  // 没有前缀的值原样返回（幂等）。
   assert.equal(dshVersionFromDescribe('0.1.2-rc.1'), '0.1.2-rc.1')
 })
 
 test('source-mode version row never doubles the v prefix', () => {
-  // 面板渲染 = 'v' + 服务端值；服务端值里若还留着 v，面板就会显示 'vv0.1.5-rc.2'
-  // （2026-09-13 本地测试实测到）。这条守住「服务端只给裸版本号」这个契约。
   assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.5-rc.2'), 'v0.1.5-rc.2')
   assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.2-rc.1-99-g76fda72'), 'v0.1.2-rc.1-99-g76fda72')
-  // 与 pkg 模式（npm 版本号）拼出来的写法一致。
   assert.equal('v' + dshVersionFromDescribe('dsh-v0.1.5-rc.2'), 'v' + '0.1.5-rc.2')
 })
 
@@ -92,7 +84,6 @@ test('parseRemoteReleaseTags keeps only dsh release tags and reads their commits
 })
 
 test('parseRemoteReleaseTags prefers the peeled commit for annotated tags regardless of line order', () => {
-  // The peeled line can precede the tag-object line in some transports.
   const peeledFirst = [
     'ccc3333\trefs/tags/dsh-v0.1.7-alpha.1^{}',
     'bbb2222\trefs/tags/dsh-v0.1.7-alpha.1',
@@ -116,10 +107,6 @@ test('newestReleaseTag picks the newest tag and keeps its commit', () => {
 })
 
 test('decideSourceUpdate reports an unrecognized listing as failed, never "up to date"', () => {
-  // `git ls-remote` can succeed while every tag it returned is a shape this
-  // build cannot parse (SHA-256 origin, unexpected prerelease spelling, an
-  // origin carrying no dsh-v* tag). Calling that "up to date" would pin the
-  // panel to a silent lie — and to no Update button — forever.
   const failed = decideSourceUpdate(undefined, false)
   assert.equal(failed.hasUpdate, false)
   assert.equal(failed.failed, true)
@@ -129,8 +116,6 @@ test('decideSourceUpdate reports an unrecognized listing as failed, never "up to
 test('decideSourceUpdate offers the newest tag only when HEAD does not contain it', () => {
   const newest = { tag: 'dsh-v0.1.7-rc.1', commit: 'abc1234' }
   assert.deepEqual(decideSourceUpdate(newest, false), { hasUpdate: true, label: 'v0.1.7-rc.1' })
-  // HEAD sits on the tag or past it (e.g. master after the tag): updating would
-  // move the checkout backwards.
   assert.deepEqual(decideSourceUpdate(newest, true), { hasUpdate: false, label: '' })
   assert.equal(describeDshUpdate(decideSourceUpdate(newest, true)), '✓ dsh is up to date')
 })
@@ -147,6 +132,5 @@ test('describeDshUpdate reports the underlying failure reason when captured', ()
     describeDshUpdate({ hasUpdate: false, label: '', failed: true, failedReason: 'timed out after 10s' }),
     '⚠ Update check failed — timed out after 10s',
   )
-  // An empty reason must not leave a dangling separator.
   assert.equal(describeDshUpdate({ hasUpdate: false, label: '', failed: true, failedReason: '' }), '⚠ Update check failed')
 })

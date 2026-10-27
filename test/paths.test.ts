@@ -1,4 +1,3 @@
-/** Tests for `src/paths.ts`: where things live and what dsh wrote there. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
@@ -61,12 +60,6 @@ test('isDshCheckout recognises a checkout root and the cli package', () => {
   }
 })
 
-/**
- * Regression for the audit finding: `isDshCheckout` used to test the raw setting
- * string, so the cli-package branch (`…/apps/cli`) failed whenever the value
- * ended in a path separator — Windows users paste `…\apps\cli\` all the time.
- * The function now normalizes with trim + path.resolve first.
- */
 test('isDshCheckout normalizes trailing separators and surrounding whitespace', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-checkout-normalize-'))
   try {
@@ -76,15 +69,11 @@ test('isDshCheckout normalizes trailing separators and surrounding whitespace', 
     const cli = join(repo, 'apps', 'cli')
 
     assert.equal(isDshCheckout(repo + sep), true, 'checkout root with a trailing separator')
-    // The cli-package branch is the one the raw-string regex broke.
     assert.equal(isDshCheckout(cli + sep), true, 'cli package with a trailing separator')
     assert.equal(isDshCheckout(cli + sep + sep), true, 'cli package with repeated trailing separators')
-    // Forward-slash spellings work on Windows too (path.resolve normalizes them).
     const forwardSlashes = repo.split(sep).join('/')
     assert.equal(isDshCheckout(forwardSlashes + '/'), true, 'checkout root with forward slashes')
-    // Settings values often arrive with stray surrounding whitespace.
     assert.equal(isDshCheckout(`  ${repo}${sep}  `), true, 'path padded with whitespace')
-    // Whitespace-only is not a path: path.resolve('') would mean the cwd.
     assert.equal(isDshCheckout('   '), false, 'whitespace-only value')
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -111,8 +100,6 @@ test('isDshCheckout resolves a relative path against the cwd', () => {
     mkdirSync(join(repo, 'apps', 'cli', 'src'), { recursive: true })
     writeFileSync(join(repo, 'apps', 'cli', 'src', 'bin.ts'), '')
     const relativePath = relative(process.cwd(), repo)
-    // On Windows a checkout on another drive has no relative form (path.relative
-    // returns an absolute path), so the case only applies when it is relative.
     if (!isAbsolute(relativePath)) {
       assert.equal(isDshCheckout(relativePath), true, `relative checkout path ${relativePath}`)
       assert.equal(isDshCheckout(join(relativePath, 'apps', 'cli') + sep), true, 'relative cli path')
@@ -125,17 +112,14 @@ test('isDshCheckout resolves a relative path against the cwd', () => {
 test('isDshCheckout rejects directories and files that are not a checkout', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-not-checkout-'))
   try {
-    // A directory that merely has src/bin.ts, without the apps/cli shape.
     const other = join(root, 'other')
     mkdirSync(join(other, 'src'), { recursive: true })
     writeFileSync(join(other, 'src', 'bin.ts'), '')
     assert.equal(isDshCheckout(other), false)
-    // The cli-package shape under a folder whose last segment is not `cli`.
     const notCli = join(root, 'apps', 'app')
     mkdirSync(join(notCli, 'src'), { recursive: true })
     writeFileSync(join(notCli, 'src', 'bin.ts'), '')
     assert.equal(isDshCheckout(notCli), false)
-    // Empty directory and plain file.
     const empty = join(root, 'empty')
     mkdirSync(empty, { recursive: true })
     assert.equal(isDshCheckout(empty), false)
@@ -187,17 +171,12 @@ test('isDshInstallDirUsable accepts absent, empty and launcher-owned dirs only',
   }
 })
 
-/**
- * The distinction that let the Update path destroy a user's file: a folder can
- * be a *usable* install target (it already holds a dsh install — which is what
- * `dsh.pkgPath` normally points at) while its package.json belongs to the user.
- * Usable must not imply writable.
- */
+// A folder can be a usable install target while its package.json belongs to the user: "usable"
+// must not imply "writable", which is what the writer's ownership guard has to prevent.
 test('a usable install dir can still have a package.json the launcher must not touch', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-ownership-'))
   try {
     const dir = join(root, 'user-project-with-dsh')
-    // The user's own project, which happens to have dsh installed inside it.
     mkdirSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh'), { recursive: true })
     writeFileSync(
       join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
@@ -210,9 +189,6 @@ test('a usable install dir can still have a package.json the launcher must not t
       dependencies: { express: '^4.21.0' },
     }))
 
-    // Both halves of the trap, asserted together: the folder passes the weaker
-    // "usable" test (so the install proceeds) and fails the ownership test (so
-    // the manifest write must be refused).
     assert.equal(isDshInstallDirUsable(dir), true, 'the install itself may proceed')
     assert.equal(installManifestRepairable(dir), false, 'but its package.json must not be replaced')
   } finally {
@@ -232,8 +208,6 @@ test('installManifestRepairable accepts only absent or launcher-owned manifests'
     mkdirSync(foreign, { recursive: true })
     writeFileSync(join(foreign, 'package.json'), JSON.stringify({ name: 'my-project' }))
     assert.equal(installManifestRepairable(foreign), false)
-    // Unparsable: ownership cannot be confirmed, so it is left alone rather than
-    // guessed at.
     const corrupt = join(root, 'corrupt')
     mkdirSync(corrupt, { recursive: true })
     writeFileSync(join(corrupt, 'package.json'), '{ not json')
@@ -243,13 +217,6 @@ test('installManifestRepairable accepts only absent or launcher-owned manifests'
   }
 })
 
-/**
- * The guard must sit in the *writer*, not at its call sites — the Update path
- * once called an unguarded writer while Start called a guarded one, and the
- * user's package.json was replaced. So this asserts the writer's effect on disk:
- * testing the predicate alone would still pass if the writer ignored it, which
- * is exactly the failure that shipped once.
- */
 test('writeInstallManifest never replaces a package.json it does not own', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-write-'))
   try {
@@ -267,9 +234,7 @@ test('writeInstallManifest never replaces a package.json it does not own', () =>
     }
     writeFileSync(join(dir, 'package.json'), JSON.stringify(userManifest, null, 2))
 
-    // The folder is a legitimate install target, so nothing upstream refuses…
     assert.equal(isDshInstallDirUsable(dir), true)
-    // …and the write must still be refused, leaving the file untouched.
     assert.equal(writeInstallManifest('0.1.7-rc.2', dir), false)
     assert.deepEqual(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')), userManifest)
   } finally {
@@ -280,11 +245,9 @@ test('writeInstallManifest never replaces a package.json it does not own', () =>
 test('writeInstallManifest writes into an absent or launcher-owned dir', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-write-ok-'))
   try {
-    // Absent dir: the first-install case.
     const fresh = join(root, 'fresh')
     assert.equal(writeInstallManifest('0.1.7-rc.2', fresh), true)
     assert.equal(JSON.parse(readFileSync(join(fresh, 'package.json'), 'utf8')).name, DSH_INSTALL_MANIFEST_NAME)
-    // Its own manifest: the repair path re-pins the version.
     assert.equal(writeInstallManifest('0.1.7-rc.3', fresh), true)
     assert.equal(
       JSON.parse(readFileSync(join(fresh, 'package.json'), 'utf8')).dependencies['@deepseek-ai/dsh'],
@@ -379,7 +342,6 @@ test('checkoutReady accepts either tsx install layout and nothing else', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-ready-'))
   try {
     assert.equal(checkoutReady(root), false)
-    // The hoisted layout (node_modules/tsx).
     mkdirSync(join(root, 'node_modules', 'tsx'), { recursive: true })
     assert.equal(checkoutReady(root), true)
   } finally {
@@ -387,7 +349,6 @@ test('checkoutReady accepts either tsx install layout and nothing else', () => {
   }
   const root2 = mkdtempSync(join(tmpdir(), 'dsh-ready2-'))
   try {
-    // The .bin shim layout, which a differently-configured install produces.
     mkdirSync(join(root2, 'node_modules', '.bin'), { recursive: true })
     writeFileSync(join(root2, 'node_modules', '.bin', 'tsx'), '')
     assert.equal(checkoutReady(root2), true)
@@ -399,27 +360,21 @@ test('checkoutReady accepts either tsx install layout and nothing else', () => {
 test('checkoutDepsStale compares the lockfile against the install record', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-stale-'))
   try {
-    // No markers at all: not evidence of an outdated install.
     assert.equal(checkoutDepsStale(root), false)
 
     const record = join(root, 'node_modules', '.pnpm', 'lock.yaml')
     const lock = join(root, 'pnpm-lock.yaml')
     mkdirSync(dirname(record), { recursive: true })
     writeFileSync(record, 'installed')
-    // Only one side present: still not comparable.
     assert.equal(checkoutDepsStale(root), false)
 
     writeFileSync(lock, 'lock')
-    // Set both mtimes explicitly: two files written back-to-back can land on
-    // the same mtimeMs, so relying on write order makes this assertion flaky.
     const installedAt = new Date(Date.now() - 60_000)
     const lockAt = new Date(Date.now() - 120_000)
     utimesSync(record, installedAt, installedAt)
     utimesSync(lock, lockAt, lockAt)
-    // The install record is newer than the lockfile, so deps are current.
     assert.equal(checkoutDepsStale(root), false)
 
-    // Now the lockfile is newer: the recorded install predates it.
     const newer = new Date(Date.now())
     utimesSync(lock, newer, newer)
     assert.equal(checkoutDepsStale(root), true)
@@ -429,15 +384,11 @@ test('checkoutDepsStale compares the lockfile against the install record', () =>
 })
 
 test('driveRootExists accepts a reachable location and never probes a UNC root', () => {
-  // A normal local path always resolves to a reachable root (the drive exists).
   const root = mkdtempSync(join(tmpdir(), 'dsh-drive-'))
   try {
     assert.equal(driveRootExists(join(root, 'package')), true)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
-  // `dsh.pkgPath` used to be synchronized across machines: a path recorded on
-  // another machine may name a drive that does not exist here. UNC roots are
-  // reported as reachable without probing — an offline share could block.
   assert.equal(driveRootExists('\\\\dsh-test-server\\share\\package'), true)
 })

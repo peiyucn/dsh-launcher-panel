@@ -1,62 +1,35 @@
-/**
- * Launcher-managed DSH Web branding.
- *
- * The launcher cannot reach into the Web UI from the outside: the page is a
- * separate browser surface and its brand is rendered by the Web client. This
- * module therefore writes a tiny, fixed-purpose client bundle into the
- * instance's profile. DSH loads it as an ordinary profile bundle; the bundle
- * only appends the instance name under the official wordmark in the sidebar
- * logo row, leaving the official mark and wordmark untouched.
- *
- * The line is a DOM overlay rather than a `sidebar.brand.name` occupant: the
- * shell's brand slot is a fixed 24px row whose overflow rules clip a second
- * line. The overlay lives in the 60px logo row, follows locale changes and is
- * re-attached if the sidebar re-renders.
- *
- * Everything here is local to one profile. No npm install, no plugin market and
- * no global dsh modification are involved.
- *
- * @module server/instance-brand
- */
-
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { dbg } from './activity.ts'
 
 export const INSTANCE_BRAND_PACKAGE = '@dsh-launcher/instance-brand'
+
 const INSTANCE_BRAND_ID = 'launcher-instance-brand'
 
 /** Prefix DSH gives a profile manifest's `name` (`dsh-profile-<profile>`). */
 const DSH_PROFILE_NAME_PREFIX = 'dsh-profile-'
 
-/** Skip reasons already written to the debug log (one line per distinct reason). */
 const loggedSkipReasons = new Set<string>()
 
-/**
- * Record why branding was skipped, once per distinct reason.
- *
- * Nothing here is allowed to throw into the start flow, and the generated
- * client depends on dsh's internal DOM contract, so a refusal/failure must be
- * diagnosable from client.log without spamming it on every Start (this runs
- * before each one).
- */
+/** Runs before every Start, so log each distinct skip reason once instead of spamming client.log. */
 function reportSkip(reason: string): void {
   if (loggedSkipReasons.has(reason)) return
   loggedSkipReasons.add(reason)
   dbg(`instance brand skipped: ${reason}`)
 }
 
-/** Directory of the generated bundle inside one profile. */
 export function instanceBrandDir(home: string, profile: string): string {
   return path.join(home, 'profiles', profile, 'node_modules', ...INSTANCE_BRAND_PACKAGE.split('/'))
 }
 
-/** The profile manifest the bundle is appended to. */
 function profileManifestPath(home: string, profile: string): string {
   return path.join(home, 'profiles', profile, 'package.json')
 }
 
-/** Read a JSON object; undefined when the file is absent, malformed or not an object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function readJsonObject(file: string): Record<string, unknown> | undefined {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
@@ -66,39 +39,28 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
   }
 }
 
-/**
- * Whether a manifest identifies a DSH profile rather than some other
- * `package.json` at the same path. Both markers are accepted because the name
- * convention and the `dsh.profile` block are the two things DSH itself writes.
- */
-function isDshProfileManifest(manifest: Record<string, unknown>): boolean {
-  const name = manifest.name
-  if (typeof name === 'string' && name.startsWith(DSH_PROFILE_NAME_PREFIX)) return true
-  const dsh = manifest.dsh
-  return isRecord(dsh) && isRecord(dsh.profile)
+/** Both markers are DSH-written; anything else at that path is not ours to edit. */
+function isDshProfile(manifest: unknown): manifest is Record<string, unknown> {
+  if (!isRecord(manifest)) return false
+  if (typeof manifest.name === 'string' && manifest.name.startsWith(DSH_PROFILE_NAME_PREFIX)) return true
+  return isRecord(manifest.dsh) && isRecord(manifest.dsh.profile)
 }
 
-/** Whether the bundle directory is one this extension generated (safe to rewrite/delete). */
+function readDshProfileManifest(manifestFile: string): Record<string, unknown> | undefined {
+  const manifest = readJsonObject(manifestFile)
+  if (isDshProfile(manifest)) return manifest
+  reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
+  return undefined
+}
+
+/** Only a directory whose package name is ours may be rewritten or removed. */
 function isOwnedBundleDir(dir: string): boolean {
-  const manifest = readJsonObject(path.join(dir, 'package.json'))
-  return manifest !== undefined && manifest.name === INSTANCE_BRAND_PACKAGE
+  return readJsonObject(path.join(dir, 'package.json'))?.name === INSTANCE_BRAND_PACKAGE
 }
 
-/**
- * Generate/update the bundle and make sure the profile loads it.
- * Safe to call before every Start; the generated files are deterministic.
- *
- * Refuses to touch a profile manifest or bundle directory it does not own, and
- * never throws: branding is a cosmetic overlay and must not break Start.
- */
 export function ensureInstanceBrand(home: string, profile: string, name: string): boolean {
   const manifestFile = profileManifestPath(home, profile)
-  if (!fs.existsSync(manifestFile)) return false
-  const manifest = readJsonObject(manifestFile)
-  if (manifest === undefined || !isDshProfileManifest(manifest)) {
-    reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
-    return false
-  }
+  if (!fs.existsSync(manifestFile) || readDshProfileManifest(manifestFile) === undefined) return false
   const dir = instanceBrandDir(home, profile)
   if (fs.existsSync(dir) && !isOwnedBundleDir(dir)) {
     reportSkip(`refusing to overwrite foreign package at ${dir}`)
@@ -114,17 +76,12 @@ export function ensureInstanceBrand(home: string, profile: string, name: string)
   }
 }
 
-/** Remove the generated bundle and its profile bundle entry. */
 export function removeInstanceBrand(home: string, profile: string): void {
-  const dir = instanceBrandDir(home, profile)
   const manifestFile = profileManifestPath(home, profile)
+  const dir = instanceBrandDir(home, profile)
   try {
     if (fs.existsSync(manifestFile)) {
-      const manifest = readJsonObject(manifestFile)
-      if (manifest === undefined || !isDshProfileManifest(manifest)) {
-        reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
-        return
-      }
+      if (readDshProfileManifest(manifestFile) === undefined) return
       updateProfileBundles(manifestFile, false)
     }
     if (!fs.existsSync(dir)) return
@@ -140,23 +97,14 @@ export function removeInstanceBrand(home: string, profile: string): void {
 
 let tempFileSeq = 0
 
-/**
- * Write a file atomically: full content to a sibling temp file, then rename it
- * over the destination. A crash mid-write therefore leaves the previous version
- * intact instead of a truncated profile manifest (which would stop the profile
- * from loading); the destination is never observed half-written.
- */
+/** Rename over the destination: a crash never leaves a truncated profile manifest. */
 function writeFileAtomic(file: string, content: string): void {
   const temp = `${file}.${process.pid}.${++tempFileSeq}.tmp`
   fs.writeFileSync(temp, content, 'utf8')
   try {
     fs.renameSync(temp, file)
   } catch (error) {
-    try {
-      fs.rmSync(temp, { force: true })
-    } catch {
-      // leave cleanup to the next write
-    }
+    try { fs.rmSync(temp, { force: true }) } catch { /* best effort */ }
     throw error
   }
 }
@@ -164,24 +112,13 @@ function writeFileAtomic(file: string, content: string): void {
 function writeBundle(dir: string, name: string): void {
   const lib = path.join(dir, 'lib')
   fs.mkdirSync(lib, { recursive: true })
-  writeFileAtomic(path.join(dir, 'package.json'), `${JSON.stringify(bundleManifest(), null, 2)}\n`)
-  writeFileAtomic(path.join(dir, 'cordis.patch.yml'), bundlePatch())
-  writeFileAtomic(path.join(lib, 'index.js'), 'export function apply() {}\n')
-  writeFileAtomic(path.join(lib, 'client.js'), clientSource(name))
-}
-
-function bundleManifest(): Record<string, unknown> {
-  return {
+  writeFileAtomic(path.join(dir, 'package.json'), `${JSON.stringify({
     name: INSTANCE_BRAND_PACKAGE,
     version: '0.0.0',
     private: true,
     type: 'module',
     main: 'lib/index.js',
-    exports: {
-      '.': './lib/index.js',
-      './client': './lib/client.js',
-      './package.json': './package.json',
-    },
+    exports: { '.': './lib/index.js', './client': './lib/client.js', './package.json': './package.json' },
     dsh: {
       bundle: { patch: './cordis.patch.yml' },
       client: {
@@ -193,30 +130,22 @@ function bundleManifest(): Record<string, unknown> {
         ],
       },
     },
-  }
-}
-
-function bundlePatch(): string {
-  return [
+  }, null, 2)}\n`)
+  writeFileAtomic(path.join(dir, 'cordis.patch.yml'), [
     '# Generated by the DSH Launcher Panel. Do not edit; it is rewritten on Start.',
     '- insert:',
     `    - id: ${INSTANCE_BRAND_ID}`,
     `      name: '${INSTANCE_BRAND_PACKAGE}'`,
     '',
-  ].join('\n')
+  ].join('\n'))
+  writeFileAtomic(path.join(lib, 'index.js'), 'export function apply() {}\n')
+  writeFileAtomic(path.join(lib, 'client.js'), clientSource(name))
 }
 
-/**
- * Add/remove our package in `dsh.profile.bundles` without touching the rest of
- * the user's profile manifest.
- *
- * Re-checks ownership here (not only in the callers) because this is the write
- * that can damage a user's profile; the manifest is also rewritten atomically.
- */
+/** Re-reads and re-checks ownership: this is the write that can damage a user profile. */
 function updateProfileBundles(manifestFile: string, enabled: boolean): void {
-  const raw = fs.readFileSync(manifestFile, 'utf8')
-  const manifest = JSON.parse(raw) as Record<string, unknown>
-  if (!isRecord(manifest) || !isDshProfileManifest(manifest)) {
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as unknown
+  if (!isDshProfile(manifest)) {
     reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
     return
   }
@@ -225,28 +154,13 @@ function updateProfileBundles(manifestFile: string, enabled: boolean): void {
   const current = Array.isArray(profile.bundles) ? profile.bundles.filter((item): item is string => typeof item === 'string') : []
   const without = current.filter((item) => item !== INSTANCE_BRAND_PACKAGE)
   const next = enabled ? [...without, INSTANCE_BRAND_PACKAGE] : without
-  if (sameList(current, next)) return
+  if (current.length === next.length && current.every((value, index) => value === next[index])) return
   dsh.profile = { ...profile, bundles: next }
   manifest.dsh = dsh
   writeFileAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function sameList(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index])
-}
-
-/**
- * The generated client half. The sidebar's brand slot is a fixed 24px row
- * owned by the official wordmark, so a second line inside that slot is clipped
- * by the shell's overflow rules. Instead this client half keeps the official
- * brand subtree untouched and appends one absolutely-positioned line to the
- * logo row, under the official wordmark. Locale changes update the label in
- * place; a MutationObserver re-adds the line if the sidebar re-renders.
- */
+/** Generated client overlay: name under the wordmark in the 60px logo row, following locale/change. */
 function clientSource(name: string): string {
   const instanceName = JSON.stringify(name)
   const css = JSON.stringify([
@@ -264,16 +178,9 @@ function clientSource(name: string): string {
     var INSTANCE_NAME = ${instanceName}
     var CSS = ${css}
     var LINE_CLASS = "launcher-instance-line"
-    var inject = []
     function localeOf(ctx) {
-      try {
-        var snapshot = ctx.locale.getLocale()
-        if (snapshot && snapshot.active) return String(snapshot.active)
-      } catch (e) {}
-      try {
-        var html = document.documentElement
-        if (html && html.lang) return String(html.lang)
-      } catch (e) {}
+      try { var snapshot = ctx.locale.getLocale(); if (snapshot && snapshot.active) return String(snapshot.active) } catch (e) {}
+      try { var html = document.documentElement; if (html && html.lang) return String(html.lang) } catch (e) {}
       try { return String(navigator.language || "en") } catch (e) { return "en" }
     }
     function labelFor(locale) {
@@ -287,7 +194,6 @@ function clientSource(name: string): string {
         style.setAttribute("data-dsh-instance-brand", "")
         style.textContent = CSS
         document.head.appendChild(style)
-
         var lineEl = null
         var labelEl = null
         var frame = 0
@@ -322,14 +228,9 @@ function clientSource(name: string): string {
         }
         function schedule() {
           if (frame) return
-          frame = requestAnimationFrame(function () {
-            frame = 0
-            ensure()
-          })
+          frame = requestAnimationFrame(function () { frame = 0; ensure() })
         }
-        function syncLabel() {
-          if (labelEl) labelEl.textContent = labelFor(localeOf(ctx))
-        }
+        function syncLabel() { if (labelEl) labelEl.textContent = labelFor(localeOf(ctx)) }
         var off = null
         if (typeof ctx.on === "function") {
           try { off = ctx.on("locale/change", syncLabel) } catch (e) {}
@@ -353,7 +254,7 @@ function clientSource(name: string): string {
       }
     }
     module.exports.apply = apply
-    module.exports.inject = inject
+    module.exports.inject = []
     return module.exports
   }
 })

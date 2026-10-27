@@ -3,7 +3,6 @@ import * as path from 'node:path'
 import { resolveDshHome } from './paths.ts'
 import { toEnglish } from './env.ts'
 
-/** One DeepSeek API service component on the official status page. */
 export interface DsComponentStatus {
   name: string
   status: 'operational' | 'degraded' | 'partial_outage' | 'full_outage' | 'maintenance'
@@ -27,15 +26,14 @@ export interface DshBalance {
 
 const DS_STATUS_PAGE_ID = 6410630422455
 const DS_STATUS_PATH = `/api/status-page/${DS_STATUS_PAGE_ID}/summary/active`
-// status.deepseek.com CNAMEs to statuspage.flashcat.cloud (same backend). The custom
-// domain's TLS listener rejects some client stacks (e.g. Windows schannel), so use the
-// backend host first and the custom domain as fallback.
+
+// status.deepseek.com's TLS listener rejects some clients (e.g. Windows schannel),
+// so the CNAME backend is tried first and the custom domain kept as fallback.
 const DS_STATUS_HOSTS = [
   'https://statuspage.flashcat.cloud',
   'https://status.deepseek.com',
 ]
 
-/** Severity ordering (higher is worse). */
 const DS_SEVERITY: Record<string, number> = {
   operational: 0,
   maintenance: 1,
@@ -47,20 +45,10 @@ const DS_SEVERITY: Record<string, number> = {
 const DS_STATUS_CACHE_TTL_MS = 60 * 1000
 const FETCH_TIMEOUT_MS = 8_000
 const BALANCE_FETCH_TIMEOUT_MS = 10_000
-
-/**
- * How long a "DeepSeek is configured" answer is reused. The panel asks on every
- * refresh (every 4s while visible); without this the answer cost up to four
- * synchronous file reads per tick. Configuration changes are picked up within
- * the TTL, which is well below the time it takes a user to click Balance.
- */
 const HAS_DEEPSEEK_MODEL_CACHE_TTL_MS = 30_000
-
-/** Cap for the per-home "is DeepSeek configured" cache (one entry per instance). */
 const HAS_DEEPSEEK_MODEL_CACHE_MAX = 32
 
 let dsStatusCache: { status: DsStatus; at: number } | undefined
-/** Coalesces concurrent cold-cache status fetches into one request. */
 let dsStatusInFlight: Promise<DsStatus> | undefined
 const balanceCache = new Map<string, { balance: DshBalance | null; error?: string; at: number }>()
 const hasDeepSeekModelCache = new Map<string, { value: boolean; at: number }>()
@@ -77,37 +65,30 @@ async function fetchJson(url: string, timeoutMs: number, headers: Record<string,
   }
 }
 
-export async function getDsStatus(): Promise<DsStatus> {
-  const now = Date.now()
-  if (dsStatusCache && now - dsStatusCache.at < DS_STATUS_CACHE_TTL_MS) return dsStatusCache.status
-  // The refresh timer and a webview command can both ask while the cache is
-  // cold (a status fetch takes up to 2×8s); without this gate each would start
-  // its own request and the later answer would overwrite the earlier one.
-  if (dsStatusInFlight) return dsStatusInFlight
-  const attempt = fetchDsStatus().then((result) => {
-    dsStatusCache = { status: result, at: Date.now() }
-    return result
-  })
-  dsStatusInFlight = attempt.finally(() => {
-    dsStatusInFlight = undefined
-  })
+/** Cold-cache fetches are coalesced: the refresh tick and a click can both ask. */
+export function getDsStatus(): Promise<DsStatus> {
+  const cached = dsStatusCache
+  if (cached && Date.now() - cached.at < DS_STATUS_CACHE_TTL_MS) return Promise.resolve(cached.status)
+  dsStatusInFlight ??= fetchDsStatus()
+    .then((status) => {
+      dsStatusCache = { status, at: Date.now() }
+      return status
+    })
+    .finally(() => { dsStatusInFlight = undefined })
   return dsStatusInFlight
 }
 
 async function fetchDsStatus(): Promise<DsStatus> {
   for (const host of DS_STATUS_HOSTS) {
-    const url = `${host}${DS_STATUS_PATH}`
     try {
-      const json = await fetchJson(url, FETCH_TIMEOUT_MS)
-      return parseDsStatus(json)
+      return parseDsStatus(await fetchJson(`${host}${DS_STATUS_PATH}`, FETCH_TIMEOUT_MS))
     } catch {
-      // try the next host
+      // Try the next host.
     }
   }
   return { state: 'unknown', components: [], incidents: [] }
 }
 
-/** Words that say "this is an API service" but not which service it is. */
 const GENERIC_LABEL_WORDS = new Set(['api', 'service', 'services'])
 
 function isGenericLabel(text: string): boolean {
@@ -118,22 +99,12 @@ function isGenericLabel(text: string): boolean {
     .every((word) => GENERIC_LABEL_WORDS.has(word))
 }
 
-/**
- * The name shown for one component in the status card.
- *
- * Status-page components read "中文(English)" and `toEnglish` drops the
- * parenthetical, so a name whose Chinese half carries the only ASCII acronym
- * ("搜索API服务(Search API Service)") collapses to "api" — two such services
- * become indistinguishable. Take the parenthetical's English whenever the text
- * outside it is generic, then show what the service is: the model name for
- * "deepseek vN model api", else the name without its "API Service" tail
- * ("search api service" → "search").
- */
+// Status-page names are "中文(English)"; when the Chinese half carries the only
+// ASCII acronym, use the parenthetical so two API services stay distinguishable.
 export function dsComponentLabel(componentName: string): string {
   const outside = toEnglish(componentName)
-  const parenthetical = /[（(]([^）)]*)[）)]/.exec(componentName)?.[1]
-  const parentheticalEnglish = parenthetical ? toEnglish(parenthetical) : ''
-  const base = isGenericLabel(outside) && !isGenericLabel(parentheticalEnglish) ? parentheticalEnglish : outside
+  const parenthetical = toEnglish(/[（(]([^）)]*)[）)]/.exec(componentName)?.[1] ?? '')
+  const base = isGenericLabel(outside) && !isGenericLabel(parenthetical) ? parenthetical : outside
   const lower = base.toLowerCase()
   const model = /^deepseek\s+(v[\d.]+)\s+(\S+)\s+api$/.exec(lower)
   if (model) return `deepseek-${model[1]}-${model[2]}`
@@ -143,14 +114,12 @@ export function dsComponentLabel(componentName: string): string {
 export function parseDsStatus(json: any): DsStatus {
   try {
     const page = json?.data?.page ?? {}
-
     const statusById = new Map<string, string>()
     const raw: Array<{ id: string; name: string; order: number }> = []
     for (const c of page.components ?? []) {
       const id = String(c?.component_id ?? '')
-      const rawName = toEnglish(String(c?.name ?? '')).toLowerCase()
-      // Only API services are monitored (skip Chat Service modes).
-      if (!id || !/api/i.test(rawName)) continue
+      // Only API services are monitored; Chat Service modes are not.
+      if (!id || !/api/i.test(toEnglish(String(c?.name ?? '')).toLowerCase())) continue
       const name = dsComponentLabel(String(c?.name ?? ''))
       statusById.set(id, 'operational')
       raw.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
@@ -161,10 +130,7 @@ export function parseDsStatus(json: any): DsStatus {
     for (const ch of json?.data?.active_changes ?? []) {
       const affectsApi = (ch?.affected_components ?? []).some((ac: any) => /api/i.test(toEnglish(String(ac?.name ?? ''))))
       if (!affectsApi) continue
-      incidents.push({
-        title: toEnglish(String(ch?.title ?? '')),
-        status: String(ch?.status ?? '').trim(),
-      })
+      incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
       for (const ac of ch?.affected_components ?? []) {
         const id = String(ac?.component_id ?? '')
         const st = String(ac?.status ?? '').trim()
@@ -181,35 +147,23 @@ export function parseDsStatus(json: any): DsStatus {
     for (const c of components) {
       if ((DS_SEVERITY[c.status] ?? 0) > (DS_SEVERITY[worst] ?? 0)) worst = c.status
     }
+    const state: DsStatus['state'] = worst === 'full_outage' || worst === 'partial_outage'
+      ? 'down'
+      : worst === 'degraded'
+        ? 'degraded'
+        : worst === 'maintenance' ? 'maintenance' : 'ok'
 
-    const state: DsStatus['state'] =
-      worst === 'full_outage' || worst === 'partial_outage' ? 'down'
-      : worst === 'degraded' ? 'degraded'
-      : worst === 'maintenance' ? 'maintenance'
-      : 'ok'
-
-    return {
-      state,
-      components,
-      incidents,
-    }
+    return { state, components, incidents }
   } catch {
     return { state: 'unknown', components: [], incidents: [] }
   }
 }
 
-/** Read a credential from a flat name:value / name=value mapping (block or flow style). */
 export function readCredentialFromFile(name: string, file: string): string | undefined {
   try {
-    const raw = fs.readFileSync(file, 'utf8')
-    // Drop whole-line comments: a commented-out key must not count as set.
-    const text = raw.split(/\r?\n/).filter((line) => !/^\s*#/.test(line)).join('\n')
-    // Whole-file scan: matches KEY: value / KEY= value in both block style
-    // (one per line) and flow style ({ KEY: value }, which dsh writes), with
-    // quoted or bare values. Values must sit on the key's own line: whitespace
-    // around the separator is [ \t] only, so a valueless parent key (dsh's
-    // credentials.yaml writes `refs:` / `records:` blocks) can never swallow
-    // the next line's key as its value.
+    const text = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter((line) => !/^\s*#/.test(line)).join('\n')
+    // Values must sit on the key's own line, so a valueless parent key (dsh's
+    // `refs:` block) cannot swallow the next line's key.
     const re = /(?:^|[{\s,])([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*[:=][ \t]*(?:"([^"]*)"|'([^']*)'|([^\s,}]+))/g
     let m: RegExpExecArray | null
     while ((m = re.exec(text)) !== null) {
@@ -223,11 +177,8 @@ export function readCredentialFromFile(name: string, file: string): string | und
   return undefined
 }
 
-/**
- * Resolve a credential exactly where dsh does: the inherited environment
- * wins, then `$DSH_HOME/.credentials.yaml` (the Models-page store), then the
- * invoking directory's `.env`, then `$DSH_HOME/.env`.
- */
+// Same precedence as dsh: inherited env wins, then $DSH_HOME's credentials store,
+// then cwd's .env, then $DSH_HOME/.env.
 function readCredential(name: string, home = resolveDshHome()): string | undefined {
   if (process.env[name]) return process.env[name]
   return readCredentialFromFile(name, path.join(home, '.credentials.yaml'))
@@ -235,7 +186,6 @@ function readCredential(name: string, home = resolveDshHome()): string | undefin
     ?? readCredentialFromFile(name, path.join(home, '.env'))
 }
 
-/** Read the default Agent model selection from settings.yaml. */
 export function readDefaultModel(home = resolveDshHome()): { provider: string; model: string } | undefined {
   try {
     const lines = fs.readFileSync(path.join(home, 'settings.yaml'), 'utf8').split(/\r?\n/)
@@ -259,14 +209,7 @@ export function readDefaultModel(home = resolveDshHome()): { provider: string; m
   return undefined
 }
 
-/**
- * Whether DeepSeek is configured: the default Agent model uses a DeepSeek
- * provider/model, or a DeepSeek API key is present. The panel shows the
- * DeepSeek API status card only when this is true.
- *
- * Cached per resolved home for {@link HAS_DEEPSEEK_MODEL_CACHE_TTL_MS}: the panel
- * refreshes on a timer and this predicate does several synchronous file reads.
- */
+/** Cached per resolved home: the panel asks on every refresh and this does several file reads. */
 export function hasDeepSeekModel(home = resolveDshHome()): boolean {
   const key = path.resolve(home)
   const now = Date.now()
@@ -277,52 +220,43 @@ export function hasDeepSeekModel(home = resolveDshHome()): boolean {
     const selection = readDefaultModel(home)
     value = selection !== undefined && /deepseek/i.test(`${selection.provider} ${selection.model}`)
   }
-  // One entry per home is bounded by the instance count, but enforce a cap so a
-  // pathological settings list cannot grow the cache without limit.
+  // The cap keeps a pathological settings list from growing the cache unbounded.
   if (hasDeepSeekModelCache.size >= HAS_DEEPSEEK_MODEL_CACHE_MAX) hasDeepSeekModelCache.clear()
   hasDeepSeekModelCache.set(key, { value, at: now })
   return value
 }
 
-/**
- * Test hook: drop the module-level caches so a test starts from a cold state
- * (the TTLs are minutes long and would otherwise leak between tests).
- */
+/** Test hook: drop the module caches so a test starts cold. */
 export function resetDsCachesForTest(): void {
   dsStatusCache = undefined
   dsStatusInFlight = undefined
   hasDeepSeekModelCache.clear()
 }
 
-/** Query the DeepSeek account balance using the key configured in one DSH home. */
+function setBalance(home: string, entry: { balance: DshBalance | null; error?: string }): void {
+  balanceCache.set(path.resolve(home), { ...entry, at: Date.now() })
+}
+
 export async function fetchDshBalance(home = resolveDshHome()): Promise<void> {
   const key = readCredential('DEEPSEEK_API_KEY', home)
-  const cacheKey = path.resolve(home)
   if (!key) {
-    balanceCache.set(cacheKey, { balance: null, error: 'No DeepSeek API key found in dsh', at: Date.now() })
+    setBalance(home, { balance: null, error: 'No DeepSeek API key found in dsh' })
     return
   }
   try {
     const json = (await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` })) as any
     const info = json?.balance_infos?.[0]
-    if (info) {
-      balanceCache.set(cacheKey, {
-        balance: { currency: String(info.currency ?? ''), total: String(info.total_balance ?? '') },
-        at: Date.now(),
-      })
-    } else {
-      balanceCache.set(cacheKey, { balance: null, error: 'No balance data returned', at: Date.now() })
-    }
+    setBalance(home, info
+      ? { balance: { currency: String(info.currency ?? ''), total: String(info.total_balance ?? '') } }
+      : { balance: null, error: 'No balance data returned' })
   } catch (e) {
-    // undici 的 fetch 失败只给笼统的 "fetch failed"；真正原因（DNS 解析失败 /
-    // 连接被拒 / TLS 握手失败）藏在 e.cause 里，带出来否则余额报错无法定位。
+    // fetch() hides the real cause (DNS / refused / TLS) in e.cause; surface it.
     const message = e instanceof Error ? e.message : String(e)
     const cause = e instanceof Error && e.cause instanceof Error ? e.cause.message : undefined
-    balanceCache.set(cacheKey, { balance: null, error: cause ? `${message} (${cause})` : message, at: Date.now() })
+    setBalance(home, { balance: null, error: cause ? `${message} (${cause})` : message })
   }
 }
 
-/** Last fetched balance for one home (undefined until the user clicks Balance). */
 export function getDshBalance(home = resolveDshHome()): { balance: DshBalance | null; error?: string } | undefined {
   return balanceCache.get(path.resolve(home))
 }

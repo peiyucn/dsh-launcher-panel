@@ -105,11 +105,6 @@ test('instance names are JSON-escaped in generated client code', () => {
   }
 })
 
-/**
- * The bundle lives inside the user's profile tree, so a rewrite/delete must be
- * limited to files this extension generated; a foreign package at the same path
- * is not ours to touch.
- */
 test('ensureInstanceBrand leaves a foreign package at the bundle path alone', () => {
   const home = makeProfile()
   try {
@@ -146,8 +141,6 @@ test('ensureInstanceBrand leaves a non-DSH profile manifest alone', () => {
 test('a failed bundle write leaves the profile manifest unchanged', () => {
   const home = makeProfile()
   try {
-    // A directory we own (so the ownership check passes) whose `lib` path is a
-    // file: creating the bundle's lib directory must fail mid-write.
     const dir = instanceBrandDir(home, 'web')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: INSTANCE_BRAND_PACKAGE }), 'utf8')

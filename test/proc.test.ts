@@ -1,4 +1,3 @@
-/** Tests for `src/proc.ts` (subprocess capture) and `src/git.ts` (git output parsing). */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
@@ -8,17 +7,8 @@ import { dirname, join, resolve } from 'node:path'
 import { decodeChildOutput, isProcessAlive, resolveCommand, resolveCommandEntry, runFile, runResolved } from '../src/proc.ts'
 import { parseLocalProxySettings } from '../src/git.ts'
 
-/**
- * Whether this environment lets a process capture another process's piped
- * output.
- *
- * Sandboxes that forbid named pipes (including the DSH agent sandbox in its
- * confined modes) fail every subprocess capture with EPERM. The `runFile` tests
- * below genuinely need that capability, so they are skipped with a stated
- * reason instead of reported as failures — a red suite that everyone has to
- * re-diagnose is worse than an honest skip, and a real defect in `runFile`
- * still surfaces (it would not manifest as EPERM).
- */
+// Sandboxes that forbid named pipes fail every subprocess capture with EPERM; skip those tests
+// with a stated reason rather than reporting red noise.
 const canSpawnWithPipes = await new Promise<boolean>((resolve) => {
   try {
     execFile(process.execPath, ['-e', 'process.stdout.write("1")'], (error) => {
@@ -33,17 +23,12 @@ const skipReason = canSpawnWithPipes
   : 'this environment forbids capturing a subprocess output pipe (EPERM)'
 
 test('decodeChildOutput keeps UTF-8 intact and recovers a GBK console message', () => {
-  // Real UTF-8 must never be reinterpreted through the legacy code page.
   assert.equal(decodeChildOutput(Buffer.from('错误: 中文路径', 'utf8')), '错误: 中文路径')
   assert.equal(decodeChildOutput(Buffer.from('plain ascii', 'utf8')), 'plain ascii')
   assert.equal(decodeChildOutput(Buffer.alloc(0)), '')
 
-  // taskkill on a Chinese Windows emits GBK; these are the bytes that machine
-  // actually produces. The expected text is written escaped so the assertion
-  // stays readable next to the raw byte list.
   const gbk = Buffer.from([0xB4, 0xED, 0xCE, 0xF3, 0x3A, 0x20, 0xCE, 0xDE, 0xB7, 0xA8, 0xD6, 0xD5, 0xD6, 0xB9])
   assert.equal(decodeChildOutput(gbk), '\u9519\u8BEF: \u65E0\u6CD5\u7EC8\u6B62')
-  // The lossy reading this replaces is what filled the activity log with U+FFFD.
   assert.equal(gbk.toString('utf8').includes('\uFFFD'), true)
 })
 
@@ -52,24 +37,12 @@ test('isProcessAlive reports own pid alive and an impossible pid dead', () => {
   assert.equal(isProcessAlive(999999999), false)
 })
 
-/**
- * `resolveCommand` replaced the old shell-quoting helpers. Its whole reason to
- * exist is that a Windows `.cmd` shim cannot be spawned by Node and must not be
- * handed to a shell, so the shim is read and its Node target run instead — the
- * arguments then stay arguments.
- */
 test('resolveCommand passes a non-shim command through untouched', () => {
-  // On every platform a plain executable needs no resolution: same file, no
-  // extra leading arguments. (The `.cmd` branch is Windows-only, so it is
-  // exercised by the test below on Windows and skipped elsewhere.)
   const r = resolveCommand(process.execPath)
   assert.deepEqual(r, { file: process.execPath, args: [] })
 })
 
 test('resolveCommand passes an argument array through without a shell', async () => {
-  // The security property that matters: an argument containing shell
-  // metacharacters is delivered as ONE argument, verbatim — it can never become
-  // a second command, because no shell parses it.
   const hostile = 'x & echo INJECTED> marker & y'
   const r = await runResolved(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', hostile])
   assert.equal(r.ok, true)
@@ -78,18 +51,13 @@ test('resolveCommand passes an argument array through without a shell', async ()
 })
 
 test('resolveCommand refuses a batch file it cannot resolve, rather than spawning it', () => {
-  if (process.platform !== 'win32') return // the refusal is Windows-specific
-  // Node refuses to spawn `.cmd`/`.bat` directly (its CVE-2024-27980 guard), and
-  // handing one to a shell is the injection hole this replaced. An unresolvable
-  // shim must therefore be reported, not attempted.
+  if (process.platform !== 'win32') return
   const bogus = join(tmpdir(), 'dsh-no-such-shim.cmd')
   assert.equal(resolveCommand(bogus), undefined)
 })
 
 test('resolveCommand reads a .cmd shim and returns its Node entry', () => {
   if (process.platform !== 'win32') return
-  // The npm shim shape: a batch file that runs a script with `%dp0%` expanded to
-  // its own directory. Written here rather than relying on a machine's pnpm.
   const dir = mkdtempSync(join(tmpdir(), 'dsh-shim-'))
   try {
     const entry = join(dir, 'entry.mjs')
@@ -109,7 +77,6 @@ test('resolveCommand reads a .cmd shim and returns its Node entry', () => {
     ].join('\r\n'))
     const r = resolveCommand(shim)
     assert.notEqual(r, undefined)
-    // It runs the script with the current Node, not the shim through cmd.
     assert.equal(r?.file, process.execPath)
     assert.equal(r?.args[0], entry)
   } finally {
@@ -117,14 +84,6 @@ test('resolveCommand reads a .cmd shim and returns its Node entry', () => {
   }
 })
 
-/**
- * Shims are written by several tools and they do not agree on how to name the
- * script: npm's cmd-shim builds it from `%dp0%`, corepack and hand-written shims
- * use `%~dp0` (including `..\` segments), and some leave the path bare. All of
- * them must resolve — a fresh machine whose pnpm is a `%~dp0` shim used to fail
- * with "Node entry could not be resolved", which then read as "the registry is
- * unreachable".
- */
 const SHIM_CASES: Array<{ name: string; relative: string; body: string }> = [
   { name: '%~dp0 (corepack / hand-written shape)', relative: join('sub', 'tool.cjs'), body: '"%~dp0\\sub\\tool.cjs" %*' },
   { name: 'an unquoted target', relative: join('sub', 'tool.js'), body: '%dp0%\\sub\\tool.js %*' },
@@ -156,9 +115,6 @@ for (const shimCase of SHIM_CASES) {
 
 test('resolveCommandEntry handles a verbatim Corepack-style shim (IF/ELSE, ~dp0)', () => {
   if (process.platform !== 'win32') return
-  // The shape Corepack writes for `corepack enable` — quoted `%~dp0` in both
-  // branches, the script named twice, and an interpreter path that is not a
-  // script. This is the shim text that used to come back unresolved.
   const root = mkdtempSync(join(tmpdir(), 'dsh-corepack-shim-'))
   try {
     const nodeDir = join(root, 'nodejs')
@@ -189,10 +145,6 @@ test('resolveCommandEntry handles a verbatim Corepack-style shim (IF/ELSE, ~dp0)
 
 test('resolveCommandEntry runs a shim that points straight at an executable', () => {
   if (process.platform !== 'win32') return
-  // Verbatim shape from a real machine: pnpm's npm package ships a Windows
-  // executable and the npm shim points at it, with no Node script involved.
-  // The old resolver only looked for `.js/.cjs/.mjs` and called this
-  // "Node entry could not be resolved", which read as a network failure.
   const root = mkdtempSync(join(tmpdir(), 'dsh-exe-shim-'))
   try {
     const packageDir = join(root, 'node_modules', 'pnpm')
@@ -226,8 +178,6 @@ test('resolveCommandEntry explains why a shim could not be resolved', async () =
   if (process.platform !== 'win32') return
   const dir = mkdtempSync(join(tmpdir(), 'dsh-shim-broken-'))
   try {
-    // Named target that does not exist: report it and stop, never fall back to
-    // running the .cmd through a shell.
     const missingTarget = join(dir, 'missing.cmd')
     writeFileSync(missingTarget, '@echo off\r\nnode "%~dp0\\gone.cjs" %*\r\n')
     const missing = resolveCommandEntry(missingTarget)
@@ -237,14 +187,12 @@ test('resolveCommandEntry explains why a shim could not be resolved', async () =
     assert.equal(unresolved.ok, false)
     assert.match(unresolved.error ?? '', /does not exist/u)
 
-    // A shim with no script token at all (e.g. it calls another .cmd).
     const noEntry = join(dir, 'nested.cmd')
     writeFileSync(noEntry, '@echo off\r\ncall "%~dp0\\inner.cmd" %*\r\n')
     const empty = resolveCommandEntry(noEntry)
     assert.equal(empty.ok, false)
     if (!empty.ok) assert.match(empty.reason, /names no program/u)
 
-    // A shim that cannot be read.
     assert.equal(resolveCommand(join(dir, 'no-such-file.cmd')), undefined)
     const unreadable = resolveCommandEntry(join(dir, 'no-such-file.cmd'))
     assert.equal(unreadable.ok, false)
@@ -268,7 +216,6 @@ test('runFile keeps the exit code and last stderr line of a failed command', { s
   assert.equal(r.ok, false)
   assert.equal(r.code, 3)
   assert.equal(r.timedOut, undefined)
-  // The *last* line is the cause; earlier lines are usually context.
   assert.equal(r.error, 'second')
 })
 
@@ -289,7 +236,6 @@ test('runFile reports a spawn failure with its reason', { skip: skipReason }, as
 })
 
 test('parseLocalProxySettings reads the format git actually prints', () => {
-  // 格式取自本机 git 2.55 的实际输出（`git config --global --get-regexp proxy`）。
   const real = 'http.proxy http://127.0.0.1:7897\nhttps.proxy http://127.0.0.1:7897'
   assert.deepEqual(parseLocalProxySettings(real), [
     { key: 'http.proxy', host: '127.0.0.1', port: 7897 },
@@ -298,7 +244,6 @@ test('parseLocalProxySettings reads the format git actually prints', () => {
 })
 
 test('parseLocalProxySettings ignores non-loopback and malformed proxies', () => {
-  // 远端代理不可达可能只是当前网络位置问题，不该由我们断言。
   assert.deepEqual(parseLocalProxySettings('http.proxy http://proxy.corp.example:8080'), [])
   assert.deepEqual(parseLocalProxySettings('http.proxy http://127.0.0.1'), [])
   assert.deepEqual(parseLocalProxySettings('http.proxy not-a-url'), [])

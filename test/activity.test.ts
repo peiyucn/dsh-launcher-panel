@@ -1,11 +1,3 @@
-/**
- * Tests for `src/server/activity.ts`: the bounded activity feed and the spinner
- * bookkeeping.
- *
- * These became testable when the module was split out of the old server
- * lifecycle — it has no VS Code dependency, so the feed's bounds and the busy
- * pairing can be exercised directly instead of inferred.
- */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -29,7 +21,6 @@ import {
 test('the activity feed is bounded and keeps the newest entries', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-activity-'))
   try {
-    // Point the log sink at a temp file so nothing touches the real home dir.
     setLogPath(join(dir, 'client.log'))
     clearConsole()
 
@@ -38,11 +29,8 @@ test('the activity feed is bounded and keeps the newest entries', () => {
 
     const feed = getActivity()
     assert.equal(feed.length, ACTIVITY_MAX_LINES, 'feed must stay at its cap')
-    // The newest line survives; the oldest were dropped.
     assert.ok(feed[feed.length - 1].text.endsWith(`line ${total - 1}`))
     assert.ok(!feed.some((e) => e.text.endsWith('line 0')))
-    // Ids keep increasing even after entries are dropped, so finishBusy can
-    // never address a recycled entry.
     assert.ok(feed[feed.length - 1].id > ACTIVITY_MAX_LINES)
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -60,7 +48,6 @@ test('finishBusy clears only the entry it was given', () => {
     const feed = getActivity()
     assert.equal(feed.find((e) => e.id === first)?.busy, false)
     assert.equal(feed.find((e) => e.id === second)?.busy, true)
-    // An unknown id is a no-op, not a throw.
     finishBusy(999999)
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -80,11 +67,6 @@ test('addActivity writes to the client log file', () => {
   }
 })
 
-/**
- * `withBusy` exists because every `addActivity(…, true)` must be paired with
- * `finishBusy`, and a throw in between used to leave the spinner turning for
- * the rest of the session (the feed has no reaper).
- */
 test('withBusy clears its spinner when the task throws', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-withbusy-'))
   try {
@@ -99,11 +81,9 @@ test('withBusy clears its spinner when the task throws', async () => {
       withBusy('↻ failing thing…', async () => { throw new Error('boom') }),
       /boom/,
     )
-    // The point of the helper: the spinner is gone even on the throw path.
     assert.equal(getActivity().filter((e) => e.busy).length, 0,
       'a failing task must not leave a spinner running')
 
-    // Two concurrent busy operations each clear only their own entry.
     const slow = withBusy('↻ one…', () => new Promise((resolve) => setTimeout(() => resolve('a'), 20)))
     const fast = withBusy('↻ two…', async () => 'b')
     assert.equal(await fast, 'b')
@@ -128,7 +108,6 @@ test('one oversized line is truncated in the feed and in the log', () => {
     const written = readFileSync(file, 'utf8').trimEnd()
     assert.ok(written.length <= ACTIVITY_LINE_MAX_CHARS + 32, `log line kept at the cap (${written.length})`)
     assert.ok(written.includes('[truncated]'), 'the log line carries the same marker')
-    // Ordinary lines are untouched.
     addActivity('short line')
     assert.ok(getActivity()[1].text.endsWith('short line'))
   } finally {
@@ -146,7 +125,6 @@ test('getActivity returns a snapshot that cannot mutate the feed', () => {
     const again = getActivity()
     assert.notEqual(snapshot, again, 'each call returns a fresh array')
     assert.notEqual(snapshot[0], again[0], 'entries are copies too')
-    // Both the array and the entry objects must be unreachable from the feed.
     ;(snapshot as unknown as Array<{ id: number; text: string; busy: boolean }>).push({ id: -1, text: 'injected', busy: false })
     snapshot[0].text = 'polluted'
     const live = getActivity()

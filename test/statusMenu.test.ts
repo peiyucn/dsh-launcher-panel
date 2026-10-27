@@ -30,8 +30,7 @@ test('stopping status menu offers dashboard only', () => {
 })
 
 test('updating status menu does not offer start', () => {
-  // An update rewrites the checkout / package tree; the server refuses a start
-  // while one runs, so the menu must not offer it either.
+  // An update rewrites the tree; Start would be refused server-side anyway.
   assert.deepEqual(actions({ ...base, updating: true }), ['dashboard', 'settings'])
 })
 
@@ -53,7 +52,6 @@ test('status menu summary reports state, mode, version and endpoint', () => {
     buildStatusMenuSummary({ ...summaryBase, running: true }),
     'Running · pkg mode · dsh v0.1.2-alpha.1 · 127.0.0.1:3080',
   )
-  // The endpoint is only a fact while the server is up.
   assert.equal(buildStatusMenuSummary(summaryBase), 'Stopped · pkg mode · dsh v0.1.2-alpha.1')
 })
 
@@ -86,8 +84,6 @@ test('instance names are trimmed the same way in the menu and the summary', () =
 })
 
 test('whitespace-only instance names leave no empty segment in either place', () => {
-  // Regression: the summary used to keep the raw string, so a blank name showed
-  // a leading " · " that the menu labels had already dropped.
   for (const name of ['   ', '\t\n']) {
     assert.equal(buildStatusMenuSummary(summaryBase, name), 'Stopped · pkg mode · dsh v0.1.2-alpha.1')
     const items = buildStatusMenuItems(base, name)
@@ -99,7 +95,6 @@ test('whitespace-only instance names leave no empty segment in either place', ()
 test('stopping and updating still offer only the dashboard', () => {
   const both = { ...base, stopping: true, updating: true }
   assert.deepEqual(actions(both), ['dashboard', 'settings'])
-  // The summary reports the in-flight state; no action depends on which word
-  // wins, so the documented priority (updating before stopping) is pinned here.
+  // Documented precedence when both are true: updating wins over stopping.
   assert.equal(buildStatusMenuSummary({ ...summaryBase, stopping: true, updating: true }), 'Updating · pkg mode · dsh v0.1.2-alpha.1')
 })

@@ -1,21 +1,12 @@
 /**
- * Dashboard CSS.
- *
- * Extracted verbatim from the webview template so the panel's markup, styling,
- * and client script can be read and reviewed separately. It is a TS module (not
- * a .css asset) because the extension ships compiled output only: a string
- * constant needs no asset-copy step and cannot go missing from the VSIX.
- *
- * Brand colours mirror dsh's own design-platform palette; light/dark follow the
- * VS Code theme classes, which is why this is one string rather than two files.
+ * Dashboard CSS, kept as a string so the extension ships no asset files.
+ * Colours mirror dsh's design-platform palette; light/dark follow the VS Code
+ * theme class on `body`.
  *
  * @module webview/panel-styles
  */
 
 export const PANEL_CSS = `
-  /* Viewport-filling flex column (not a hard-coded content height): the
-     console is the flexible region, so expanding DeepSeek API shrinks the
-     console instead of adding a page scrollbar. */
   html, body { height: 100%; }
   body {
     color-scheme: light;
@@ -28,7 +19,7 @@ export const PANEL_CSS = `
     gap: 8px;
     box-sizing: border-box;
     overflow: hidden;
-    /* 官方 dsh 静态色板（design-platform.css）关键值；明暗主题跟随 VS Code 主题类。 */
+    /* Official dsh palette; dark values below override the same tokens. */
     --lap-bg: #FFFFFF;
     --lap-fg: #0F1115;
     --lap-fg2: #61666B;
@@ -71,7 +62,6 @@ export const PANEL_CSS = `
     --lap-warning: #F59E0B;
     --lap-info: #4D8BFE;
   }
-  /* One framed region for every functional area: border, inner title, body. */
   .section { flex: 0 0 auto; border: 0.5px solid var(--lap-border); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .section-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
   .section-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--lap-fg); line-height: 16px; }
@@ -87,14 +77,7 @@ export const PANEL_CSS = `
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
   .dot.stopped { background: var(--lap-fg2); opacity: .5; box-shadow: none; }
-  /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
-     几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
-     stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方
-     StateDot 的 ongoing 默认值 14px。
-     ⚠️ 配色走**中性档** --lap-fg2：官方 .spinner 用的是 --dsw-alias-label-tertiary（中性灰），
-     既不是主色也没有彩色；面板这两档主题的 fg2 就是同一档（浅 #61666B / 深 #81868C）。
-     这里此前用一个自造的蓝色 --lap-ongoing（#5686FE），那是**更老的官方点阵色**，已删。
-     ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix），官方早已改成圆弧 spinner。 */
+  /* Mirrors dsh's StateDot ongoing spinner (geometry and timing are copied). */
   .dot.matrix { background: none; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
   .state-spinner { display: inline-block; width: var(--spinner-size, 14px); height: var(--spinner-size, 14px); color: var(--lap-fg2); flex: none; vertical-align: -1.5px; }
   .state-spinner-motion { transform-origin: center; animation: lap-spinner-spin 1.5s linear infinite; }
@@ -107,7 +90,6 @@ export const PANEL_CSS = `
     50% { stroke-dasharray: 24 150; stroke-dashoffset: -6; }
     100% { stroke-dasharray: 12 150; stroke-dashoffset: 0; }
   }
-  /* 减少动态偏好：停在弧的静态形态（与官方一致，不再旋转/呼吸）。 */
   @media (prefers-reduced-motion: reduce) {
     .state-spinner-motion, .state-spinner-arc { animation: none; }
     .state-spinner-arc { stroke-dasharray: 18 150; stroke-dashoffset: -3; }
@@ -116,8 +98,6 @@ export const PANEL_CSS = `
   .status-main { font-size: 12px; font-weight: 600; }
   .status-sub { color: var(--lap-fg2); font-size: 10px; word-break: break-all; }
   .mode-toggle { display: flex; flex-direction: row; background: var(--lap-track); border: 0.5px solid var(--lap-border-soft); border-radius: 14px; padding: 2px; gap: 2px; flex: none; }
-  /* 模式切换：普通药丸按钮（选中 = 主色实心 + 白字）。药丸半径取高的一半（22/2 = 11），
-     与面板里 h28 + r14 的胶囊同一套比例；不再是圆形图标钮。 */
   .mode-option { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 11px; height: 22px; min-width: 38px; padding: 0 9px; background: transparent; color: var(--lap-fg2); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
   .mode-option:hover { background: var(--lap-hover); color: var(--lap-fg); }
   .mode-option.active { background: var(--lap-accent); color: #fff; }
@@ -132,7 +112,6 @@ export const PANEL_CSS = `
   .runtime-path, .runtime-data { font-size: 10px; color: var(--lap-fg2); word-break: break-all; font-family: var(--vscode-editor-font-family); min-width: 0; cursor: pointer; }
   .runtime-path:hover, .runtime-data:hover { color: var(--lap-accent); text-decoration: underline; }
   .instance-buttons { display: flex; gap: 8px; margin-top: 2px; }
-  /* 按钮：官方 Button 几何（h28 + r14 胶囊 + 超椭圆；无支持时退普通圆角）。 */
   button { height: 28px; border: none; border-radius: 14px; padding: 0 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
   button.primary { background: var(--lap-accent); color: #fff; flex: 1; }
   button.primary:hover { background: var(--lap-accent-hover); }
@@ -146,8 +125,6 @@ export const PANEL_CSS = `
   .log-files { display: flex; flex-direction: column; gap: 3px; }
   .log-file-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .log-size { color: var(--lap-fg2); font-size: 10px; flex: none; }
-  .section-actions .mini-btn { flex: none; }
-  /* debug 状态药丸：文字在按钮内，on = 绿色点亮（owner 拍板恢复原方式）。 */
   .debug-pill { border: 0.5px solid var(--lap-border-soft); border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 500; line-height: 18px; cursor: pointer; background: transparent; color: var(--lap-fg2); flex: none; font-family: inherit; height: auto; }
   .debug-pill.on { color: var(--lap-success); border-color: var(--lap-success-bg); background: var(--lap-success-bg); }
   .icon-btn { background: transparent; border: none; border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 2px 6px; font-size: 12px; flex: none; height: auto; }
@@ -183,12 +160,10 @@ export const PANEL_CSS = `
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
-  .ds-balance-row .balance-btn { flex: none; }
   .ds-balance-row .ds-open { margin-left: 0; }
   .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
-  /* 自绘下拉：触发器 + 向上展开的菜单（官方菜单样式）。 */
   .lap-select { position: relative; flex: none; margin-left: auto; }
   .lap-select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; box-sizing: border-box; width: 96px; height: 28px; padding: 0 8px 0 12px; border: 0.5px solid var(--lap-border-soft); border-radius: 14px; background: var(--lap-surface); color: var(--lap-fg); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
   .lap-select-trigger:hover { background: var(--lap-hover); }
@@ -202,16 +177,13 @@ export const PANEL_CSS = `
   .lap-select-check { margin-left: auto; width: 16px; height: 16px; flex: none; color: var(--lap-accent); visibility: hidden; }
   .lap-select-option[aria-selected='true'] .lap-select-check { visibility: visible; }
   .balance-btn { background: var(--lap-hover); color: var(--lap-fg); border: none; border-radius: 8px; padding: 0 8px; font-size: 11px; font-family: inherit; cursor: pointer; flex: none; height: 22px; }
-  .balance-btn:hover { background: var(--lap-hover); }
   .balance-btn:disabled { opacity: .6; cursor: progress; }
-  /* 官方全局规则的同款曲率：非圆角形状一律走 superellipse(1.5)（不支持的引擎退普通圆角）。 */
   @supports (corner-shape: superellipse(1.5)) {
     button, .mini-btn, .icon-btn, .balance-btn, .ds-open, .section, .console, .mode-toggle, .lap-select-menu { corner-shape: superellipse(1.5); }
   }
   .version-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .version-spacer { flex: 1; min-width: 8px; }
   .plugin-version { font-size: 10px; color: var(--lap-fg2); }
-  /* Tabs live inside the instance card, so there is no outside seam to align. */
   .instance-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; padding: 0 0 4px; margin: 0; border-bottom: 0.5px solid var(--lap-border-soft); }
   .instance-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; height: 24px; padding: 0 8px; border: 0.5px solid transparent; border-radius: 8px; background: transparent; color: var(--lap-fg2); font-family: inherit; font-size: 11px; cursor: pointer; flex: 0 0 auto; position: relative; }
   .instance-tab:hover { background: var(--lap-hover); color: var(--lap-fg); }
@@ -219,8 +191,6 @@ export const PANEL_CSS = `
   .instance-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .instance-tabs-empty { color: var(--lap-fg2); font-size: 11px; padding: 4px 6px; }
   .instance-summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lap-fg2); font-size: 10px; }
-  /* Settings/bootstrap diagnostics (invalid entries, a refused settings write).
-     Hidden when empty so a healthy panel looks unchanged. */
   .instance-issues { display: flex; flex-direction: column; gap: 2px; }
   .instance-issues:empty { display: none; }
   .instance-issue { font-size: 10px; line-height: 14px; word-break: break-word; color: var(--lap-fg2); }

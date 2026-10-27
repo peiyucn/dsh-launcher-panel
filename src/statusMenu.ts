@@ -1,18 +1,12 @@
 export type StatusMenuAction = 'start' | 'stop' | 'open' | 'dashboard' | 'settings'
 
-export interface StatusMenuItem {
+interface StatusMenuItem {
   label: string
-  /** Codicon id shown as the quick-pick icon. */
   icon: string
   action: StatusMenuAction
 }
 
-/**
- * What the status-bar menu may read to summarize the current run. A narrow
- * interface, not the whole dashboard status, so the menu cannot start depending
- * on state it has no business reading.
- */
-export interface MenuStatus {
+interface MenuStatus {
   running: boolean
   starting: boolean
   installing: boolean
@@ -23,80 +17,60 @@ export interface MenuStatus {
   url: string
 }
 
-const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'settings-gear', action: 'settings' }
+type Phase = 'running' | 'starting' | 'busy' | 'stopped'
+type PhaseAction = Exclude<StatusMenuAction, 'settings'>
 
-/**
- * The instance name as the menu should show it: trimmed, with whitespace-only
- * names treated as "no name". Both the action labels and the summary header go
- * through this helper so one of them cannot end up with a stray separator that
- * the other drops.
- */
+const PHASE_ACTIONS: Record<Phase, readonly PhaseAction[]> = {
+  running: ['open', 'dashboard', 'stop'], starting: ['dashboard', 'stop'], busy: ['dashboard'], stopped: ['start', 'dashboard'],
+}
+
+const ACTION_ICONS: Record<StatusMenuAction, string> = { start: 'play', stop: 'debug-stop', open: 'globe', dashboard: 'browser', settings: 'settings-gear' }
+
+const STATE_WORDS: ReadonlyArray<readonly [keyof MenuStatus, string]> = [
+  ['running', 'Running'], ['starting', 'Starting'], ['installing', 'Installing'], ['updating', 'Updating'], ['stopping', 'Stopping'],
+]
+
 function instanceLabel(instanceName?: string): string {
   return instanceName?.trim() ?? ''
 }
 
-/**
- * Contextual quick-pick menu for the status bar DSH Launcher Panel item:
- * clicking the item opens this menu (matching the behaviour of other status bar
- * entries) instead of starting the server directly.
- */
+function phaseOf(status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>): Phase {
+  if (status.running) return 'running'
+  if (status.starting || status.installing) return 'starting'
+  if (status.stopping || status.updating) return 'busy'
+  return 'stopped'
+}
+
+function menuItem(action: PhaseAction, name: string): StatusMenuItem {
+  const label = {
+    open: [`Open ${name} Web UI`, 'Open Web UI'],
+    stop: [`Stop ${name} Web UI`, 'Stop DSH Web UI'],
+    start: [`Start ${name} & Open Web UI`, 'Start & Open Web UI'],
+    dashboard: ['Open Dashboard', 'Open Dashboard'],
+  }[action][name ? 0 : 1]
+  return { label, icon: ACTION_ICONS[action], action }
+}
+
 export function buildStatusMenuItems(
   status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
   instanceName?: string,
 ): StatusMenuItem[] {
   const name = instanceLabel(instanceName)
-  const openLabel = name ? `Open ${name} Web UI` : 'Open Web UI'
-  const stopLabel = name ? `Stop ${name} Web UI` : 'Stop DSH Web UI'
-  const startLabel = name ? `Start ${name} & Open Web UI` : 'Start & Open Web UI'
-  let items: StatusMenuItem[]
-  if (status.running) {
-    items = [
-      { label: openLabel, icon: 'globe', action: 'open' },
-      { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: stopLabel, icon: 'debug-stop', action: 'stop' },
-    ]
-  } else if (status.starting || status.installing) {
-    items = [
-      { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-      { label: stopLabel, icon: 'debug-stop', action: 'stop' },
-    ]
-  } else if (status.stopping || status.updating) {
-    // An update rewrites the checkout / package tree; offering Start here would
-    // hit the server-side refusal anyway, so don't offer it.
-    items = [{ label: 'Open Dashboard', icon: 'browser', action: 'dashboard' }]
-  } else {
-    items = [
-      { label: startLabel, icon: 'play', action: 'start' },
-      { label: 'Open Dashboard', icon: 'browser', action: 'dashboard' },
-    ]
-  }
-  items.push(OPEN_SETTINGS)
+  const items = PHASE_ACTIONS[phaseOf(status)].map((action) => menuItem(action, name))
+  items.push({ label: 'Open Global Settings', icon: ACTION_ICONS.settings, action: 'settings' })
   return items
 }
 
-/** The lifecycle state, worded the same way the panel reports it. */
 function stateWord(status: MenuStatus): string {
-  if (status.running) return 'Running'
-  if (status.starting) return 'Starting'
-  if (status.installing) return 'Installing'
-  if (status.updating) return 'Updating'
-  if (status.stopping) return 'Stopping'
+  for (const [key, word] of STATE_WORDS) if (status[key]) return word
   return 'Stopped'
 }
 
-/**
- * One-line summary of the current run, shown as the header of the status-bar
- * quick pick. It answers "what is it doing?" before the actions ask "what
- * next?", so the menu is useful without opening the Dashboard. The endpoint is
- * only shown while the server is up — otherwise it would read like a claim.
- */
 export function buildStatusMenuSummary(status: MenuStatus, instanceName?: string): string {
   const name = instanceLabel(instanceName)
   const parts = name ? [name] : []
   parts.push(stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode')
   parts.push(status.dshVersion ? `dsh v${status.dshVersion}` : 'dsh version unknown')
-  // displayUrl() always yields "http://127.0.0.1:<port>"; the scheme is noise in
-  // a one-line summary.
   if (status.running) parts.push(status.url.replace(/^https?:\/\//, ''))
   return parts.join(' · ')
 }

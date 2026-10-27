@@ -1,13 +1,3 @@
-/**
- * Multi-instance manager: settings, lifecycle and the dashboard snapshot.
- *
- * One instance = one {@link InstanceRuntime}. Install/detect/update stay shared:
- * the manager prepares the published package or source checkout once, then each
- * runtime spawns its own DSH process with its own `DSH_HOME` and port.
- *
- * @module instance-manager
- */
-
 import * as fs from 'node:fs'
 import * as net from 'node:net'
 import * as vscode from 'vscode'
@@ -23,14 +13,7 @@ import {
   type NormalizedInstances,
 } from './instances.ts'
 import type { ActivityEntry } from './server/activity.ts'
-import {
-  addActivity,
-  activityLogFile,
-  dbg,
-  fileSizeSafe,
-  getActivity,
-  withBusy,
-} from './server/activity.ts'
+import { addActivity, activityLogFile, dbg, fileSizeSafe, getActivity, withBusy } from './server/activity.ts'
 import type { CheckoutHost } from './server/checkout.ts'
 import { ensureCheckoutReady } from './server/checkout.ts'
 import { readConfig } from './server/config.ts'
@@ -66,8 +49,7 @@ import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from './timing.ts'
 import { versionFromDescribe } from './versions.ts'
 import { checkDshUpdateStatus, isUpdating, runDshUpdate, type DshUpdate, type UpdateHost } from './server/update.ts'
 
-/** The dashboard snapshot the webview consumes. */
-export interface InstanceDashboard {
+interface InstanceDashboard {
   status: {
     running: boolean
     starting: boolean
@@ -99,48 +81,27 @@ export interface InstanceDashboard {
   issues: InstanceIssue[]
 }
 
-/** Result of a create/edit submission. */
-export interface InstanceMutation {
+interface InstanceMutation {
   instance?: DshInstance
   issues: InstanceIssue[]
 }
 
-/** The runtime host shared by every instance. */
-class ManagerHost implements RuntimeHost {
-  constructor(private readonly manager: InstanceManager) {}
-
-  prepare(): Promise<PreparedDsh | undefined> {
-    return this.manager.prepare()
-  }
-
-  isDshMissing(): boolean {
-    return this.manager.isDshMissing()
-  }
-
-  isHomeRunning(home: string, exceptId: string): boolean {
-    return this.manager.isHomeRunning(home, exceptId)
-  }
-
-  addActivity(line: string, isBusy?: boolean): number {
-    return addActivity(line, isBusy)
-  }
-
-  dbg(line: string): void {
-    dbg(line)
-  }
-}
-
-/** The terminal layer's view of the manager. */
 const terminalHost: TerminalHost = { addActivity }
+
+/** Host members shared by the install/checkout/update builders. */
+const flowHost = {
+  addActivity,
+  withBusy,
+  runInTerminal: (title: string, command: string, args: string[], env?: Record<string, string>) =>
+    runInTerminalInner(title, command, args, terminalHost, env),
+}
 
 let activeManager: InstanceManager | undefined
 
-/** The extension creates one manager at activation; panel/actions read it. */
 export function setInstanceManager(manager: InstanceManager): void {
   activeManager = manager
 }
 
-/** The manager created at activation. */
 export function getInstanceManager(): InstanceManager | undefined {
   return activeManager
 }
@@ -148,7 +109,7 @@ export function getInstanceManager(): InstanceManager | undefined {
 export class InstanceManager {
   private settings: NormalizedInstances = { instances: [], activeId: '', issues: [] }
   private runtimes = new Map<string, InstanceRuntime>()
-  private readonly host: ManagerHost
+  private readonly host: RuntimeHost
   private readyPromise: Promise<void> | undefined
   private readyError = ''
   private preparePromise: Promise<PreparedDsh | undefined> | undefined
@@ -164,23 +125,22 @@ export class InstanceManager {
   private checkingUpdate = false
 
   constructor(private readonly context: Pick<vscode.ExtensionContext, 'globalState'>) {
-    this.host = new ManagerHost(this)
+    this.host = {
+      prepare: () => this.prepare(),
+      isDshMissing: () => this.dshState === 'missing',
+      isHomeRunning: (home, exceptId) => this.isHomeRunning(home, exceptId),
+      addActivity,
+      dbg,
+    }
   }
 
-  /**
-   * Load settings, work out the first-run instance list and build runtimes.
-   *
-   * A failed attempt must stay retryable: caching the rejection would keep every
-   * later `dashboard()` throwing and leave the panel permanently empty, with no
-   * way back except reloading the window. `readyError` carries the failure to
-   * the panel, which renders it next to whatever instances are known.
-   */
+  /** A failed load stays retryable: caching the rejection would blank the panel for the session. */
   ready(): Promise<void> {
     if (this.readyPromise) return this.readyPromise
     const attempt = this.initialize()
     this.readyPromise = attempt
     attempt.catch((error) => {
-      this.readyError = error instanceof Error ? error.message : String(error)
+      this.readyError = errorMessage(error)
       if (this.readyPromise === attempt) this.readyPromise = undefined
     })
     return attempt
@@ -188,26 +148,30 @@ export class InstanceManager {
 
   private async initialize(): Promise<void> {
     this.readyError = ''
-    this.settings = await readInitialInstances(this.context)
-    this.rebuildRuntimes()
+    this.applySettings(await readInitialInstances(this.context))
     this.nodeVersion = await probeNodeVersion(readConfig().nodePath).catch(() => '')
     for (const issue of this.settings.issues) addActivity(`⚠ ${issue.message}`)
   }
 
-  private rebuildRuntimes(): void {
-    this.runtimes.clear()
-    for (const instance of this.settings.instances) {
-      this.runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
+  /** Match runtimes to settings by id: a runtime owns its child and log pump, so it must be reused. */
+  private applySettings(next: NormalizedInstances): void {
+    const previous = this.runtimes
+    const runtimes = new Map<string, InstanceRuntime>()
+    for (const instance of next.instances) {
+      const existing = previous.get(instance.id)
+      if (existing) existing.update(instance)
+      runtimes.set(instance.id, existing ?? new InstanceRuntime(instance, this.host))
     }
+    for (const [id, runtime] of previous) {
+      if (!runtimes.has(id)) runtime.dispose()
+    }
+    this.settings = next
+    this.runtimes = runtimes
   }
 
   private get activeId(): string {
     if (this.settings.activeId && this.runtimes.has(this.settings.activeId)) return this.settings.activeId
     return this.settings.instances[0]?.id ?? ''
-  }
-
-  private get activeRuntime(): InstanceRuntime | undefined {
-    return this.runtimes.get(this.activeId)
   }
 
   instances(): DshInstance[] {
@@ -222,17 +186,11 @@ export class InstanceManager {
     return issues
   }
 
-  /** The active instance id the panel should mark; '' when none. */
   activeInstanceId(): string {
     return this.activeId
   }
 
-  /**
-   * Every known instance as a renderable status.
-   *
-   * Synchronous on purpose: it is also the fallback the panel renders when a
-   * status refresh throws, so a failing subsystem never blanks the list.
-   */
+  /** Synchronous on purpose: the panel's fallback render must not fail with the rest of a refresh. */
   instanceStatuses(): InstanceRuntimeStatus[] {
     return [...this.runtimes.values()].map((runtime) => runtime.status())
   }
@@ -242,34 +200,25 @@ export class InstanceManager {
     return this.settings.instances.find((instance) => instance.id === id)
   }
 
-  /** One instance by id. */
   instance(id: string): DshInstance | undefined {
     return this.settings.instances.find((instance) => instance.id === id)
   }
 
-  /** One runtime status by id. */
   statusOf(id: string): InstanceRuntimeStatus | undefined {
     return this.runtimes.get(id)?.status()
   }
 
-  /** The URL to open for one instance, carrying its launch token when known. */
   uiUrl(id: string): string | undefined {
-    const runtime = this.runtimes.get(id)
-    // The token-bearing URL is a method, never a status field: status objects
-    // are posted to the webview, which must not receive the launch token.
-    return runtime?.uiUrl()
+    return this.runtimes.get(id)?.uiUrl()
   }
 
-  /** Select an instance and persist the choice. */
   async select(id: string): Promise<void> {
     await this.ready()
     if (!this.runtimes.has(id)) return
     this.settings.activeId = id
-    const saveError = await writeResult(writeActiveInstance(id))
-    if (saveError !== undefined) addActivity(`⚠ could not remember the active instance: ${saveError}`)
+    await this.persistActiveId(id)
   }
 
-  /** Refresh every runtime from its port and re-detect the shared install. */
   async refresh(): Promise<void> {
     for (const runtime of this.runtimes.values()) await runtime.refresh()
     const now = Date.now()
@@ -285,20 +234,14 @@ export class InstanceManager {
         this.dshState = 'unknown'
       }
     }
-    // Keep the Update button honest without blocking a status refresh on the
-    // registry/tag lookup: a stale cache starts one background check.
     const lastUpdateCheck = this.updateCache?.at ?? this.updateCheckedAt
-    if (!this.checkingUpdate && Date.now() - lastUpdateCheck > UPDATE_CHECK_TTL_MS) {
-      void this.checkUpdate()
-    }
+    if (!this.checkingUpdate && Date.now() - lastUpdateCheck > UPDATE_CHECK_TTL_MS) void this.checkUpdate()
   }
 
-  /** Drop the shared detection cache (after a mode/update change). */
   invalidateDetection(): void {
     this.detectionAt = 0
   }
 
-  /** Check for a newer shared dsh; coalesced and cached for a few minutes. */
   checkUpdate(force = false): Promise<DshUpdate | undefined> {
     if (this.checkPromise) return this.checkPromise
     if (!force && this.updateCache && Date.now() - this.updateCache.at < UPDATE_CHECK_TTL_MS) {
@@ -311,7 +254,7 @@ export class InstanceManager {
         return update
       })
       .catch((error) => {
-        addActivity(`⚠ Update check failed: ${error instanceof Error ? error.message : String(error)}`)
+        addActivity(`⚠ Update check failed: ${errorMessage(error)}`)
         return this.updateCache?.update
       })
       .finally(() => {
@@ -324,11 +267,9 @@ export class InstanceManager {
 
   private updateHost(): UpdateHost {
     return {
+      ...flowHost,
       readConfig: () => readConfig(),
       findSourceCheckout: () => findSourceCheckout(readConfig()),
-      addActivity,
-      withBusy,
-      runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
       dbg,
       isStopped: () => !this.anyActive(),
       invalidateUpdateCache: () => { this.updateCache = undefined },
@@ -337,82 +278,66 @@ export class InstanceManager {
     }
   }
 
-  /**
-   * Recently active instance server output plus the shared launcher feed.
-   *
-   * Only the startup output is mirrored (see `InstanceRuntime.consoleLines`):
-   * a running dsh's periodic plugin logging is not a launcher event and does
-   * not belong in the panel console.
-   */
   activityFor(id: string): ActivityEntry[] {
     const result: ActivityEntry[] = getActivity().map((entry) => ({ ...entry }))
     const runtime = this.runtimes.get(id)
-    if (runtime) {
-      const lines = runtime.consoleLines()
-      if (lines.length > 0) {
-        result.push({ id: --this.logLineSeq, text: `── ${runtime.instance.name} startup output ──`, busy: false })
-        for (const line of lines) result.push({ id: --this.logLineSeq, text: line, busy: false })
-      }
+    const lines = runtime?.consoleLines() ?? []
+    if (runtime && lines.length > 0) {
+      result.push({ id: --this.logLineSeq, text: `── ${runtime.instance.name} startup output ──`, busy: false })
+      for (const line of lines) result.push({ id: --this.logLineSeq, text: line, busy: false })
     }
     return result
   }
 
-  /** Build the dashboard snapshot for the panel. */
   async dashboard(): Promise<InstanceDashboard> {
-    // A failed bootstrap is reported through issues() below; the snapshot still
-    // shows whatever instances are known, because an empty dashboard would hide
-    // both the instances and the error.
     try {
       await this.ready()
     } catch {
-      // readyError is rendered by the panel.
+      // readyError is reported through issues() below.
     }
     await this.refresh()
     const cfg = readConfig()
-    const active = this.activeRuntime
-    const status = active?.status()
+    const instances = this.instanceStatuses()
+    const activeId = this.activeId
+    const active = instances.find((instance) => instance.id === activeId)
+    const consoleLogPath = activityLogFile()
     return {
       status: {
-        running: status?.running ?? false,
-        starting: status?.starting ?? false,
-        installing: status?.installing ?? false,
-        stopping: status?.stopping ?? false,
+        running: active?.running ?? false,
+        starting: active?.starting ?? false,
+        installing: active?.installing ?? false,
+        stopping: active?.stopping ?? false,
         checking: this.checkingUpdate,
         updating: isUpdating(),
-        url: status?.url ?? '',
+        url: active?.url ?? '',
         dsh: this.dshState,
         dshVersion: this.dshVersion,
         dshPath: this.dshPath,
-        dshHome: status?.home ?? '',
+        dshHome: active?.home ?? '',
         dshPathShort: maskPath(this.dshPath),
-        dshHomeShort: maskPath(status?.home ?? ''),
+        dshHomeShort: maskPath(active?.home ?? ''),
         nodeVersion: this.nodeVersion,
         mode: cfg.runMode,
         update: this.updateCache?.update,
-        consoleLogPath: activityLogFile(),
-        consoleLogPathShort: maskPath(activityLogFile()),
-        serverLogPath: status?.logPath ?? '',
-        serverLogPathShort: status?.logPathShort ?? '',
-        consoleLogSize: fileSizeSafe(activityLogFile()),
-        serverLogSize: status ? fileSizeSafe(status.logPath) : 0,
+        consoleLogPath,
+        consoleLogPathShort: maskPath(consoleLogPath),
+        serverLogPath: active?.logPath ?? '',
+        serverLogPathShort: active?.logPathShort ?? '',
+        consoleLogSize: fileSizeSafe(consoleLogPath),
+        serverLogSize: active ? fileSizeSafe(active.logPath) : 0,
         sourceDebug: cfg.sourceDebug,
       },
-      instances: this.instanceStatuses(),
-      active: status,
-      activeId: this.activeId,
+      instances,
+      active,
+      activeId,
       issues: this.issues(),
     }
   }
 
-  /** Suggest a free port not used by another instance (five-digit base + 1). */
   async suggestPort(): Promise<number | undefined> {
     await this.ready()
     const used = new Set(this.settings.instances.map((instance) => instance.port))
-    const base = readConfig().instancePortBase
-    let candidate = nextPort(used, base + 1)
-    // A base at the very top of the range has no room for +1; wrap to the
-    // five-digit floor instead of reporting "no port".
-    if (candidate === undefined) candidate = nextPort(used, MIN_INSTANCE_PORT_BASE)
+    let candidate = nextPort(used, readConfig().instancePortBase + 1) ?? nextPort(used, MIN_INSTANCE_PORT_BASE)
     while (candidate !== undefined) {
       if (await isPortFree(candidate)) return candidate
       used.add(candidate)
@@ -421,25 +346,12 @@ export class InstanceManager {
     return undefined
   }
 
-  /** The form-facing error for a settings write that rejected. */
   private saveIssue(detail: string): InstanceIssue {
-    return {
-      index: 0,
-      field: 'entry',
-      severity: 'error',
-      message: `could not save the instance list to VS Code settings: ${detail} — `
-        + 'reload the window if the extension was just installed or updated, then try again',
-    }
+    return issue('entry', `could not save the instance list to VS Code settings: ${detail} — `
+      + 'reload the window if the extension was just installed or updated, then try again')
   }
 
-  /**
-   * Create a new instance; profile initialization is deferred to Start.
-   *
-   * The list is persisted *before* it is committed to memory and a runtime is
-   * created. A failed save must not leave a phantom instance behind: that made a
-   * retry report `name "…" is already used by another instance` for an instance
-   * the panel never showed.
-   */
+  /** Persist before committing to memory: a failed save must not leave a phantom instance behind. */
   async create(input: InstanceInput): Promise<InstanceMutation> {
     await this.ready()
     const result = validateInstance(input, instanceModelOptions(), this.settings.instances)
@@ -448,78 +360,55 @@ export class InstanceManager {
     const home = instanceHome(instance, instanceModelOptions())
     try {
       if (fs.existsSync(home) && !fs.statSync(home).isDirectory()) {
-        return { issues: [...result.issues, { index: 0, field: 'home', severity: 'error', message: 'home is a file' }] }
+        return { issues: [...result.issues, issue('home', 'home is a file')] }
       }
       fs.mkdirSync(home, { recursive: true })
     } catch (error) {
-      return { issues: [...result.issues, { index: 0, field: 'home', severity: 'error', message: `cannot create home: ${error instanceof Error ? error.message : String(error)}` }] }
+      return { issues: [...result.issues, issue('home', `cannot create home: ${errorMessage(error)}`)] }
     }
     const next = [...this.settings.instances, instance]
-    const saveError = await writeResult(writeInstances(next))
+    const saveError = await this.writeList(next)
     if (saveError !== undefined) return { issues: [...result.issues, this.saveIssue(saveError)] }
-    this.settings.instances = next
     this.settings.activeId = instance.id
-    // A settings-change reload may already have created this runtime; keep that
-    // object rather than leaking a second one.
     if (!this.runtimes.has(instance.id)) this.runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
-    const activeError = await writeResult(writeActiveInstance(instance.id))
-    if (activeError !== undefined) addActivity(`⚠ could not remember the active instance: ${activeError}`)
+    await this.persistActiveId(instance.id)
     return { instance, issues: result.issues }
   }
 
-  /** Edit an instance; home/profile/port changes require a stopped runtime. */
   async update(id: string, input: InstanceInput): Promise<InstanceMutation> {
     await this.ready()
-    const current = this.settings.instances.find((instance) => instance.id === id)
-    if (!current) return { issues: [{ index: 0, field: 'entry', severity: 'error', message: 'instance not found' }] }
-    const runtime = this.runtimes.get(id)
-    if (runtime) {
-      const status = runtime.status()
-      if (status.running || status.starting || status.stopping || status.installing) {
-        return { issues: [{ index: 0, field: 'entry', severity: 'error', message: 'stop the instance before editing it' }] }
-      }
-    }
+    if (!this.settings.instances.some((instance) => instance.id === id)) return { issues: [issue('entry', 'instance not found')] }
+    if (this.isBusy(id)) return { issues: [issue('entry', 'stop the instance before editing it')] }
     const result = validateInstance(input, instanceModelOptions(), this.settings.instances, id)
     if (!result.instance) return { issues: result.issues }
-    const index = this.settings.instances.findIndex((instance) => instance.id === id)
-    const next = [...this.settings.instances]
-    next[index] = result.instance
-    const saveError = await writeResult(writeInstances(next))
+    const instance = result.instance
+    const next = this.settings.instances.map((entry) => (entry.id === id ? instance : entry))
+    const saveError = await this.writeList(next)
     if (saveError !== undefined) return { issues: [...result.issues, this.saveIssue(saveError)] }
-    this.settings.instances = next
-    runtime?.update(result.instance)
-    return { instance: result.instance, issues: result.issues }
+    this.runtimes.get(id)?.update(instance)
+    return { instance, issues: result.issues }
   }
 
-  /** Remove an instance from the list; its DSH home is never deleted. */
   async remove(id: string): Promise<boolean> {
     await this.ready()
-    const runtime = this.runtimes.get(id)
-    if (runtime) {
-      const status = runtime.status()
-      if (status.running || status.starting || status.stopping || status.installing) return false
-    }
+    if (this.isBusy(id)) return false
     if (!this.settings.instances.some((instance) => instance.id === id)) return false
     const next = this.settings.instances.filter((instance) => instance.id !== id)
     const nextActiveId = this.settings.activeId === id ? (next[0]?.id ?? '') : this.settings.activeId
-    const saveError = await writeResult(writeInstances(next))
+    const saveError = await this.writeList(next)
     if (saveError !== undefined) {
       addActivity(`✗ could not remove the instance: ${saveError}`)
       return false
     }
-    const activeError = await writeResult(writeActiveInstance(nextActiveId))
-    if (activeError !== undefined) addActivity(`⚠ could not remember the active instance: ${activeError}`)
-    runtime?.dispose()
+    await this.persistActiveId(nextActiveId)
+    this.runtimes.get(id)?.dispose()
     this.runtimes.delete(id)
-    this.settings.instances = next
     this.settings.activeId = nextActiveId
-    // An empty list is a decision, not a first run: remember it so the
-    // synthesized Default is not resurrected on the next activation.
+    // An empty list is a decision, not a first run; remember it so Default is not resurrected.
     if (next.length === 0) await markInstancesAuthoritative(this.context)
     return true
   }
 
-  /** Start one instance and make it active. */
   async start(id: string): Promise<boolean> {
     await this.ready()
     const runtime = this.runtimes.get(id)
@@ -528,23 +417,17 @@ export class InstanceManager {
     return runtime.start()
   }
 
-  /** Stop one instance; `killUntracked` must be granted explicitly by the user. */
+  /** `killUntracked` must be granted by the user (see `stopNeedsConfirmation`). */
   async stop(id: string, killUntracked = false): Promise<boolean> {
     await this.ready()
     return (await this.runtimes.get(id)?.stop(killUntracked)) ?? false
   }
 
-  /**
-   * Whether stopping `id` would have to kill a process this window did not
-   * start (an adopted server, or a foreign listener on the instance port).
-   * The UI asks for confirmation exactly then.
-   */
   async stopNeedsConfirmation(id: string): Promise<boolean> {
     await this.ready()
     return (await this.runtimes.get(id)?.needsStopConfirmation()) ?? false
   }
 
-  /** Whether any instance is running/starting/stopping. */
   anyActive(): boolean {
     return [...this.runtimes.values()].some((runtime) => {
       const status = runtime.status()
@@ -552,28 +435,14 @@ export class InstanceManager {
     })
   }
 
-  /**
-   * Another instance with the same normalized home still owns it.
-   *
-   * `running`/`starting` are not enough: a `stopping` runtime still has its
-   * child/home, and an `error` runtime can still hold a live child (failed
-   * Stop) or a listening port. Spec §10 allows one server per home.
-   */
+  /** A stopping runtime still owns its child, and an error one can hold a live child or port. */
   isHomeRunning(home: string, exceptId: string): boolean {
     for (const [id, runtime] of this.runtimes) {
-      if (id === exceptId) continue
-      if (!runtime.holdsHome()) continue
-      if (sameHome(runtime.status().home, home)) return true
+      if (id !== exceptId && runtime.holdsHome() && sameHome(runtime.status().home, home)) return true
     }
     return false
   }
 
-  /** Whether the shared dsh is currently known to be missing. */
-  isDshMissing(): boolean {
-    return this.dshState === 'missing'
-  }
-
-  /** Shared install preparation; concurrent starts coalesce onto one install. */
   prepare(): Promise<PreparedDsh | undefined> {
     if (this.preparePromise) return this.preparePromise
     this.preparePromise = this.prepareInternal().finally(() => {
@@ -585,12 +454,11 @@ export class InstanceManager {
   private async prepareInternal(): Promise<PreparedDsh | undefined> {
     const cfg = readConfig()
     await this.ready()
-    // A dsh.pkgPath synchronized from another machine may point at a drive that
-    // does not exist here; pkgInstallDir falls back to the managed location, and
-    // this says so instead of letting the panel show an install in a mystery path.
-    const unreachablePkgPath = cfg.runMode === 'pnpm' ? unreachablePkgPathSetting(cfg) : undefined
-    if (unreachablePkgPath !== undefined) {
-      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachablePkgPath)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
+    // A pkgPath synced from another machine may not exist here; say so instead of
+    // silently installing into the managed location.
+    const unreachable = cfg.runMode === 'pnpm' ? unreachablePkgPathSetting(cfg) : undefined
+    if (unreachable !== undefined) {
+      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
     }
     const installHost = this.installHost()
     await detectDshVersion(cfg, this.detectHost())
@@ -628,9 +496,7 @@ export class InstanceManager {
 
   private installHost(): InstallHost {
     return {
-      addActivity,
-      withBusy,
-      runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
+      ...flowHost,
       runInstalling: (task) => task(),
       setDshVersion: (version) => { this.dshVersion = version },
       setDshState: (state) => { this.dshState = state },
@@ -639,14 +505,9 @@ export class InstanceManager {
   }
 
   private checkoutHost(): CheckoutHost {
-    return {
-      addActivity,
-      runInTerminal: (title, command, args, env) => runInTerminalInner(title, command, args, terminalHost, env),
-      runInstalling: (task) => task(),
-    }
+    return { ...flowHost, runInstalling: (task) => task() }
   }
 
-  /** Update the shared dsh install; requires every instance stopped. */
   async updateDsh(): Promise<void> {
     if (this.anyActive()) throw new Error('Stop all instances before updating dsh')
     await runDshUpdate(this.updateHost())
@@ -661,60 +522,45 @@ export class InstanceManager {
     for (const runtime of this.runtimes.values()) runtime.dispose()
   }
 
-  /** Clear the selected instance's console/log plus the shared activity feed. */
   clearConsole(id: string): void {
     this.runtimes.get(id)?.clearLog()
   }
 
-  /**
-   * Re-read the instance list after an external settings edit (another window,
-   * the Settings UI, or settings sync).
-   *
-   * Runtimes are matched by id and reused: a runtime object owns its tracked
-   * child and log pump, so rebuilding the map would orphan a running DSH
-   * process. Only added instances get a new runtime; removed ones are disposed
-   * (their DSH process is intentionally left running, matching `remove` and
-   * deactivate).
-   */
   async reloadSettings(): Promise<void> {
-    // A reload that raced the initial bootstrap would be overwritten by it, so
-    // let the bootstrap finish first; its failure is surfaced through issues().
     await this.ready().catch(() => undefined)
     this.applySettings(readInstanceSettings())
   }
 
-  /** Adopt a freshly read settings snapshot, reusing runtimes by instance id. */
-  private applySettings(next: NormalizedInstances): void {
-    const previous = this.runtimes
-    const runtimes = new Map<string, InstanceRuntime>()
-    for (const instance of next.instances) {
-      const existing = previous.get(instance.id)
-      if (existing) {
-        existing.update(instance)
-        runtimes.set(instance.id, existing)
-      } else {
-        runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
-      }
-    }
-    for (const [id, runtime] of previous) {
-      if (!runtimes.has(id)) runtime.dispose()
-    }
-    this.settings = next
-    this.runtimes = runtimes
-  }
-
-  /** Normalized options for tests/panel forms. */
-  modelOptions() {
-    return instanceModelOptions()
-  }
-
-  /** Resolve an instance's home for the panel/edit form. */
   homeOf(instance: DshInstance): string {
     return instanceHome(instance, instanceModelOptions())
   }
+
+  private isBusy(id: string): boolean {
+    const status = this.runtimes.get(id)?.status()
+    return status !== undefined && (status.running || status.starting || status.stopping || status.installing)
+  }
+
+  /** Write the list, then commit it to memory; resolves to the failure reason instead of throwing. */
+  private async writeList(next: DshInstance[]): Promise<string | undefined> {
+    const error = await writeResult(writeInstances(next))
+    if (error === undefined) this.settings.instances = next
+    return error
+  }
+
+  private async persistActiveId(id: string): Promise<void> {
+    const error = await writeResult(writeActiveInstance(id))
+    if (error !== undefined) addActivity(`⚠ could not remember the active instance: ${error}`)
+  }
 }
 
-/** Resolve one settings write to `undefined` (saved) or its failure reason. */
+function issue(field: InstanceIssue['field'], message: string): InstanceIssue {
+  return { index: 0, field, severity: 'error', message }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 async function writeResult(write: PromiseLike<void>): Promise<string | undefined> {
   try {
     await write
@@ -724,7 +570,6 @@ async function writeResult(write: PromiseLike<void>): Promise<string | undefined
   }
 }
 
-/** Whether a TCP port is free on loopback. */
 function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer()

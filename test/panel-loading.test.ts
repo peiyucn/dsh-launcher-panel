@@ -5,26 +5,12 @@ import { panelScript } from '../src/webview/panel-script.ts'
 import { panelBody } from '../src/webview/panel-body.ts'
 
 /**
- * 面板 loading 指示器与 **dsh 官方 `StateDot`** 的外观契约。
- *
- * ## 为什么有这条测试
- *
- * 面板的 loading 是**手抄官方几何**的（它不能 import 官方组件：本扩展零运行时依赖、
- * 而且那是 VS Code webview，不是 DSH 客户端）。手抄的东西必然会漂 —— 实际就漂过一次：
- * 这里原本画的是官方**更老的**「点阵」（`StateDot` 的 matrix 分支，8 个 2px 方块追逐），
- * 而官方早在 `4937343a5e feat(web): unify the client visual language`（先于 `0.1.7-rc.1`）
- * 就把 `ongoing` 换成了 **SVG 圆弧 spinner**。owner 报的正是这类「官方改了、我们没跟进」。
- *
- * 于是把官方的**几何 / 时长 / 减动效兜底**逐条钉在这里（真值取自
- * `dsh-v0.2.0-rc.2:packages/client/ui-primitives/src/StateDot.module.css`）：
- * 整圈 1.5s 匀速旋转 + arc 的 `stroke-dasharray` 呼吸，两者同相；track 25% 不透明；
- * 减动效时停在静态弧（18 150 / -3）。
- *
- * ⚠️ 官方哪天再改这几个数，这里**会红**——那是**有意的**：红了就说明该人工去看一眼
- * 新版长什么样，而不是让面板悄悄留在旧形态上。
+ * Pins the panel's loading spinner to the official dsh StateDot look (geometry,
+ * timing, reduced-motion fallback). The geometry is copied rather than imported
+ * (VS Code webview, zero runtime deps), so this test exists to fail on drift.
+ * Source: dsh-v0.2.0-rc.2 packages/client/ui-primitives/src/StateDot.module.css
  */
 
-/** 取某条规则体（按行首锚定选择器，避开 `.state-spinner-track, .state-spinner-arc` 那条合并规则）。 */
 function ruleBody(css: string, selector: string): string {
   const re = new RegExp(`(?:^|\\n)\\s*${selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*\\{([^}]*)\\}`, 'u')
   const m = re.exec(css)
@@ -32,7 +18,6 @@ function ruleBody(css: string, selector: string): string {
   return m[1]
 }
 
-/** 取某个 @keyframes 的完整块（花括号配对）。 */
 function keyframesBody(css: string, name: string): string {
   const at = css.indexOf(`@keyframes ${name}`)
   assert.ok(at >= 0, `PANEL_CSS 里找不到 @keyframes ${name}`)
@@ -52,7 +37,7 @@ const script = panelScript({ peakWindows: '[]', defaultBrowser: 'built-in' })
 const body = panelBody({ version: '0.0.0-test' })
 
 test('面板指示器与官方 StateDot 同形：圆弧 spinner，不再是点阵', () => {
-  // 旧形态（官方更老的 matrix 分支）必须彻底消失，否则「统一」只是嘴上说。
+  // The old matrix variant must be gone from CSS, script and body alike.
   for (const [what, text] of [['PANEL_CSS', PANEL_CSS], ['panel-script', script], ['panel-body', body]] as const) {
     assert.ok(!/dot-matrix|DOT_MATRIX|lap-dot-chase|loadingMatrix/u.test(text), `${what} 里仍有旧的官方点阵实现`)
     assert.ok(!/matrix-size/u.test(text), `${what} 里仍有 --matrix-size（点阵尺寸变量）`)
@@ -61,7 +46,7 @@ test('面板指示器与官方 StateDot 同形：圆弧 spinner，不再是点�
 
 test('脚本把官方几何的 SVG 注入 spinner 挂载点', () => {
   assert.match(script, /getElementById\('loadingSpinner'\)\.innerHTML = SPINNER_SVG/u, '注入目标应为 loadingSpinner')
-  // 官方 StateDot 的 ongoing 分支：24 视图里的 9.5 半径圆、一根 track + 一根 arc，整体同相。
+  // Official ongoing branch: 24 viewBox, one track + one arc, both radius 9.5.
   assert.match(script, /viewBox="0 0 24 24"/u, '用官方的 24 viewBox')
   assert.equal((script.match(/r="9\.5"/gu) ?? []).length, 2, 'track 与 arc 两根 9.5 半径圆')
   assert.match(script, /class="state-spinner-motion"/u, '旋转组')

@@ -1,4 +1,3 @@
-/** Tests for `src/instances.ts`: the pure multi-instance model. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as path from 'node:path'
@@ -221,7 +220,6 @@ test('resolveInitialInstances does not resurrect a list the user emptied on purp
 })
 
 test('resolveInitialInstances keeps normalization issues and still offers the Default', () => {
-  // An unreadable settings value must be reported, not silently replaced.
   const result = resolveInitialInstances([{ id: 'broken' }], undefined, 3099, false, options)
   assert.equal(result.synthesized, true)
   assert.deepEqual(result.instances.map((entry) => entry.id), ['default'])

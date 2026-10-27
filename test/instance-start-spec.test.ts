@@ -1,4 +1,3 @@
-/** Tests for `src/server/start-spec.ts`: the DSH spawn/profile-init command contract. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -10,7 +9,6 @@ import {
 
 const baseEnv: NodeJS.ProcessEnv = { PATH: '/usr/bin', KEEP: 'yes' }
 
-/** A pkg-mode input; `pnpmCmd` may be any resolvable executable (not a .cmd shim). */
 function pkgInput(overrides: Partial<SpawnSpecInput> = {}): SpawnSpecInput {
   return {
     mode: 'pnpm',
@@ -73,7 +71,6 @@ test('pkg mode spawns pnpm exec dsh with port, profile, DSH_HOME and --no-open',
   ])
   assert.equal(built.spec.cwd, '/managed/pkg')
   assert.equal(built.spec.env.DSH_HOME, '/instances/work')
-  // The launcher's own environment is inherited, not replaced.
   assert.equal(built.spec.env.PATH, '/usr/bin')
   assert.equal(built.spec.env.KEEP, 'yes')
 })

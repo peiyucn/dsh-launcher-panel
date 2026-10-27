@@ -1,4 +1,3 @@
-/** Tests for `src/instance-bootstrap.ts`: the first-run list that must survive a failed settings write. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as path from 'node:path'
@@ -37,9 +36,6 @@ function recorder(overrides: Partial<InstanceBootstrapHost> = {}): Recorder {
 }
 
 test('a failed settings write still yields the Default instance plus a visible warning', async () => {
-  // The exact failure seen on a fresh install: the running window has not
-  // registered dsh.instances yet, so the write rejects. The session must still
-  // get its instance instead of an empty panel.
   const failing = recorder({
     async persist() {
       throw new Error('Unable to write to User Settings because dsh.instances is not a registered configuration.')

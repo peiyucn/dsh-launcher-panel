@@ -1,4 +1,3 @@
-/** Tests for the pure config/text helpers in `src/env.ts`. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {

@@ -1,4 +1,3 @@
-/** Tests for `src/instance-state.ts`: lifecycle transitions and home reservation. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -29,12 +28,9 @@ test('stop goes through stopping and only stopping completes to stopped', () => 
 })
 
 test('a starting instance cannot silently jump back to stopped', () => {
-  // Spec §14: a start that failed has to be cleaned up and reported, so the
-  // normal failure/exit/lost edges are not allowed straight out of starting.
   assert.equal(nextState('starting', 'exit'), undefined)
   assert.equal(nextState('starting', 'lost'), undefined)
   assert.equal(nextState('starting', 'stop-complete'), undefined)
-  // The explicit cleanup path (Stop before a process exists) is allowed.
   assert.equal(nextState('starting', 'cleanup'), 'stopped')
 })
 
@@ -63,24 +59,17 @@ test('holdsHome keeps stopping and a still-alive error from sharing the home', (
   for (const state of ['running', 'starting', 'stopping'] as InstanceState[]) {
     assert.equal(holdsHome(state, false, false), true, `${state} must hold its home`)
   }
-  // An error runtime may still own a live child (failed Stop) or a listener.
   assert.equal(holdsHome('error', true, false), true)
   assert.equal(holdsHome('error', false, true), true)
   assert.equal(holdsHome('error', false, false), false)
   assert.equal(holdsHome('stopped', false, false), false)
-  // A stopped instance with a foreign listener on its port does not reserve
-  // the home; the start path reports the port conflict separately.
   assert.equal(holdsHome('stopped', false, true), false)
 })
 
 test('Stop asks before killing a port owner this runtime does not track', () => {
-  // A tracked child is always ours to kill.
   assert.equal(stopDecision({ hasTrackedChild: true, portOpen: false, killUntracked: false }), 'kill')
-  // No tracked child + a listening port: the core P0 case — ask, never kill.
   assert.equal(stopDecision({ hasTrackedChild: false, portOpen: true, killUntracked: false }), 'ask')
-  // Consent turns the same situation into an allowed kill.
   assert.equal(stopDecision({ hasTrackedChild: false, portOpen: true, killUntracked: true }), 'kill')
-  // Nothing tracked and nothing listening: only the state needs clearing.
   assert.equal(stopDecision({ hasTrackedChild: false, portOpen: false, killUntracked: false }), 'cleanup')
 })
 

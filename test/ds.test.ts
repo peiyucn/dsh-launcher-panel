@@ -75,8 +75,8 @@ test('readCredentialFromFile ignores commented-out keys', () => {
 })
 
 test('dsComponentLabel keeps the service name when only the Chinese half has an ASCII acronym', () => {
-  // Live status-page names: toEnglish drops the parenthetical and leaves "API",
-  // so both search and fetch used to show up as "api".
+  // Live status-page names: the Chinese half can be the only part carrying an
+  // ASCII acronym, after the parenthetical is dropped.
   assert.equal(dsComponentLabel('搜索API服务(Search API Service)'), 'search')
   assert.equal(dsComponentLabel('抓取API服务(Fetch API Service)'), 'fetch')
   // The model services keep the Chinese half's English and ignore the generic

@@ -1,4 +1,3 @@
-/** Tests for `src/server/log-read.ts`: bounded log-tail and launch-token reads. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
@@ -6,7 +5,6 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { readLogTail, readLogTailBytes, readTokenFromLog } from '../src/server/log-read.ts'
 
-/** Write `text` to a fresh temp file and clean the directory up after the test. */
 function tempLog(t: { after: (fn: () => void) => void }, text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-log-read-'))
   const file = path.join(dir, 'server.log')
