@@ -50,13 +50,28 @@ export function dshBaseDir(
   return path.join(home, '.dsh-launcher-panel')
 }
 
-/** Whether `dir` is a deepseek-harness source checkout (or the cli package itself). */
+/**
+ * Whether `dir` is a deepseek-harness source checkout (or the cli package itself).
+ *
+ * The argument is usually a user setting, so normalize it before looking at it:
+ * surrounding whitespace and trailing separators are ignored, and `path.resolve`
+ * both strips a trailing separator and resolves a relative path against the cwd
+ * exactly as the fs calls below would. The trailing separator matters on
+ * Windows: without normalization `…\apps\cli\` fails the `apps/cli` regex used
+ * by the cli-package branch, so a perfectly valid checkout read as "not a
+ * checkout".
+ */
 export function isDshCheckout(dir: string | undefined): boolean {
   if (!dir) return false
   try {
-    if (fs.existsSync(path.join(dir, DSH_CLI_BIN))) return true
+    const trimmed = dir.trim()
+    // A whitespace-only setting is not a path. Reject it before path.resolve,
+    // which would turn '' into the cwd and could then match a checkout there.
+    if (trimmed === '') return false
+    const root = path.resolve(trimmed)
+    if (fs.existsSync(path.join(root, DSH_CLI_BIN))) return true
     // Also accept pointing directly at the cli package (e.g. .../apps/cli).
-    if (fs.existsSync(path.join(dir, 'src', 'bin.ts')) && /apps[\\/]cli$/.test(dir)) return true
+    if (fs.existsSync(path.join(root, 'src', 'bin.ts')) && /apps[\\/]cli$/.test(root)) return true
     return false
   } catch {
     return false

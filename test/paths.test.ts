@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
   BUILD_CLEAN_SCRIPT,
   BUILD_OFFICIAL_SCRIPT,
@@ -49,17 +49,99 @@ test('resolveDshHome prefers DSH_HOME and falls back to ~/.dsh', () => {
 test('isDshCheckout recognises a checkout root and the cli package', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-checkout-'))
   try {
-    assert.equal(isDshCheckout(join(root, 'absent')), false)
     assert.equal(isDshCheckout(undefined), false)
+    assert.equal(isDshCheckout(join(root, 'absent')), false)
     const repo = join(root, 'repo')
     mkdirSync(join(repo, 'apps', 'cli', 'src'), { recursive: true })
     writeFileSync(join(repo, 'apps', 'cli', 'src', 'bin.ts'), '')
     assert.equal(isDshCheckout(repo), true)
     assert.equal(isDshCheckout(join(repo, 'apps', 'cli')), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+/**
+ * Regression for the audit finding: `isDshCheckout` used to test the raw setting
+ * string, so the cli-package branch (`…/apps/cli`) failed whenever the value
+ * ended in a path separator — Windows users paste `…\apps\cli\` all the time.
+ * The function now normalizes with trim + path.resolve first.
+ */
+test('isDshCheckout normalizes trailing separators and surrounding whitespace', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-checkout-normalize-'))
+  try {
+    const repo = join(root, 'repo')
+    mkdirSync(join(repo, 'apps', 'cli', 'src'), { recursive: true })
+    writeFileSync(join(repo, 'apps', 'cli', 'src', 'bin.ts'), '')
+    const cli = join(repo, 'apps', 'cli')
+
+    assert.equal(isDshCheckout(repo + sep), true, 'checkout root with a trailing separator')
+    // The cli-package branch is the one the raw-string regex broke.
+    assert.equal(isDshCheckout(cli + sep), true, 'cli package with a trailing separator')
+    assert.equal(isDshCheckout(cli + sep + sep), true, 'cli package with repeated trailing separators')
+    // Forward-slash spellings work on Windows too (path.resolve normalizes them).
+    const forwardSlashes = repo.split(sep).join('/')
+    assert.equal(isDshCheckout(forwardSlashes + '/'), true, 'checkout root with forward slashes')
+    // Settings values often arrive with stray surrounding whitespace.
+    assert.equal(isDshCheckout(`  ${repo}${sep}  `), true, 'path padded with whitespace')
+    // Whitespace-only is not a path: path.resolve('') would mean the cwd.
+    assert.equal(isDshCheckout('   '), false, 'whitespace-only value')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('isDshCheckout accepts spaces and non-ASCII in the path', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-checkout-u-'))
+  try {
+    const repo = join(root, 'repo 空格 检查 dir')
+    mkdirSync(join(repo, 'apps', 'cli', 'src'), { recursive: true })
+    writeFileSync(join(repo, 'apps', 'cli', 'src', 'bin.ts'), '')
+    assert.equal(isDshCheckout(repo), true)
+    assert.equal(isDshCheckout(join(repo, 'apps', 'cli') + sep), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('isDshCheckout resolves a relative path against the cwd', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-checkout-rel-'))
+  try {
+    const repo = join(root, 'repo')
+    mkdirSync(join(repo, 'apps', 'cli', 'src'), { recursive: true })
+    writeFileSync(join(repo, 'apps', 'cli', 'src', 'bin.ts'), '')
+    const relativePath = relative(process.cwd(), repo)
+    // On Windows a checkout on another drive has no relative form (path.relative
+    // returns an absolute path), so the case only applies when it is relative.
+    if (!isAbsolute(relativePath)) {
+      assert.equal(isDshCheckout(relativePath), true, `relative checkout path ${relativePath}`)
+      assert.equal(isDshCheckout(join(relativePath, 'apps', 'cli') + sep), true, 'relative cli path')
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('isDshCheckout rejects directories and files that are not a checkout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-not-checkout-'))
+  try {
+    // A directory that merely has src/bin.ts, without the apps/cli shape.
     const other = join(root, 'other')
     mkdirSync(join(other, 'src'), { recursive: true })
     writeFileSync(join(other, 'src', 'bin.ts'), '')
     assert.equal(isDshCheckout(other), false)
+    // The cli-package shape under a folder whose last segment is not `cli`.
+    const notCli = join(root, 'apps', 'app')
+    mkdirSync(join(notCli, 'src'), { recursive: true })
+    writeFileSync(join(notCli, 'src', 'bin.ts'), '')
+    assert.equal(isDshCheckout(notCli), false)
+    // Empty directory and plain file.
+    const empty = join(root, 'empty')
+    mkdirSync(empty, { recursive: true })
+    assert.equal(isDshCheckout(empty), false)
+    const file = join(root, 'file.txt')
+    writeFileSync(file, '')
+    assert.equal(isDshCheckout(file), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
