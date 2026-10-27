@@ -13,10 +13,6 @@
 import { NODE_PROBE_TIMEOUT_MS } from '../timing.ts'
 import { runFile } from '../proc.ts'
 
-/** Node.js engines range the harness requires: ^22.19 || >=24. */
-export const NODE_MIN_MAJOR = 24
-export const NODE_22_MIN_MINOR = 19
-
 /** One `node --version` probe per Node path for the session (shared by checks and the panel). */
 const nodeVersionCache = new Map<string, Promise<string>>()
 

@@ -26,6 +26,10 @@ function readManifest(home: string): any {
   return JSON.parse(fs.readFileSync(path.join(home, 'profiles', 'web', 'package.json'), 'utf8'))
 }
 
+function readManifestRaw(home: string): string {
+  return fs.readFileSync(path.join(home, 'profiles', 'web', 'package.json'), 'utf8')
+}
+
 test('ensureInstanceBrand writes a local bundle and adds it to the profile', () => {
   const home = makeProfile()
   try {
@@ -96,6 +100,83 @@ test('instance names are JSON-escaped in generated client code', () => {
     ensureInstanceBrand(home, 'web', 'a "quoted" instance')
     const client = fs.readFileSync(path.join(instanceBrandDir(home, 'web'), 'lib', 'client.js'), 'utf8')
     assert.ok(client.includes(`var INSTANCE_NAME = ${JSON.stringify('a "quoted" instance')}`))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+/**
+ * The bundle lives inside the user's profile tree, so a rewrite/delete must be
+ * limited to files this extension generated; a foreign package at the same path
+ * is not ours to touch.
+ */
+test('ensureInstanceBrand leaves a foreign package at the bundle path alone', () => {
+  const home = makeProfile()
+  try {
+    const dir = instanceBrandDir(home, 'web')
+    fs.mkdirSync(dir, { recursive: true })
+    const foreignFile = path.join(dir, 'package.json')
+    fs.writeFileSync(foreignFile, '{"name":"someone-else","version":"1.0.0"}\n', 'utf8')
+    const manifestBefore = readManifestRaw(home)
+
+    assert.equal(ensureInstanceBrand(home, 'web', 'sssden'), false)
+    assert.equal(fs.readFileSync(foreignFile, 'utf8'), '{"name":"someone-else","version":"1.0.0"}\n',
+      'the foreign package manifest is not overwritten')
+    assert.equal(readManifestRaw(home), manifestBefore, 'the profile manifest is not touched either')
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('ensureInstanceBrand leaves a non-DSH profile manifest alone', () => {
+  const home = makeProfile()
+  try {
+    const manifestFile = path.join(home, 'profiles', 'web', 'package.json')
+    const userManifest = '{"name":"some-user-package","version":"1.0.0"}\n'
+    fs.writeFileSync(manifestFile, userManifest, 'utf8')
+
+    assert.equal(ensureInstanceBrand(home, 'web', 'sssden'), false)
+    assert.equal(fs.readFileSync(manifestFile, 'utf8'), userManifest)
+    assert.equal(fs.existsSync(instanceBrandDir(home, 'web')), false)
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('a failed bundle write leaves the profile manifest unchanged', () => {
+  const home = makeProfile()
+  try {
+    // A directory we own (so the ownership check passes) whose `lib` path is a
+    // file: creating the bundle's lib directory must fail mid-write.
+    const dir = instanceBrandDir(home, 'web')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: INSTANCE_BRAND_PACKAGE }), 'utf8')
+    fs.writeFileSync(path.join(dir, 'lib'), 'not a directory', 'utf8')
+    const manifestBefore = readManifestRaw(home)
+
+    assert.equal(ensureInstanceBrand(home, 'web', 'sssden'), false)
+    assert.equal(readManifestRaw(home), manifestBefore, 'the manifest keeps its previous content')
+    assert.equal(readManifest(home).dsh.profile.bundles.includes(INSTANCE_BRAND_PACKAGE), false)
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('removeInstanceBrand does not delete a foreign package', () => {
+  const home = makeProfile()
+  try {
+    const dir = instanceBrandDir(home, 'web')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"someone-else"}\n', 'utf8')
+
+    removeInstanceBrand(home, 'web')
+
+    assert.equal(fs.existsSync(dir), true, 'a non-launcher package survives the cleanup')
+    assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), '{"name":"someone-else"}\n')
+    assert.deepEqual(readManifest(home).dsh.profile.bundles, [
+      '@deepseek-ai/dsh-base',
+      '@deepseek-ai/dsh-web-app',
+    ])
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
   }

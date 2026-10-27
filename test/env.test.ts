@@ -6,10 +6,8 @@ import {
   extractWebToken,
   normalizeBrowser,
   npmSpecForChannel,
-  parseImportMetaMainProbe,
   parseNpmChannel,
   shouldOpenBrowser,
-  silentExitHint,
   toEnglish,
 } from '../src/env.ts'
 
@@ -27,30 +25,6 @@ test('shouldOpenBrowser honours auto-open and explicit re-opens', () => {
   assert.equal(shouldOpenBrowser(false, false), false)
   assert.equal(shouldOpenBrowser(false, true), true)
   assert.equal(shouldOpenBrowser(undefined, true), true)
-})
-
-test('parseImportMetaMainProbe accepts only a true probe answer', () => {
-  assert.equal(parseImportMetaMainProbe('true'), true)
-  assert.equal(parseImportMetaMainProbe('true\r\n'), true)
-  // Node < 22.18 / < 24.2 stringifies the missing binding as undefined.
-  assert.equal(parseImportMetaMainProbe('undefined'), false)
-  assert.equal(parseImportMetaMainProbe(''), false)
-  assert.equal(parseImportMetaMainProbe('false'), false)
-  assert.equal(parseImportMetaMainProbe('v24.0.0'), false)
-})
-
-test('silentExitHint explains only the guarded-entry silent exit', () => {
-  const base = { dshVersion: '0.1.5-rc.1', nodeVersion: '24.0.0', supportsImportMetaMain: false, outputLines: 0 }
-  const hint = silentExitHint(base)
-  assert.ok(hint?.includes('import.meta.main'))
-  assert.ok(hint?.includes('Node v24.0.0'))
-  // A dsh older than the guard, captured output, or a capable Node: nothing to add.
-  assert.equal(silentExitHint({ ...base, dshVersion: '0.1.2-rc.1' }), undefined)
-  assert.equal(silentExitHint({ ...base, outputLines: 3 }), undefined)
-  assert.equal(silentExitHint({ ...base, supportsImportMetaMain: true }), undefined)
-  // An unknown version must not produce a claim about that version.
-  assert.equal(silentExitHint({ ...base, dshVersion: '' }), undefined)
-  assert.ok(silentExitHint({ ...base, nodeVersion: '' })?.includes('The configured Node'))
 })
 
 test('toEnglish strips non-ASCII and parentheticals', () => {

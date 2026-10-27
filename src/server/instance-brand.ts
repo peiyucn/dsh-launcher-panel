@@ -21,9 +21,30 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { dbg } from './activity.ts'
 
 export const INSTANCE_BRAND_PACKAGE = '@dsh-launcher/instance-brand'
 const INSTANCE_BRAND_ID = 'launcher-instance-brand'
+
+/** Prefix DSH gives a profile manifest's `name` (`dsh-profile-<profile>`). */
+const DSH_PROFILE_NAME_PREFIX = 'dsh-profile-'
+
+/** Skip reasons already written to the debug log (one line per distinct reason). */
+const loggedSkipReasons = new Set<string>()
+
+/**
+ * Record why branding was skipped, once per distinct reason.
+ *
+ * Nothing here is allowed to throw into the start flow, and the generated
+ * client depends on dsh's internal DOM contract, so a refusal/failure must be
+ * diagnosable from client.log without spamming it on every Start (this runs
+ * before each one).
+ */
+function reportSkip(reason: string): void {
+  if (loggedSkipReasons.has(reason)) return
+  loggedSkipReasons.add(reason)
+  dbg(`instance brand skipped: ${reason}`)
+}
 
 /** Directory of the generated bundle inside one profile. */
 export function instanceBrandDir(home: string, profile: string): string {
@@ -35,34 +56,118 @@ function profileManifestPath(home: string, profile: string): string {
   return path.join(home, 'profiles', profile, 'package.json')
 }
 
+/** Read a JSON object; undefined when the file is absent, malformed or not an object. */
+function readJsonObject(file: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
+    return isRecord(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether a manifest identifies a DSH profile rather than some other
+ * `package.json` at the same path. Both markers are accepted because the name
+ * convention and the `dsh.profile` block are the two things DSH itself writes.
+ */
+function isDshProfileManifest(manifest: Record<string, unknown>): boolean {
+  const name = manifest.name
+  if (typeof name === 'string' && name.startsWith(DSH_PROFILE_NAME_PREFIX)) return true
+  const dsh = manifest.dsh
+  return isRecord(dsh) && isRecord(dsh.profile)
+}
+
+/** Whether the bundle directory is one this extension generated (safe to rewrite/delete). */
+function isOwnedBundleDir(dir: string): boolean {
+  const manifest = readJsonObject(path.join(dir, 'package.json'))
+  return manifest !== undefined && manifest.name === INSTANCE_BRAND_PACKAGE
+}
+
 /**
  * Generate/update the bundle and make sure the profile loads it.
  * Safe to call before every Start; the generated files are deterministic.
+ *
+ * Refuses to touch a profile manifest or bundle directory it does not own, and
+ * never throws: branding is a cosmetic overlay and must not break Start.
  */
 export function ensureInstanceBrand(home: string, profile: string, name: string): boolean {
   const manifestFile = profileManifestPath(home, profile)
   if (!fs.existsSync(manifestFile)) return false
+  const manifest = readJsonObject(manifestFile)
+  if (manifest === undefined || !isDshProfileManifest(manifest)) {
+    reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
+    return false
+  }
   const dir = instanceBrandDir(home, profile)
-  writeBundle(dir, name || 'instance')
-  updateProfileBundles(manifestFile, true)
-  return true
+  if (fs.existsSync(dir) && !isOwnedBundleDir(dir)) {
+    reportSkip(`refusing to overwrite foreign package at ${dir}`)
+    return false
+  }
+  try {
+    writeBundle(dir, name || 'instance')
+    updateProfileBundles(manifestFile, true)
+    return true
+  } catch (error) {
+    reportSkip(`write failed: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
 }
 
 /** Remove the generated bundle and its profile bundle entry. */
 export function removeInstanceBrand(home: string, profile: string): void {
   const dir = instanceBrandDir(home, profile)
   const manifestFile = profileManifestPath(home, profile)
-  if (fs.existsSync(manifestFile)) updateProfileBundles(manifestFile, false)
-  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
+  try {
+    if (fs.existsSync(manifestFile)) {
+      const manifest = readJsonObject(manifestFile)
+      if (manifest === undefined || !isDshProfileManifest(manifest)) {
+        reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
+        return
+      }
+      updateProfileBundles(manifestFile, false)
+    }
+    if (!fs.existsSync(dir)) return
+    if (!isOwnedBundleDir(dir)) {
+      reportSkip(`refusing to remove foreign package at ${dir}`)
+      return
+    }
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch (error) {
+    reportSkip(`remove failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+let tempFileSeq = 0
+
+/**
+ * Write a file atomically: full content to a sibling temp file, then rename it
+ * over the destination. A crash mid-write therefore leaves the previous version
+ * intact instead of a truncated profile manifest (which would stop the profile
+ * from loading); the destination is never observed half-written.
+ */
+function writeFileAtomic(file: string, content: string): void {
+  const temp = `${file}.${process.pid}.${++tempFileSeq}.tmp`
+  fs.writeFileSync(temp, content, 'utf8')
+  try {
+    fs.renameSync(temp, file)
+  } catch (error) {
+    try {
+      fs.rmSync(temp, { force: true })
+    } catch {
+      // leave cleanup to the next write
+    }
+    throw error
+  }
 }
 
 function writeBundle(dir: string, name: string): void {
   const lib = path.join(dir, 'lib')
   fs.mkdirSync(lib, { recursive: true })
-  fs.writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(bundleManifest(), null, 2)}\n`, 'utf8')
-  fs.writeFileSync(path.join(dir, 'cordis.patch.yml'), bundlePatch(), 'utf8')
-  fs.writeFileSync(path.join(lib, 'index.js'), 'export function apply() {}\n', 'utf8')
-  fs.writeFileSync(path.join(lib, 'client.js'), clientSource(name), 'utf8')
+  writeFileAtomic(path.join(dir, 'package.json'), `${JSON.stringify(bundleManifest(), null, 2)}\n`)
+  writeFileAtomic(path.join(dir, 'cordis.patch.yml'), bundlePatch())
+  writeFileAtomic(path.join(lib, 'index.js'), 'export function apply() {}\n')
+  writeFileAtomic(path.join(lib, 'client.js'), clientSource(name))
 }
 
 function bundleManifest(): Record<string, unknown> {
@@ -104,10 +209,17 @@ function bundlePatch(): string {
 /**
  * Add/remove our package in `dsh.profile.bundles` without touching the rest of
  * the user's profile manifest.
+ *
+ * Re-checks ownership here (not only in the callers) because this is the write
+ * that can damage a user's profile; the manifest is also rewritten atomically.
  */
 function updateProfileBundles(manifestFile: string, enabled: boolean): void {
   const raw = fs.readFileSync(manifestFile, 'utf8')
   const manifest = JSON.parse(raw) as Record<string, unknown>
+  if (!isRecord(manifest) || !isDshProfileManifest(manifest)) {
+    reportSkip(`refusing to edit non-DSH profile manifest ${manifestFile}`)
+    return
+  }
   const dsh = isRecord(manifest.dsh) ? manifest.dsh : {}
   const profile = isRecord(dsh.profile) ? dsh.profile : {}
   const current = Array.isArray(profile.bundles) ? profile.bundles.filter((item): item is string => typeof item === 'string') : []
@@ -116,7 +228,7 @@ function updateProfileBundles(manifestFile: string, enabled: boolean): void {
   if (sameList(current, next)) return
   dsh.profile = { ...profile, bundles: next }
   manifest.dsh = dsh
-  fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  writeFileAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -19,7 +19,12 @@ import {
   setLogPath,
   withBusy,
 } from '../src/server/activity.ts'
-import { ACTIVITY_MAX_LINES } from '../src/timing.ts'
+import {
+  ACTIVITY_LINE_MAX_CHARS,
+  ACTIVITY_LOG_KEEP_BYTES,
+  ACTIVITY_LOG_MAX_BYTES,
+  ACTIVITY_MAX_LINES,
+} from '../src/timing.ts'
 
 test('the activity feed is bounded and keeps the newest entries', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-activity-'))
@@ -105,6 +110,72 @@ test('withBusy clears its spinner when the task throws', async () => {
     assert.equal(getActivity().filter((e) => e.busy).length, 1, 'the other spinner is untouched')
     assert.equal(await slow, 'a')
     assert.equal(getActivity().filter((e) => e.busy).length, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('one oversized line is truncated in the feed and in the log', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-linecap-'))
+  try {
+    const file = join(dir, 'client.log')
+    setLogPath(file)
+    clearConsole()
+    addActivity('x'.repeat(ACTIVITY_LINE_MAX_CHARS * 2))
+    const entry = getActivity()[0].text
+    assert.ok(entry.length <= ACTIVITY_LINE_MAX_CHARS + 32, `feed line kept at the cap (${entry.length})`)
+    assert.ok(entry.includes('[truncated]'), 'the truncation marker is visible')
+    const written = readFileSync(file, 'utf8').trimEnd()
+    assert.ok(written.length <= ACTIVITY_LINE_MAX_CHARS + 32, `log line kept at the cap (${written.length})`)
+    assert.ok(written.includes('[truncated]'), 'the log line carries the same marker')
+    // Ordinary lines are untouched.
+    addActivity('short line')
+    assert.ok(getActivity()[1].text.endsWith('short line'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('getActivity returns a snapshot that cannot mutate the feed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-snapshot-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+    addActivity('kept line')
+    const snapshot = getActivity()
+    const again = getActivity()
+    assert.notEqual(snapshot, again, 'each call returns a fresh array')
+    assert.notEqual(snapshot[0], again[0], 'entries are copies too')
+    // Both the array and the entry objects must be unreachable from the feed.
+    ;(snapshot as unknown as Array<{ id: number; text: string; busy: boolean }>).push({ id: -1, text: 'injected', busy: false })
+    snapshot[0].text = 'polluted'
+    const live = getActivity()
+    assert.equal(live.length, 1)
+    assert.ok(live[0].text.endsWith('kept line'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('setLogPath trims an oversized client log to its tail', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-logtrim-'))
+  try {
+    const file = join(dir, 'client.log')
+    const line = 'y'.repeat(1024)
+    const count = Math.ceil((ACTIVITY_LOG_MAX_BYTES + 1024 * 1024) / (line.length + 1)) + 10
+    writeFileSync(file, `HEAD-MARKER\n${(line + '\n').repeat(count)}TAIL-MARKER\n`)
+    assert.ok(statSync(file).size > ACTIVITY_LOG_MAX_BYTES, 'fixture must exceed the trim threshold')
+
+    setLogPath(file)
+
+    const size = statSync(file).size
+    assert.ok(size <= ACTIVITY_LOG_KEEP_BYTES, `trimmed log size ${size} must be within the keep bound`)
+    const content = readFileSync(file, 'utf8')
+    assert.ok(content.includes('TAIL-MARKER'), 'the newest line survives the trim')
+    assert.ok(!content.includes('HEAD-MARKER'), 'the oldest lines are dropped')
+    const feed = getActivity()
+    assert.ok(feed.length > 0)
+    assert.ok(feed[feed.length - 1].text.includes('TAIL-MARKER'), 'the trim happens before the tail replay')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -80,7 +80,15 @@ export const GIT_OP_TIMEOUT_MS = 10_000
 export const ACTIVITY_MAX_LINES = 200
 /** Server log lines re-read after a reload marker. */
 export const LOG_RELOAD_LINES = 50
-/** Progress print every N module loads when `dsh.sourceDebug` is on. */
-export const MODULE_PROGRESS_EVERY = 500
+/**
+ * Longest activity line kept in the feed or `client.log` (characters).
+ * A single line can be an entire tool output or error message, so it must be
+ * bounded too — otherwise one line bypasses the line-count cap.
+ */
+export const ACTIVITY_LINE_MAX_CHARS = 8 * 1024
+/** `client.log` is trimmed once it grows past this size (bytes). */
+export const ACTIVITY_LOG_MAX_BYTES = 5 * 1024 * 1024
+/** How much of the tail `client.log` keeps when trimmed, and the most replayed on load (bytes). */
+export const ACTIVITY_LOG_KEEP_BYTES = 256 * 1024
 /** How often the server log tail is appended to the console. */
 export const LOG_TAIL_POLL_MS = 500

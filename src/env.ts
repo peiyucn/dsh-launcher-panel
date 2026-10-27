@@ -8,8 +8,6 @@
  * @module env
  */
 
-import { DSH_CLI_ENTRY_GUARD_MIN_VERSION, dshVersionAtLeast } from './versions.ts'
-
 /** The port the web UI listens on when `dsh.port` is unset (mirrors package.json). */
 export const DEFAULT_PORT = 3080
 
@@ -71,37 +69,4 @@ const WEB_TOKEN_RE = /[?&]token=([A-Za-z0-9_-]{8,})/
 /** Extract the web access token from a server output line (undefined when absent). */
 export function extractWebToken(line: string): string | undefined {
   return WEB_TOKEN_RE.exec(line)?.[1]
-}
-
-/** Whether the Node capability probe reported `import.meta.main` as present. */
-export function parseImportMetaMainProbe(stdout: string): boolean {
-  return stdout.trim() === 'true'
-}
-
-/**
- * Explanation for a server that exited before opening its port without
- * printing anything, when the configured Node cannot run dsh's guarded CLI
- * entry. Returns undefined when there is nothing to explain, so an ordinary
- * failure keeps its own (already reported) cause.
- */
-export function silentExitHint(input: {
-  /** The dsh version about to run ('' when unknown). */
-  dshVersion: string
-  /** The configured Node version without the leading `v` ('' when unknown). */
-  nodeVersion: string
-  /** Whether the Node capability probe found `import.meta.main`. */
-  supportsImportMetaMain: boolean
-  /** Server output lines captured for the run that just exited. */
-  outputLines: number
-}): string | undefined {
-  if (input.outputLines > 0 || input.supportsImportMetaMain) return undefined
-  return guardHint(input.dshVersion, input.nodeVersion)
-}
-
-/** The Node-capability sentence, split out so the guard rule stays readable. */
-function guardHint(dshVersion: string, nodeVersion: string): string | undefined {
-  // An unknown or older dsh does not use the guard, so stay out of the way.
-  if (!dshVersionAtLeast(dshVersion, DSH_CLI_ENTRY_GUARD_MIN_VERSION)) return undefined
-  const node = nodeVersion ? `Node v${nodeVersion}` : 'The configured Node'
-  return `${node} lacks import.meta.main — dsh ≥ ${DSH_CLI_ENTRY_GUARD_MIN_VERSION} starts its CLI through it (needs Node 22.18+ or 24.2+), so the server exits silently. Upgrade Node, then start again`
 }
