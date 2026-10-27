@@ -237,7 +237,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
    - 参数为 `[<profile>, '--port', '<port>']`，dsh 版本足够新时追加 `--no-open`；
    - pkg 模式经 `pnpm exec dsh` 启动，source 模式经 `node --import tsx/esm apps/cli/src/bin.ts` 启动；
    - `hideConsole` → `windowsHide`；source 模式且 `sourceDebug` 时加 `NODE_DEBUG=module`。
-7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`；`clearServerLogOnStart` 只清该实例的日志。
+7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。
 8. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
 9. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
 10. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。
@@ -311,7 +311,7 @@ node · launcher
   - **home/package** 归为一组；profile 不在 Instances 区显示，也不在 Edit 表单里编辑（新建固定 `web`；手改 settings 才能换 profile）。**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
   - 编辑表单只改名称、home、auto-open、browser；名称变化时，若 home 仍是自动格式，会同步改成 `.dsh-{new name}`；改 home 不移动数据。profile 固定 web，不在表单里。
 - **Runtime（最上方）**：`deepseek harness` 版本、mode（pkg/src）、Update/⟳；这些是共享的。
-- **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
+- **Console/日志**：独立 section，跟随当前 tab；只显示与当前实例相关的 launcher 活动与该实例启动输出，外加少量 launcher 全局事件（安装/更新/检测）；日志路径随 tab 切到该实例的 `client.log` / `server.log`；`Clear` 只清当前实例的这两份日志。
 - **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
 - **Settings**：页面底部，无边框、无标题；放 Global Settings、浏览器选择和 node/launcher 版本。
 - **同步**：tab 选择是每个窗口各自的内存状态；`dsh.activeInstance` 只作为新窗口的初始值（同机多窗口共享 user settings，不能把它当 per-window 持久化）。状态栏/快速选择/命令在本窗口切换时 tab 跟随；其他窗口切换 active 不影响本窗口。
@@ -348,7 +348,7 @@ node · launcher
 
 ### 日志与账户
 
-- 服务端日志按实例分开；客户端 `client.log` 仍为全局扩展日志。
+- 服务端日志与实例 launcher 活动按实例分开：`logs/instances/<id>/server.log` 与 `logs/instances/<id>/client.log`；与实例无关的扩展级事件（安装 / 更新 / 检测 / 窗口）写全局 `logs/client.log`。
 - 面板的账户/余额/API key 读取必须使用**当前实例的 home**（`<home>/.credentials.yaml`），不能固定读 `~/.dsh`。
 - 当前实例没有凭据时显示「未配置」，不要回退显示另一个实例的账户。
 

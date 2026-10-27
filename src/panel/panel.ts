@@ -182,7 +182,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         active,
         activeId,
         issues: [...(manager?.issues() ?? []), { index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${reason}` }],
-        activity: getActivity().concat([{ id: -1, text: `✗ Status refresh failed: ${reason}`, busy: false }]),
+        activity: getActivity(activeId).concat([{ id: -1, text: `✗ Status refresh failed: ${reason}`, busy: false }]),
         browser: this.browserChoice(),
         dsStatus: previous?.dsStatus,
         balance: previous?.balance,

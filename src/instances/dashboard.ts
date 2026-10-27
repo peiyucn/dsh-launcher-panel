@@ -1,4 +1,4 @@
-import { activityLogFile, fileSizeSafe } from '../shared/activity.ts'
+import { activityLogFile, fileSizeSafe, instanceActivityLogFile } from '../shared/activity.ts'
 import { readConfig } from '../dsh/config.ts'
 import { maskPath } from '../dsh/paths.ts'
 import { isUpdating, type DshUpdate } from '../dsh/update.ts'
@@ -65,7 +65,7 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
   const facts = source.facts()
   const cfg = readConfig()
   const active = facts.instances.find((instance) => instance.id === facts.activeId)
-  const consoleLogPath = activityLogFile()
+  const consoleLogPath = active ? instanceActivityLogFile(active.id) : activityLogFile()
   return {
     status: {
       running: active?.running ?? false,

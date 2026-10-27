@@ -68,7 +68,7 @@ export class InstanceRuntime {
   }
 
   private activity(line: string, busy = false): number {
-    return this.host.addActivity(`[${this.instance.name}] ${line}`, busy)
+    return this.host.addActivity(`[${this.instance.name}] ${line}`, busy, this.instance.id)
   }
 
   private config(): DshConfig {

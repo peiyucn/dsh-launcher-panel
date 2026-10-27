@@ -13,7 +13,7 @@ export interface RuntimeHost {
   prepare(): Promise<PreparedDsh | undefined>
   isDshMissing(): boolean
   isHomeRunning(home: string, exceptId: string): boolean
-  addActivity: (line: string, isBusy?: boolean) => number
+  addActivity: (line: string, isBusy?: boolean, instanceId?: string) => number
   dbg: (line: string) => void
 }
 

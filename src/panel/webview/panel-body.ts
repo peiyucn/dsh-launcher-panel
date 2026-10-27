@@ -84,7 +84,7 @@ export function panelBody(values: PanelBodyValues): string {
     <div class="section-head">
       <span class="section-title">Console</span>
       <div class="section-actions">
-        <button class="mini-btn" id="clearConsoleBtn" title="Clear console log">Clear</button>
+        <button class="mini-btn" id="clearConsoleBtn" title="Clear this instance's launcher and server logs">Clear</button>
         <button class="debug-pill" id="debugToggle" title="Toggle NODE_DEBUG=module in source mode">debug off</button>
       </div>
     </div>

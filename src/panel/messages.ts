@@ -11,7 +11,7 @@ import {
 } from '../actions.ts'
 import { getInstanceManager, type InstanceManager } from '../instances/manager.ts'
 import { describeDshUpdate } from '../dsh/versions.ts'
-import { addActivity, clearConsole, dbg, withBusy } from '../shared/activity.ts'
+import { addActivity, dbg, withBusy } from '../shared/activity.ts'
 import { writeRunMode } from '../dsh/config.ts'
 import { fetchDshBalance, getDshBalance } from './deepseek.ts'
 import { parseInstanceFormPayload } from './form.ts'
@@ -101,10 +101,11 @@ export class PanelMessages {
         await vscode.commands.executeCommand('workbench.action.openSettings', SETTINGS_QUERY)
         return
       case 'toggleDebug': return this.toggleDebug()
-      case 'clearConsole':
-        if (manager) manager.clearConsole(manager.activeInstance()?.id ?? '')
-        clearConsole()
+      case 'clearConsole': {
+        const id = manager?.activeInstance()?.id
+        if (manager && id) manager.clearConsole(id)
         return
+      }
       default:
         dbg(`ignored unknown webview command: ${JSON.stringify(message.command)}`)
     }

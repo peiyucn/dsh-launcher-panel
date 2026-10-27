@@ -1,13 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   addActivity,
   clearConsole,
+  clearInstanceConsole,
   finishBusy,
   getActivity,
+  replayInstanceActivity,
   setLogPath,
   withBusy,
 } from '../src/shared/activity.ts'
@@ -135,8 +137,7 @@ test('getActivity returns a snapshot that cannot mutate the feed', () => {
   }
 })
 
-test('setLogPath trims an oversized client log to its tail', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-logtrim-'))
+test('setLogPath trims an oversized client log to its tail', () => {  const dir = mkdtempSync(join(tmpdir(), 'dsh-logtrim-'))
   try {
     const file = join(dir, 'client.log')
     const line = 'y'.repeat(1024)
@@ -154,6 +155,71 @@ test('setLogPath trims an oversized client log to its tail', () => {
     const feed = getActivity()
     assert.ok(feed.length > 0)
     assert.ok(feed[feed.length - 1].text.includes('TAIL-MARKER'), 'the trim happens before the tail replay')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('instance-scoped entries are filtered per tab and written to that instance log', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-scoped-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+    addActivity('global launcher event')
+    addActivity('[A] started', false, 'a')
+    addActivity('[B] started', false, 'b')
+
+    const a = getActivity('a').map((entry) => entry.text)
+    assert.ok(a.some((text) => text.endsWith('global launcher event')), 'global events stay visible in every tab')
+    assert.ok(a.some((text) => text.includes('[A] started')))
+    assert.ok(!a.some((text) => text.includes('[B] started')), 'another instance activity must not leak')
+    assert.ok(!getActivity('b').some((entry) => entry.text.includes('[A] started')))
+
+    const globalLog = readFileSync(join(dir, 'client.log'), 'utf8')
+    assert.ok(globalLog.includes('global launcher event'))
+    assert.ok(!globalLog.includes('[A] started'), 'instance lines do not go to the shared launcher log')
+    const aLog = readFileSync(join(dir, 'instances', 'a', 'client.log'), 'utf8')
+    assert.ok(aLog.includes('[A] started'))
+    assert.ok(!aLog.includes('[B] started'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('clearing one instance leaves other instances and global entries alone', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-clear-scoped-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+    addActivity('global launcher event')
+    addActivity('[A] started', false, 'a')
+    addActivity('[B] started', false, 'b')
+
+    clearInstanceConsole('a')
+
+    const a = getActivity('a').map((entry) => entry.text)
+    assert.ok(a.some((text) => text.endsWith('global launcher event')), 'global events are not owned by one tab')
+    assert.ok(!a.some((text) => text.includes('[A] started')), 'the cleared tab loses its entries')
+    assert.ok(getActivity('b').some((entry) => entry.text.includes('[B] started')), 'the other tab is untouched')
+    assert.equal(readFileSync(join(dir, 'instances', 'a', 'client.log'), 'utf8'), '')
+    assert.ok(readFileSync(join(dir, 'instances', 'b', 'client.log'), 'utf8').includes('[B] started'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('replayInstanceActivity restores that instance history after a window reload', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-replay-scoped-'))
+  try {
+    setLogPath(join(dir, 'client.log'))
+    clearConsole()
+    mkdirSync(join(dir, 'instances', 'a'), { recursive: true })
+    writeFileSync(join(dir, 'instances', 'a', 'client.log'), '[1:00:00 PM] [A] previous run\n')
+
+    replayInstanceActivity('a')
+
+    assert.ok(getActivity('a').some((entry) => entry.text.includes('previous run')))
+    assert.ok(!getActivity('b').some((entry) => entry.text.includes('previous run')))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

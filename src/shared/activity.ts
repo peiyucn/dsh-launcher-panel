@@ -13,11 +13,14 @@ export interface ActivityEntry {
   id: number
   text: string
   busy: boolean
+  /** Set for instance-scoped entries; global launcher entries leave it undefined. */
+  instanceId?: string
 }
 
 const activity: ActivityEntry[] = []
 let activitySeq = 0
 const TRUNCATION_MARKER = '… [truncated]'
+const trimmedInstanceLogs = new Set<string>()
 let consolePath = ''
 
 function clampLine(line: string): string {
@@ -30,7 +33,6 @@ function readTailText(file: string, maxBytes: number): string | undefined {
   const text = readLogTailBytes(file, maxBytes)
   if (text === undefined) return undefined
   if (size <= maxBytes) return text
-  // A read that starts mid-file can begin mid-character; drop the partial first line.
   const newline = text.indexOf('\n')
   return newline === -1 ? '' : text.slice(newline + 1)
 }
@@ -49,6 +51,11 @@ export function activityLogFile(): string {
   return consolePath
 }
 
+export function instanceActivityLogFile(instanceId: string): string {
+  if (!consolePath) return ''
+  return path.join(path.dirname(consolePath), 'instances', instanceId, 'client.log')
+}
+
 export function setLogPath(value: string): void {
   consolePath = value
   try {
@@ -65,11 +72,17 @@ export function setLogPath(value: string): void {
   }
 }
 
-function appendLog(entry: string): void {
+function appendLog(entry: string, instanceId?: string): void {
   if (!consolePath) return
+  const file = instanceId === undefined ? consolePath : instanceActivityLogFile(instanceId)
+  if (file === '') return
   try {
-    fs.mkdirSync(path.dirname(consolePath), { recursive: true })
-    fs.appendFileSync(consolePath, clampLine(entry) + '\n')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    if (instanceId !== undefined && !trimmedInstanceLogs.has(instanceId)) {
+      trimmedInstanceLogs.add(instanceId)
+      trimLogFile(file)
+    }
+    fs.appendFileSync(file, clampLine(entry) + '\n')
   } catch {
     // Best effort: a failed write must not disturb the panel.
   }
@@ -79,23 +92,44 @@ export function dbg(line: string): void {
   appendLog(`[${new Date().toLocaleTimeString()}] [dbg] ${line}`)
 }
 
-function pushActivity(entry: string, isBusy = false): number {
+function pushActivity(entry: string, isBusy = false, instanceId?: string): number {
   const id = ++activitySeq
-  activity.push({ id, text: clampLine(entry), busy: isBusy })
+  activity.push({ id, text: clampLine(entry), busy: isBusy, ...instanceId === undefined ? {} : { instanceId } })
   if (activity.length > ACTIVITY_MAX_LINES) activity.splice(0, activity.length - ACTIVITY_MAX_LINES)
   return id
 }
 
-export function addActivity(line: string, isBusy = false): number {
+export function addActivity(line: string, isBusy = false, instanceId?: string): number {
   const entry = `[${new Date().toLocaleTimeString()}] ${line}`
-  const id = pushActivity(entry, isBusy)
-  appendLog(entry)
+  const id = pushActivity(entry, isBusy, instanceId)
+  appendLog(entry, instanceId)
   return id
 }
 
-export function getActivity(): ReadonlyArray<ActivityEntry> {
-  // Copies, not the live array: callers must not be able to mutate the feed.
-  return activity.map((entry) => ({ ...entry }))
+/**
+ * Feed slice for one tab: launcher-wide entries (no instance) plus the given
+ * instance's own entries. Without an id every entry is returned.
+ */
+export function getActivity(instanceId?: string): ReadonlyArray<ActivityEntry> {
+  const source = instanceId === undefined
+    ? activity
+    : activity.filter((entry) => entry.instanceId === undefined || entry.instanceId === instanceId)
+  return source.map((entry) => ({ ...entry }))
+}
+
+/** Push the tail of one instance's launcher log back into the feed (window reload). */
+export function replayInstanceActivity(instanceId: string): void {
+  const file = instanceActivityLogFile(instanceId)
+  if (file === '' || !fs.existsSync(file)) return
+  try {
+    trimLogFile(file)
+    const text = readTailText(file, ACTIVITY_LOG_KEEP_BYTES)
+    if (text === undefined) return
+    const lines = text.split(/\r?\n/).filter((line) => line.length > 0)
+    for (const line of lines.slice(-LOG_RELOAD_LINES)) pushActivity(line, false, instanceId)
+  } catch {
+    // Best effort: a broken file must not break activation.
+  }
 }
 
 export function finishBusy(id: number): void {
@@ -113,6 +147,22 @@ export async function withBusy<T>(label: string, task: () => Promise<T>): Promis
   }
 }
 
+/** Clear one tab's console: its scoped feed entries and its launcher log file. */
+export function clearInstanceConsole(instanceId: string): void {
+  for (let i = activity.length - 1; i >= 0; i--) {
+    if (activity[i].instanceId === instanceId) activity.splice(i, 1)
+  }
+  const file = instanceActivityLogFile(instanceId)
+  if (file === '') return
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, '')
+  } catch {
+    // Best effort: the feed is already cleared.
+  }
+}
+
+/** Clear every feed entry and the global launcher log. */
 export function clearConsole(): void {
   activity.length = 0
   if (!consolePath) return

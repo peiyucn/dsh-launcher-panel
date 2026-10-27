@@ -14,7 +14,7 @@ import {
   type NormalizedInstances,
 } from './model.ts'
 import type { ActivityEntry } from '../shared/activity.ts'
-import { addActivity, dbg, getActivity } from '../shared/activity.ts'
+import { addActivity, clearInstanceConsole, dbg, getActivity, replayInstanceActivity } from '../shared/activity.ts'
 import { readConfig } from '../dsh/config.ts'
 import type { DshUpdate } from '../dsh/update.ts'
 import { InstanceRuntime } from './runtime/runtime.ts'
@@ -56,7 +56,7 @@ export class InstanceManager {
       prepare: () => this.prepare(),
       isDshMissing: () => this.shared.isDshMissing(),
       isHomeRunning: (home, exceptId) => this.isHomeRunning(home, exceptId),
-      addActivity,
+      addActivity: (line, isBusy, instanceId) => addActivity(line, isBusy, instanceId),
       dbg,
     }
   }
@@ -94,6 +94,9 @@ export class InstanceManager {
     }
     this.settings = { ...next, activeId: resolveActiveId(next.instances, keepActiveId, next.activeId) }
     this.runtimes = runtimes
+    for (const instance of next.instances) {
+      if (!previous.has(instance.id)) replayInstanceActivity(instance.id)
+    }
   }
 
   private get activeId(): string {
@@ -160,7 +163,7 @@ export class InstanceManager {
   }
 
   activityFor(id: string): ActivityEntry[] {
-    const result: ActivityEntry[] = getActivity().map((entry) => ({ ...entry }))
+    const result: ActivityEntry[] = [...getActivity(id)]
     const runtime = this.runtimes.get(id)
     const lines = runtime?.consoleLines() ?? []
     if (runtime && lines.length > 0) {
@@ -318,8 +321,11 @@ export class InstanceManager {
     for (const runtime of this.runtimes.values()) runtime.dispose()
   }
 
+  /** Clear one instance's server log and its scoped launcher log/feed. */
   clearConsole(id: string): void {
+    if (id === '') return
     this.runtimes.get(id)?.clearLog()
+    clearInstanceConsole(id)
   }
 
   async reloadSettings(): Promise<void> {

@@ -66,7 +66,7 @@ Settings → search "dsh":
 * Update checks/updates the one shared dsh install and requires all instances stopped.
 * Closing VS Code does not stop the servers. Stop them from the panel or the command palette.
 * The API Status card supports DeepSeek only, and appears only when the active instance's home has a DeepSeek model configured. Balance is queried with the active instance's credentials.
-* Log files: `~/.dsh-launcher-panel/logs/client.log` (launcher activity) and `~/.dsh-launcher-panel/logs/instances/<id>/server.log` per instance. The legacy single-instance `logs/server.log` is still read when the default instance adopts an old run. All are clickable in the panel. Those dirs live directly under your home directory (`%USERPROFILE%` on Windows).
+* Log files are per instance: `~/.dsh-launcher-panel/logs/instances/<id>/client.log` (that instance's launcher activity) and `.../server.log` (dsh's own output). Both follow the active tab and are clickable in the panel. Extension-wide events (dsh install/update/detection, window activity) go to the shared `~/.dsh-launcher-panel/logs/client.log`. The legacy single-instance `logs/server.log` is still read when the default instance adopts an old run. Those dirs live directly under your home directory (`%USERPROFILE%` on Windows).
 * The 🐳 artwork (activity bar icon and status bar icon font) is Twemoji's spouting whale (Twitter, Inc., CC-BY 4.0), rendered as a monochrome silhouette — see NOTICE.
 
 ## Known limitations
