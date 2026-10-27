@@ -2,7 +2,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  DSH_CLI_ENTRY_GUARD_MIN_VERSION,
   compareDshVersions,
   decideSourceUpdate,
   describeDshUpdate,
@@ -45,10 +44,10 @@ test('dshVersionAtLeast ranks a stable release above its own prereleases', () =>
   assert.equal(dshVersionAtLeast('0.1.5-rc.1', '0.1.5'), false)
   assert.equal(dshVersionAtLeast('0.1.5', '0.1.5'), true)
   assert.equal(dshVersionAtLeast('0.1.5-rc.2', '0.1.5-rc.1'), true)
-  assert.equal(dshVersionAtLeast(DSH_CLI_ENTRY_GUARD_MIN_VERSION, DSH_CLI_ENTRY_GUARD_MIN_VERSION), true)
-  assert.equal(dshVersionAtLeast('0.1.3-alpha.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), false)
-  assert.equal(dshVersionAtLeast('0.1.5-rc.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), true)
-  assert.equal(dshVersionAtLeast('0.1.2-rc.1', DSH_CLI_ENTRY_GUARD_MIN_VERSION), false)
+  assert.equal(dshVersionAtLeast('0.1.3-alpha.2', '0.1.3-alpha.2'), true)
+  assert.equal(dshVersionAtLeast('0.1.3-alpha.1', '0.1.3-alpha.2'), false)
+  assert.equal(dshVersionAtLeast('0.1.5-rc.1', '0.1.3-alpha.2'), true)
+  assert.equal(dshVersionAtLeast('0.1.2-rc.1', '0.1.3-alpha.2'), false)
 })
 
 test('versionFromDescribe extracts the base version', () => {

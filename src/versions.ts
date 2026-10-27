@@ -12,15 +12,6 @@
 /** dsh ≥ this version opens the system browser on its own; the launcher then passes `--no-open`. */
 export const DSH_NO_OPEN_MIN_VERSION = '0.1.0-rc.8'
 
-/**
- * dsh ≥ this version boots its CLI behind an `import.meta.main` guard (its
- * entry point only runs when that binding is true). The binding exists in Node
- * ≥ 22.18 / ≥ 24.2 only, while dsh's engines still advertise `^22.19 || >=24`
- * — on Node 24.0/24.1 the guarded entry never runs and dsh exits silently with
- * no output at all.
- */
-export const DSH_CLI_ENTRY_GUARD_MIN_VERSION = '0.1.3-alpha.2'
-
 /** Order two dsh versions: -1 (a older), 0 (equal), 1 (a newer). Prereleases: alpha < beta < rc < stable. */
 export function compareDshVersions(a: string, b: string): number {
   const parse = (v: string): { core: number[]; pre: { kind: string; n: number } | null } | undefined => {
