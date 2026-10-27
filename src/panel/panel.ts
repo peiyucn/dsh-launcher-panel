@@ -9,16 +9,16 @@ import {
   defaultInstanceHome,
   defaultInstanceHomePrefix,
   openUrl,
-} from './actions.ts'
-import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
-import { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
-import { getInstanceManager, type InstanceManager } from './instance-manager.ts'
-import { parseInstanceFormPayload } from './panel-form.ts'
+} from '../app/actions.ts'
+import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from '../shared/env.ts'
+import { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './deepseek.ts'
+import { getInstanceManager, type InstanceManager } from '../instances/manager.ts'
+import { parseInstanceFormPayload } from './form.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
-import { describeDshUpdate } from './versions.ts'
-import { PANEL_REFRESH_INTERVAL_MS } from './timing.ts'
-import { addActivity, clearConsole, dbg, getActivity, withBusy } from './server/activity.ts'
-import { writeRunMode } from './server/config.ts'
+import { describeDshUpdate } from '../dsh/versions.ts'
+import { PANEL_REFRESH_INTERVAL_MS } from '../shared/timing.ts'
+import { addActivity, clearConsole, dbg, getActivity, withBusy } from '../shared/activity.ts'
+import { writeRunMode } from '../dsh/config.ts'
 import {
   buildPanelUpdate,
   isBrowserChoice,

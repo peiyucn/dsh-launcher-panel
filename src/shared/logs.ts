@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
-import { extractWebToken } from '../env.ts'
-import { LOG_TAIL_POLL_MS } from '../timing.ts'
+import { extractWebToken } from './env.ts'
+import { LOG_TAIL_POLL_MS } from './timing.ts'
 
 /** Never read more than the tail: a source-mode log can reach ~90 MB. */
 export const LOG_READ_BYTES = 256 * 1024

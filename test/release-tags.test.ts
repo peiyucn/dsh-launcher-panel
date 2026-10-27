@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { classifyContainment, releaseVersion } from '../src/server/release-tags.ts'
+import { classifyContainment, releaseVersion } from '../src/dsh/release-tags.ts'
 
 test('a successful ancestor check means the commit is contained', () => {
   assert.equal(classifyContainment({ ok: true }), 'contained')

@@ -1,9 +1,9 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { GIT_OP_TIMEOUT_MS } from '../timing.ts'
-import { runFile } from '../proc.ts'
-import { dshVersionFromDescribe } from '../versions.ts'
-import { findPnpm } from '../pnpm.ts'
+import { GIT_OP_TIMEOUT_MS } from '../shared/timing.ts'
+import { runFile } from '../shared/proc.ts'
+import { dshVersionFromDescribe } from './versions.ts'
+import { findPnpm } from './pnpm.ts'
 import { managedSourceCheckout, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 
 type ConditionState = 'unknown' | 'ok' | 'missing'

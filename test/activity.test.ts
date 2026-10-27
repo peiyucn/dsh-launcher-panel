@@ -10,13 +10,13 @@ import {
   getActivity,
   setLogPath,
   withBusy,
-} from '../src/server/activity.ts'
+} from '../src/shared/activity.ts'
 import {
   ACTIVITY_LINE_MAX_CHARS,
   ACTIVITY_LOG_KEEP_BYTES,
   ACTIVITY_LOG_MAX_BYTES,
   ACTIVITY_MAX_LINES,
-} from '../src/timing.ts'
+} from '../src/shared/timing.ts'
 
 test('the activity feed is bounded and keeps the newest entries', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-activity-'))

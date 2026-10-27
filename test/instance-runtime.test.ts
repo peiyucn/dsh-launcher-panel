@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canTransition, holdsHome, nextState, stopDecision, type InstanceState } from '../src/instance-state.ts'
+import { canTransition, holdsHome, nextState, stopDecision, type InstanceState } from '../src/instances/state.ts'
 
 test('start moves a stopped or failed instance to starting', () => {
   assert.equal(nextState('stopped', 'start'), 'starting')
@@ -74,15 +74,15 @@ test('Stop asks before killing a port owner this runtime does not track', () => 
 })
 
 test('Stop no longer kills an untracked port owner by default', () => {
-  const source = readFileSync(new URL('../src/server/instance-runtime.ts', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
   assert.match(source, /stop\(killUntracked = false\)/, 'InstanceRuntime.stop must default to not killing untracked owners')
   assert.match(source, /stopDecision\(\{/, 'the untracked-port rule must be the tested pure decision')
   assert.match(source, /needsStopConfirmation\(\)/, 'the UI needs a way to ask before the untracked kill')
 })
 
 test('log tail reads live in the vscode-free log-read module', () => {
-  const source = readFileSync(new URL('../src/server/instance-runtime.ts', import.meta.url), 'utf8')
-  assert.match(source, /from '\.\/log-read\.ts'/)
+  const source = readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
+  assert.match(source, /from '\.\.\/\.\.\/shared\/logs\.ts'/)
   assert.doesNotMatch(source, /function readLogTail\(/, 'the duplicated tail reader must not come back')
   assert.doesNotMatch(source, /function readTokenFromLog\(/, 'the duplicated token reader must not come back')
 })

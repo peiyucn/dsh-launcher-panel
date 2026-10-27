@@ -1,7 +1,7 @@
-import { GIT_OP_TIMEOUT_MS, GIT_REMOTE_TIMEOUT_MS, PORT_PROBE_TIMEOUT_MS } from '../timing.ts'
-import { runFile } from '../proc.ts'
-import { parseLocalProxySettings } from '../git.ts'
-import { parseRemoteReleaseTags, type RemoteReleaseTag } from '../versions.ts'
+import { GIT_OP_TIMEOUT_MS, GIT_REMOTE_TIMEOUT_MS, PORT_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
+import { runFile } from '../shared/proc.ts'
+import { parseLocalProxySettings } from './git.ts'
+import { parseRemoteReleaseTags, type RemoteReleaseTag } from './versions.ts'
 import { isPortOpen } from './probes.ts'
 
 const RELEASE_TAG_PREFIX = 'dsh-v'

@@ -6,8 +6,8 @@ import {
   ACTIVITY_LOG_MAX_BYTES,
   ACTIVITY_MAX_LINES,
   LOG_RELOAD_LINES,
-} from '../timing.ts'
-import { readLogTailBytes } from './log-read.ts'
+} from './timing.ts'
+import { readLogTailBytes } from './logs.ts'
 
 export interface ActivityEntry {
   id: number

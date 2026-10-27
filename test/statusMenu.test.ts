@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildStatusMenuItems, buildStatusMenuSummary } from '../src/statusMenu.ts'
+import { buildStatusMenuItems, buildStatusMenuSummary } from '../src/app/status-menu.ts'
 
 const base = { running: false, starting: false, installing: false, stopping: false, updating: false }
 const actions = (status: typeof base) => buildStatusMenuItems(status).map((item) => item.action)

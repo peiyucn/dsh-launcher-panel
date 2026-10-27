@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { runFile } from './proc.ts'
-import { PNPM_PROBE_TIMEOUT_MS } from './timing.ts'
+import { runFile } from '../shared/proc.ts'
+import { PNPM_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 
 export function windowsPnpmCandidates(env: Record<string, string | undefined>): string[] {
   const out: string[] = []

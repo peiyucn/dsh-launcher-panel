@@ -9,15 +9,15 @@ import {
   actionSelectInstance,
   actionStart,
   actionStop,
-} from './actions.ts'
-import { DshPanelProvider } from './panel.ts'
-import { getInstanceManager, InstanceManager, setInstanceManager } from './instance-manager.ts'
-import type { InstanceRuntimeStatus } from './server/instance-runtime.ts'
-import { dshBaseDir } from './paths.ts'
-import { STATUS_BAR_REFRESH_INTERVAL_MS } from './timing.ts'
-import { dbg, setLogPath } from './server/activity.ts'
-import { migrateLegacyDshConfig } from './server/config.ts'
-import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
+} from './app/actions.ts'
+import { DshPanelProvider } from './panel/panel.ts'
+import { getInstanceManager, InstanceManager, setInstanceManager } from './instances/manager.ts'
+import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
+import { dshBaseDir } from './dsh/paths.ts'
+import { STATUS_BAR_REFRESH_INTERVAL_MS } from './shared/timing.ts'
+import { dbg, setLogPath } from './shared/activity.ts'
+import { migrateLegacyDshConfig } from './dsh/config.ts'
+import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './app/status-menu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
 const RUNNING_BACKGROUND_COLOR = 'dsh.statusBar.runningBackground'

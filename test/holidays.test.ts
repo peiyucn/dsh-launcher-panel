@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { CN_HOLIDAY_RANGES } from '../src/holidays.ts'
+import { CN_HOLIDAY_RANGES } from '../src/panel/holidays.ts'
 
-const source = readFileSync(new URL('../src/holidays.ts', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/panel/holidays.ts', import.meta.url), 'utf8')
 
 test('the table is a well-formed year → spans map', () => {
   const years = Object.keys(CN_HOLIDAY_RANGES).map(Number)

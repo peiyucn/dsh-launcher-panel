@@ -15,7 +15,7 @@ import {
   validateInstance,
   type DshInstance,
   type InstanceModelOptions,
-} from '../src/instances.ts'
+} from '../src/instances/model.ts'
 
 const homeDir = path.resolve('instances-test-home')
 const options: InstanceModelOptions = {

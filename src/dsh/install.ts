@@ -1,11 +1,11 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from '../paths.ts'
-import { npmSpecForChannel, type NpmChannel } from '../env.ts'
-import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
-import { resolveCommandEntry, runResolved } from '../proc.ts'
-import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from '../pnpm.ts'
+import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
+import { npmSpecForChannel, type NpmChannel } from '../shared/env.ts'
+import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
+import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
+import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {

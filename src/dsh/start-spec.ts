@@ -1,5 +1,5 @@
-import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from '../versions.ts'
-import { resolveCommandEntry, type ResolvedCommand } from '../proc.ts'
+import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from './versions.ts'
+import { resolveCommandEntry, type ResolvedCommand } from '../shared/proc.ts'
 
 interface CommandTarget {
   mode: 'pnpm' | 'source'

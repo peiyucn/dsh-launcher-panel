@@ -26,7 +26,7 @@ import {
   maskPath,
   resolveDshHome,
   writeInstallManifest,
-} from '../src/paths.ts'
+} from '../src/dsh/paths.ts'
 
 test('dshBaseDir resolves the home directory on every platform', () => {
   assert.equal(dshBaseDir('win32', { USERPROFILE: 'C:\\Users\\me' }, 'C:\\Users\\me'), join('C:\\Users\\me', '.dsh-launcher-panel'))

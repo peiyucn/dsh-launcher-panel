@@ -1,5 +1,5 @@
 import * as net from 'node:net'
-import { HTTP_PROBE_TIMEOUT_MS, PORT_PROBE_TIMEOUT_MS } from '../timing.ts'
+import { HTTP_PROBE_TIMEOUT_MS, PORT_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 
 export function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TIMEOUT_MS): Promise<boolean> {
   return new Promise((resolve) => {

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
-import { NODE_PROBE_TIMEOUT_MS, TASKKILL_TIMEOUT_MS } from '../timing.ts'
-import { decodeChildOutput } from '../proc.ts'
+import { NODE_PROBE_TIMEOUT_MS, TASKKILL_TIMEOUT_MS } from '../shared/timing.ts'
+import { decodeChildOutput } from '../shared/proc.ts'
 
 function execText(command: string, args: string[], timeoutMs: number): Promise<string | undefined> {
   return new Promise((resolve) => {

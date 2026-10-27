@@ -5,7 +5,7 @@ import {
   buildSpawnSpec,
   type ProfileInitSpecInput,
   type SpawnSpecInput,
-} from '../src/server/start-spec.ts'
+} from '../src/dsh/start-spec.ts'
 
 const baseEnv: NodeJS.ProcessEnv = { PATH: '/usr/bin', KEEP: 'yes' }
 

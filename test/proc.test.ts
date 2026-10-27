@@ -4,8 +4,8 @@ import { execFile } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { decodeChildOutput, isProcessAlive, resolveCommand, resolveCommandEntry, runFile, runResolved } from '../src/proc.ts'
-import { parseLocalProxySettings } from '../src/git.ts'
+import { decodeChildOutput, isProcessAlive, resolveCommand, resolveCommandEntry, runFile, runResolved } from '../src/shared/proc.ts'
+import { parseLocalProxySettings } from '../src/dsh/git.ts'
 
 // Sandboxes that forbid named pipes fail every subprocess capture with EPERM; skip those tests
 // with a stated reason rather than reporting red noise.

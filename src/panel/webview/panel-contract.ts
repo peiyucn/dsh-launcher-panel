@@ -1,5 +1,5 @@
-import { DEFAULT_BROWSER } from '../env.ts'
-import type { DsStatus, DshBalance } from '../ds.ts'
+import { DEFAULT_BROWSER } from '../../shared/env.ts'
+import type { DsStatus, DshBalance } from '../deepseek.ts'
 import type { PricingWindow } from '../pricing.ts'
 
 const COMMAND_NAMES = [

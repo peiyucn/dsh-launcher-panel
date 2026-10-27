@@ -8,9 +8,9 @@ import {
   checkoutSupportsClean,
   checkoutSupportsOfficialBuild,
   clientBuildCommit,
-} from '../paths.ts'
-import { GIT_OP_TIMEOUT_MS } from '../timing.ts'
-import { runFile } from '../proc.ts'
+} from './paths.ts'
+import { GIT_OP_TIMEOUT_MS } from '../shared/timing.ts'
+import { runFile } from '../shared/proc.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface CheckoutHost {

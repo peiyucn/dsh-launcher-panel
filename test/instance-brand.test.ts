@@ -8,7 +8,7 @@ import {
   ensureInstanceBrand,
   instanceBrandDir,
   removeInstanceBrand,
-} from '../src/server/instance-brand.ts'
+} from '../src/instances/runtime/brand.ts'
 
 function makeProfile(): string {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-instance-brand-'))

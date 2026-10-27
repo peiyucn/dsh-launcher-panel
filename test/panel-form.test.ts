@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseInstanceFormPayload } from '../src/panel-form.ts'
+import { parseInstanceFormPayload } from '../src/panel/form.ts'
 
 function rawForm(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)

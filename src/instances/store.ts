@@ -1,14 +1,14 @@
 import * as os from 'node:os'
 import * as vscode from 'vscode'
-import { bootstrapInstances, type InstanceBootstrapHost } from '../instance-bootstrap.ts'
+import { bootstrapInstances, type InstanceBootstrapHost } from './bootstrap.ts'
 import {
   normalizeInstances,
   type DshInstance,
   type InstanceModelOptions,
   type NormalizedInstances,
-} from '../instances.ts'
-import { dshBaseDir, resolveDshHome } from '../paths.ts'
-import { managedPackageDir, managedSourceCheckout } from './install.ts'
+} from './model.ts'
+import { dshBaseDir, resolveDshHome } from '../dsh/paths.ts'
+import { managedPackageDir, managedSourceCheckout } from '../dsh/install.ts'
 
 /** Shares the migration marker: an emptied list must not resurrect a Default. */
 const LIST_AUTHORITATIVE_KEY = 'dsh.instancesMigrated'

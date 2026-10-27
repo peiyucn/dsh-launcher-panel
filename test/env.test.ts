@@ -8,7 +8,7 @@ import {
   parseNpmChannel,
   shouldOpenBrowser,
   toEnglish,
-} from '../src/env.ts'
+} from '../src/shared/env.ts'
 
 test('normalizeBrowser collapses config values to known choices', () => {
   assert.equal(normalizeBrowser('external'), 'external')

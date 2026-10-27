@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { dsComponentLabel, getDsStatus, hasDeepSeekModel, parseDsStatus, readCredentialFromFile, readDefaultModel, resetDsCachesForTest } from '../src/ds.ts'
+import { dsComponentLabel, getDsStatus, hasDeepSeekModel, parseDsStatus, readCredentialFromFile, readDefaultModel, resetDsCachesForTest } from '../src/panel/deepseek.ts'
 
 function withTempFile(content: string, fn: (file: string) => unknown): unknown {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-test-'))

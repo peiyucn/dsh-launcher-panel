@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { readLogTail, readLogTailBytes, readTokenFromLog } from '../src/server/log-read.ts'
+import { readLogTail, readLogTailBytes, readTokenFromLog } from '../src/shared/logs.ts'
 
 function tempLog(t: { after: (fn: () => void) => void }, text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-log-read-'))

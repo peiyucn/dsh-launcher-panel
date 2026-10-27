@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PANEL_CSS } from '../src/webview/panel-styles.ts'
-import { panelScript } from '../src/webview/panel-script.ts'
-import { panelBody } from '../src/webview/panel-body.ts'
+import { PANEL_CSS } from '../src/panel/webview/panel-styles.ts'
+import { panelScript } from '../src/panel/webview/panel-script.ts'
+import { panelBody } from '../src/panel/webview/panel-body.ts'
 
 /**
  * Pins the panel's loading spinner to the official dsh StateDot look (geometry,

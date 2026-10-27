@@ -3,18 +3,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createRefreshScheduler } from '../src/webview/panel-refresh.ts'
+import { createRefreshScheduler } from '../src/panel/webview/panel-refresh.ts'
 import {
   BROWSER_CHOICES,
   PANEL_COMMANDS,
   PANEL_MESSAGE_TYPES,
   buildPanelUpdate,
   isBrowserChoice,
-} from '../src/webview/panel-contract.ts'
-import { PANEL_CSS } from '../src/webview/panel-styles.ts'
-import { panelBody } from '../src/webview/panel-body.ts'
-import { panelScript } from '../src/webview/panel-script.ts'
-import { PEAK_WINDOWS_BJ_HOURS } from '../src/pricing.ts'
+} from '../src/panel/webview/panel-contract.ts'
+import { PANEL_CSS } from '../src/panel/webview/panel-styles.ts'
+import { panelBody } from '../src/panel/webview/panel-body.ts'
+import { panelScript } from '../src/panel/webview/panel-script.ts'
+import { PEAK_WINDOWS_BJ_HOURS } from '../src/panel/pricing.ts'
 
 function uniqueMatches(pattern: RegExp, text: string, group = 1): string[] {
   const found = new Set<string>()
@@ -29,8 +29,8 @@ const sorted = (values: Iterable<string>): string[] => [...values].sort()
 
 const body = panelBody({ version: '0.0.0-test' })
 const script = panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrowser: 'built-in' })
-const panelSource = readFileSync(new URL('../src/panel.ts', import.meta.url), 'utf8')
-const contractSource = readFileSync(new URL('../src/webview/panel-contract.ts', import.meta.url), 'utf8')
+const panelSource = readFileSync(new URL('../src/panel/panel.ts', import.meta.url), 'utf8')
+const contractSource = readFileSync(new URL('../src/panel/webview/panel-contract.ts', import.meta.url), 'utf8')
 
 const UPDATE_KEYS = [
   'active',

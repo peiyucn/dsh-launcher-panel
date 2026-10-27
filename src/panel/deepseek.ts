@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { resolveDshHome } from './paths.ts'
-import { toEnglish } from './env.ts'
+import { resolveDshHome } from '../dsh/paths.ts'
+import { toEnglish } from '../shared/env.ts'
 
 export interface DsComponentStatus {
   name: string

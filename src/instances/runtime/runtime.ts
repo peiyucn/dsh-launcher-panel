@@ -2,24 +2,24 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { decodeChildOutput, isProcessAlive, sleep } from '../proc.ts'
+import { decodeChildOutput, isProcessAlive, sleep } from '../../shared/proc.ts'
 import {
   HTTP_PROBE_TIMEOUT_MS,
   PORT_POLL_INTERVAL_MS,
   STOP_POLL_ATTEMPTS,
   STOP_POLL_INTERVAL_MS,
   STOP_POLL_PROBE_MS,
-} from '../timing.ts'
-import { httpOk, isPortOpen, tokenAccepted } from './probes.ts'
-import { findPortOwner, killPid } from './process.ts'
-import { dshBaseDir, maskPath, resolveDshHome } from '../paths.ts'
-import { instanceHome, instanceLogPath, type DshInstance } from '../instances.ts'
-import { holdsHome, nextState, stopDecision, type InstanceEvent, type InstanceState } from '../instance-state.ts'
-import { readConfig, type DshConfig } from './config.ts'
-import { ensureInstanceBrand, removeInstanceBrand } from './instance-brand.ts'
-import { LOG_TAIL_LINES, LogTailPump, readLogTail, readTokenFromLog } from './log-read.ts'
-import { buildProfileInitSpec, buildSpawnSpec } from './start-spec.ts'
-import { isUpdating } from './update.ts'
+} from '../../shared/timing.ts'
+import { httpOk, isPortOpen, tokenAccepted } from '../../dsh/probes.ts'
+import { findPortOwner, killPid } from '../../dsh/process.ts'
+import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
+import { instanceHome, instanceLogPath, type DshInstance } from '../model.ts'
+import { holdsHome, nextState, stopDecision, type InstanceEvent, type InstanceState } from '../state.ts'
+import { readConfig, type DshConfig } from '../../dsh/config.ts'
+import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
+import { LOG_TAIL_LINES, LogTailPump, readLogTail, readTokenFromLog } from '../../shared/logs.ts'
+import { buildProfileInitSpec, buildSpawnSpec } from '../../dsh/start-spec.ts'
+import { isUpdating } from '../../dsh/update.ts'
 
 const LOOPBACK = '127.0.0.1'
 

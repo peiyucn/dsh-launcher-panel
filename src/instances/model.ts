@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
-import { DEFAULT_PORT, MAX_PORT } from './env.ts'
+import { DEFAULT_PORT, MAX_PORT } from '../shared/env.ts'
 
 export const DEFAULT_PROFILE = 'web'
 

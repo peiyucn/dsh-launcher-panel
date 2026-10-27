@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { dbg } from './activity.ts'
+import { dbg } from '../../shared/activity.ts'
 
 export const INSTANCE_BRAND_PACKAGE = '@dsh-launcher/instance-brand'
 

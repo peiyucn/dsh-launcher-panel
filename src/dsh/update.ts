@@ -4,10 +4,10 @@ import {
   newestReleaseTag,
   type RemoteReleaseTag,
   type UpdateCheckOutcome,
-} from '../versions.ts'
-import { GIT_FETCH_TIMEOUT_MS } from '../timing.ts'
-import { runFile } from '../proc.ts'
-import type { NpmChannel } from '../env.ts'
+} from './versions.ts'
+import { GIT_FETCH_TIMEOUT_MS } from '../shared/timing.ts'
+import { runFile } from '../shared/proc.ts'
+import type { NpmChannel } from '../shared/env.ts'
 import { commitIsContained, explainGitFailure, listReleaseTags, releaseVersion } from './release-tags.ts'
 import { ensureDshInstalled, ensurePnpmAvailable, latestDshVersion, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 import type { InstallHost } from './install.ts'

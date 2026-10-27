@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as net from 'node:net'
 import * as vscode from 'vscode'
-import { MIN_INSTANCE_PORT_BASE } from './env.ts'
+import { MIN_INSTANCE_PORT_BASE } from '../shared/env.ts'
 import {
   instanceHome,
   nextPort,
@@ -11,15 +11,15 @@ import {
   type InstanceInput,
   type InstanceIssue,
   type NormalizedInstances,
-} from './instances.ts'
-import type { ActivityEntry } from './server/activity.ts'
-import { addActivity, activityLogFile, dbg, fileSizeSafe, getActivity, withBusy } from './server/activity.ts'
-import type { CheckoutHost } from './server/checkout.ts'
-import { ensureCheckoutReady } from './server/checkout.ts'
-import { readConfig } from './server/config.ts'
-import { detectDsh, detectDshVersion, type DetectHost } from './server/detect.ts'
-import { probeNodeVersion } from './server/node-check.ts'
-import { runInTerminal as runInTerminalInner, type TerminalHost } from './server/terminal.ts'
+} from './model.ts'
+import type { ActivityEntry } from '../shared/activity.ts'
+import { addActivity, activityLogFile, dbg, fileSizeSafe, getActivity, withBusy } from '../shared/activity.ts'
+import type { CheckoutHost } from '../dsh/checkout.ts'
+import { ensureCheckoutReady } from '../dsh/checkout.ts'
+import { readConfig } from '../dsh/config.ts'
+import { detectDsh, detectDshVersion, type DetectHost } from '../dsh/detect.ts'
+import { probeNodeVersion } from '../dsh/node-check.ts'
+import { runInTerminal as runInTerminalInner, type TerminalHost } from '../dsh/terminal.ts'
 import {
   ensurePnpmAvailable,
   ensureSourceCheckout,
@@ -28,14 +28,14 @@ import {
   preparePkgStart,
   unreachablePkgPath as unreachablePkgPathSetting,
   type InstallHost,
-} from './server/install.ts'
+} from '../dsh/install.ts'
 import {
   InstanceRuntime,
   type InstanceRuntimeStatus,
   type PreparedDsh,
   type RuntimeHost,
-} from './server/instance-runtime.ts'
-import { settingsWriteFailure } from './instance-bootstrap.ts'
+} from './runtime/runtime.ts'
+import { settingsWriteFailure } from './bootstrap.ts'
 import {
   instanceModelOptions,
   markInstancesAuthoritative,
@@ -43,11 +43,11 @@ import {
   readInstanceSettings,
   writeActiveInstance,
   writeInstances,
-} from './server/instance-store.ts'
-import { maskPath } from './paths.ts'
-import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from './timing.ts'
-import { versionFromDescribe } from './versions.ts'
-import { checkDshUpdateStatus, isUpdating, runDshUpdate, type DshUpdate, type UpdateHost } from './server/update.ts'
+} from './store.ts'
+import { maskPath } from '../dsh/paths.ts'
+import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from '../shared/timing.ts'
+import { versionFromDescribe } from '../dsh/versions.ts'
+import { checkDshUpdateStatus, isUpdating, runDshUpdate, type DshUpdate, type UpdateHost } from '../dsh/update.ts'
 
 interface InstanceDashboard {
   status: {

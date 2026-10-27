@@ -3,7 +3,7 @@ import {
   type DshInstance,
   type InstanceModelOptions,
   type NormalizedInstances,
-} from './instances.ts'
+} from './model.ts'
 
 export interface InstanceBootstrapHost {
   readPersisted(): { instances: unknown; activeId: unknown; legacyPort: unknown }

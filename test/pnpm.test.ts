@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { findPnpm, pickPnpmFromPath, pnpmSupportsDangerouslyAllowAllBuilds, windowsPnpmCandidates } from '../src/pnpm.ts'
+import { findPnpm, pickPnpmFromPath, pnpmSupportsDangerouslyAllowAllBuilds, windowsPnpmCandidates } from '../src/dsh/pnpm.ts'
 
 test('pnpmSupportsDangerouslyAllowAllBuilds gates on pnpm 10.16+', () => {
   assert.equal(pnpmSupportsDangerouslyAllowAllBuilds('11.22.0'), true)

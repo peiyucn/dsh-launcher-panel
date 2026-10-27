@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { dbg } from './activity.ts'
+import { dbg } from '../shared/activity.ts'
 import {
   DEFAULT_INSTANCE_PORT_BASE,
   DEFAULT_PORT,
@@ -7,7 +7,7 @@ import {
   MIN_INSTANCE_PORT_BASE,
   parseNpmChannel,
   type NpmChannel,
-} from '../env.ts'
+} from '../shared/env.ts'
 
 type RunMode = 'pnpm' | 'source'
 

@@ -10,7 +10,7 @@ import {
   newestReleaseTag,
   parseRemoteReleaseTags,
   versionFromDescribe,
-} from '../src/versions.ts'
+} from '../src/dsh/versions.ts'
 
 test('compareDshVersions orders versions by core, then prerelease', () => {
   assert.equal(compareDshVersions('0.1.2-rc.1', '0.1.2-rc.1'), 0)

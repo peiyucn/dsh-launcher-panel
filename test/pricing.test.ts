@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pricingWindowAt } from '../src/pricing.ts'
+import { pricingWindowAt } from '../src/panel/pricing.ts'
 
 test('pricingWindowAt follows the Beijing peak windows', () => {
   assert.equal(pricingWindowAt(new Date('2026-09-24T02:00:00Z')), 'peak')

@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as path from 'node:path'
-import { bootstrapInstances, type InstanceBootstrapHost } from '../src/instance-bootstrap.ts'
-import type { DshInstance, InstanceModelOptions } from '../src/instances.ts'
+import { bootstrapInstances, type InstanceBootstrapHost } from '../src/instances/bootstrap.ts'
+import type { DshInstance, InstanceModelOptions } from '../src/instances/model.ts'
 
 const homeDir = path.resolve('instance-bootstrap-test-home')
 const options: InstanceModelOptions = {

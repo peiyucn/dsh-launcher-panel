@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const panel = readFileSync(new URL('../src/panel.ts', import.meta.url), 'utf8')
+const panel = readFileSync(new URL('../src/panel/panel.ts', import.meta.url), 'utf8')
 
 // The panel must not refresh the manager itself: the trailing scheduled refresh
 // already does it through `dashboard()`, so a second call doubles probes.
