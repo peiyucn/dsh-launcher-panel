@@ -1,9 +1,7 @@
 import * as vscode from 'vscode'
 import { webcrypto } from 'node:crypto'
 import {
-  actionCreateInstance,
   actionDeleteInstance,
-  actionEditInstance,
   actionSetBrowser,
   actionStart,
   actionStop,
@@ -15,11 +13,26 @@ import {
 import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
 import { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
 import { getInstanceManager } from './instance-manager.ts'
+import { parseInstanceFormPayload } from './panel-form.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
 import { describeDshUpdate } from './versions.ts'
 import { PANEL_REFRESH_INTERVAL_MS } from './timing.ts'
 import { addActivity, clearConsole, dbg, getActivity, withBusy } from './server/activity.ts'
 import { writeRunMode } from './server/config.ts'
+import {
+  buildPanelUpdate,
+  isBrowserChoice,
+  PANEL_COMMANDS,
+  PANEL_MESSAGE_TYPES,
+  type PanelInstanceForm,
+  type PanelInstanceFormErrorMessage,
+  type PanelInstanceFormMessage,
+  type PanelInstanceFormSavedMessage,
+  type PanelMessage,
+  type PanelStatus,
+  type PanelUpdate,
+} from './webview/panel-contract.ts'
+import { createRefreshScheduler } from './webview/panel-refresh.ts'
 import { PANEL_CSS } from './webview/panel-styles.ts'
 import { panelBody } from './webview/panel-body.ts'
 import { panelScript } from './webview/panel-script.ts'
@@ -33,8 +46,13 @@ function getNonce(): string {
   return out
 }
 
+/** One-line message for an unknown thrown value. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** The status shape used before the manager exists or when a refresh throws. */
-function emptyStatus() {
+function emptyStatus(): PanelStatus {
   const cfg = vscode.workspace.getConfiguration('dsh')
   return {
     running: false,
@@ -43,15 +61,16 @@ function emptyStatus() {
     stopping: false,
     checking: false,
     updating: false,
+    unknown: false,
     url: '',
-    dsh: 'unknown' as const,
+    dsh: 'unknown',
     dshVersion: '',
     dshPath: '',
     dshHome: '',
     dshPathShort: '',
     dshHomeShort: '',
     nodeVersion: '',
-    mode: cfg.get<string>('runMode') === 'source' ? 'source' as const : 'pnpm' as const,
+    mode: cfg.get<string>('runMode') === 'source' ? 'source' : 'pnpm',
     update: undefined,
     consoleLogPath: '',
     consoleLogPathShort: '',
@@ -68,6 +87,9 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | undefined
   private timer: ReturnType<typeof setInterval> | undefined
+  /** Last successful payload; used as the fallback when a refresh throws. */
+  private lastUpdate: PanelUpdate | undefined
+  private readonly refresher = createRefreshScheduler(() => this.refreshOnce())
 
   constructor(private readonly version: string) {}
 
@@ -76,22 +98,44 @@ export class DshPanelProvider implements vscode.WebviewViewProvider {
     dbg(`view resolved, visible=${view.visible}`)
     view.webview.options = { enableScripts: true }
     view.webview.html = this.getHtml()
-    view.webview.onDidReceiveMessage((message: { command?: string; value?: string }) => {
-      dbg(`message from webview: ${JSON.stringify(message)}`)
-      if (message && message.command === 'ready') {
-        void this.refresh()
+    view.webview.onDidReceiveMessage((message: unknown) => {
+      // A malformed message (null, a primitive, ...) must stay inside this
+      // handler: an exception escaping the extension's own webview entry point
+      // becomes an unhandled rejection in VS Code's message pipeline.
+      if (typeof message !== 'object' || message === null) {
+        dbg(`ignored non-object webview message: ${String(message)}`)
         return
       }
-      void this.onMessage(message)
+      const msg = message as PanelMessage
+      dbg(`message from webview: ${JSON.stringify(msg)}`)
+      if (msg.command === PANEL_COMMANDS.ready) {
+        // The refresh started by resolveWebviewView may still be in flight; it
+        // posts after the webview is listening, so let it finish instead of
+        // queueing a duplicate. If it already finished, its post may have
+        // raced the webview's message listener, so ask for a fresh snapshot.
+        if (!this.refresher.busy) void this.requestRefresh()
+        return
+      }
+      void this.onMessage(msg)
     })
     view.onDidChangeVisibility(() => {
       dbg(`visibility changed, visible=${view.visible}`)
-      if (view.visible) this.startTimer()
-      else this.stopTimer()
+      if (view.visible) {
+        this.startTimer()
+        // Do not make the user wait up to one timer tick for fresh data.
+        void this.requestRefresh()
+      } else {
+        this.stopTimer()
+      }
     })
-    view.onDidDispose(() => this.stopTimer())
+    view.onDidDispose(() => {
+      this.stopTimer()
+      // Do not keep a reference to a destroyed webview for the provider's
+      // lifetime; posting to it would be a no-op at best.
+      this.view = undefined
+    })
     if (view.visible) this.startTimer()
-    void this.refresh()
+    void this.requestRefresh()
   }
 
   /**
@@ -125,18 +169,21 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
    * the trailing refresh has to happen even then — otherwise one bad click
    * freezes the dashboard on stale data.
    */
-  private async onMessage(message: { command?: string; value?: string }): Promise<void> {
+  private async onMessage(message: PanelMessage): Promise<void> {
+    const command = typeof message.command === 'string' ? message.command : '(unknown)'
     try {
       await this.handleMessage(message)
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      dbg(`webview command "${message.command}" failed: ${msg}`)
-      addActivity(`✗ Command failed (${message.command}): ${msg}`)
+      const msg = errorMessage(error)
+      dbg(`webview command "${command}" failed: ${msg}`)
+      addActivity(`✗ Command failed (${command}): ${msg}`)
     }
-    await this.refresh()
+    // Single-flight + trailing merge: the refresh also covers the manager's own
+    // refresh (dashboard() calls it), so handlers must not refresh separately.
+    await this.requestRefresh()
   }
 
-  private async handleMessage(message: { command?: string; value?: string }): Promise<void> {
+  private async handleMessage(message: PanelMessage): Promise<void> {
     const manager = getInstanceManager()
     switch (message.command) {
       case 'start':
@@ -144,9 +191,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         break
       case 'stop':
         await actionStop(message.value)
-        break
-      case 'newInstance':
-        await actionCreateInstance()
         break
       case 'instanceForm':
         await this.openInstanceForm(message.value ?? 'new')
@@ -157,9 +201,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       case 'selectInstance':
         if (manager && message.value) await manager.select(message.value)
         break
-      case 'editInstance':
-        await actionEditInstance(message.value)
-        break
       case 'deleteInstance':
         await actionDeleteInstance(message.value)
         break
@@ -167,13 +208,14 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         try {
           await actionUpdateDsh()
         } catch (error) {
-          void vscode.window.showErrorMessage(`DSH update failed: ${error instanceof Error ? error.message : String(error)}`)
+          void vscode.window.showErrorMessage(`DSH update failed: ${errorMessage(error)}`)
         }
         break
       case 'refreshRequirements': {
+        // The trailing refresh renders the status, including the update this
+        // check just cached; asking the manager again here doubled the probes.
         const update = await manager?.checkUpdate(true)
         addActivity(describeDshUpdate(update))
-        await manager?.refresh()
         break
       }
       case 'setMode':
@@ -184,7 +226,8 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
           }
           await writeRunMode(message.value)
           manager?.invalidateDetection()
-          await manager?.refresh()
+        } else {
+          dbg(`ignored setMode with invalid value: ${JSON.stringify(message.value)}`)
         }
         break
       case 'revealPath':
@@ -210,7 +253,10 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         })
         break
       case 'setBrowser':
-        if (message.value) await actionSetBrowser(message.value)
+        // Validate against the real enum: writing an arbitrary client string
+        // into `dsh.browser` would only be folded back on read.
+        if (isBrowserChoice(message.value)) await actionSetBrowser(message.value)
+        else dbg(`ignored setBrowser with invalid value: ${JSON.stringify(message.value)}`)
         break
       case 'openStatus':
         await openUrl('https://status.deepseek.com/')
@@ -222,7 +268,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         const cfg = vscode.workspace.getConfiguration('dsh')
         const cur = cfg.get<boolean>('sourceDebug') ?? false
         await cfg.update('sourceDebug', !cur, vscode.ConfigurationTarget.Global)
-        await this.refresh()
         break
       }
       case 'clearConsole':
@@ -230,6 +275,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         clearConsole()
         break
       default:
+        dbg(`ignored unknown webview command: ${JSON.stringify(message.command)}`)
         break
     }
   }
@@ -238,75 +284,72 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     void this.view?.webview.postMessage(message)
   }
 
+  private postInstanceFormError(message: string): void {
+    const error: PanelInstanceFormErrorMessage = { type: PANEL_MESSAGE_TYPES.instanceFormError, message }
+    this.postToWebview(error)
+  }
+
   /** Seed the in-panel create/edit modal. */
   private async openInstanceForm(value: string): Promise<void> {
     const manager = getInstanceManager()
-    if (!manager || !this.view) return
+    if (!manager) {
+      // Surface the reason instead of returning silently: a click that does
+      // nothing at all reads as a broken panel.
+      this.postInstanceFormError('Launcher is not ready yet — try again in a moment')
+      return
+    }
+    if (!this.view) return
     // The form's prefilled name (and the edit form's fields) come from the
     // settings list: waiting for the bootstrap keeps the prefill consistent
     // with what the save will validate against.
     await manager.ready().catch(() => {})
     if (value === 'new') {
       const name = `Instance ${manager.instances().length + 1}`
-      this.postToWebview({
-        type: 'instanceForm',
-        form: { mode: 'new', name, home: defaultInstanceHome(name), homePrefix: defaultInstanceHomePrefix() },
-      })
+      const form: PanelInstanceForm = { mode: 'new', name, home: defaultInstanceHome(name), homePrefix: defaultInstanceHomePrefix() }
+      this.postToWebview({ type: PANEL_MESSAGE_TYPES.instanceForm, form } satisfies PanelInstanceFormMessage)
       return
     }
     const instance = manager.instance(value)
-    if (!instance) return
-    this.postToWebview({
-      type: 'instanceForm',
-      form: {
-        mode: 'edit',
-        id: instance.id,
-        name: instance.name,
-        home: manager.homeOf(instance),
-        homePrefix: defaultInstanceHomePrefix(),
-        autoOpenBrowser: instance.autoOpenBrowser,
-        browser: instance.browser,
-      },
-    })
+    if (!instance) {
+      this.postInstanceFormError('Instance was not found')
+      return
+    }
+    const form: PanelInstanceForm = {
+      mode: 'edit',
+      id: instance.id,
+      name: instance.name,
+      home: manager.homeOf(instance),
+      homePrefix: defaultInstanceHomePrefix(),
+      autoOpenBrowser: instance.autoOpenBrowser,
+      browser: instance.browser,
+    }
+    this.postToWebview({ type: PANEL_MESSAGE_TYPES.instanceForm, form } satisfies PanelInstanceFormMessage)
   }
 
   /** Persist the modal's form and report validation errors back into it. */
   private async saveInstanceForm(value: string | undefined): Promise<void> {
     const manager = getInstanceManager()
-    if (!manager || !value) return
+    if (!manager) {
+      this.postInstanceFormError('Launcher is not ready yet — try again in a moment')
+      return
+    }
     // Wait for the bootstrap before reading the instance being edited: a save
     // that raced the first-run setup would otherwise validate against an empty
     // list and report a bogus "already used" (or lose the instance).
     await manager.ready().catch(() => {})
-    let payload: {
-      mode?: unknown
-      id?: unknown
-      name?: unknown
-      home?: unknown
-      autoOpenBrowser?: unknown
-      browser?: unknown
-    }
-    try {
-      payload = JSON.parse(value) as typeof payload
-    } catch {
-      this.postToWebview({ type: 'instanceFormError', message: 'Malformed instance form' })
+    const parsed = parseInstanceFormPayload(value)
+    if (!parsed.ok) {
+      this.postInstanceFormError(parsed.message)
       return
     }
-    if (typeof payload.name !== 'string' || typeof payload.home !== 'string') {
-      this.postToWebview({ type: 'instanceFormError', message: 'Name and home are required' })
-      return
-    }
-    const autoOpenBrowser = typeof payload.autoOpenBrowser === 'boolean' ? payload.autoOpenBrowser : undefined
-    const browser: 'built-in' | 'external' | undefined =
-      payload.browser === 'built-in' || payload.browser === 'external' ? payload.browser : undefined
-
-    const editing = payload.mode === 'edit'
+    const form = parsed.form
+    const editing = form.mode === 'edit'
     let port: number | undefined
     let profile = 'web'
     if (editing) {
-      const current = typeof payload.id === 'string' ? manager.instance(payload.id) : undefined
+      const current = form.id ? manager.instance(form.id) : undefined
       if (!current) {
-        this.postToWebview({ type: 'instanceFormError', message: 'Instance was not found' })
+        this.postInstanceFormError('Instance was not found')
         return
       }
       // Ports are assigned by the launcher and are not edited from this form.
@@ -315,40 +358,41 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     } else {
       port = await manager.suggestPort()
       if (port === undefined) {
-        this.postToWebview({ type: 'instanceFormError', message: 'No free Web UI port was found for the new instance' })
+        this.postInstanceFormError('No free Web UI port was found for the new instance')
         return
       }
     }
 
     const input = {
-      name: payload.name,
-      home: payload.home,
+      name: form.name,
+      home: form.home,
       profile,
       port,
-      autoOpenBrowser,
-      browser,
+      autoOpenBrowser: form.autoOpenBrowser,
+      browser: form.browser,
     }
-    const result = editing && typeof payload.id === 'string'
-      ? await manager.update(payload.id, input).catch((error) => {
-        this.postToWebview({ type: 'instanceFormError', message: error instanceof Error ? error.message : String(error) })
+    const result = editing
+      ? await manager.update(form.id, input).catch((error) => {
+        this.postInstanceFormError(errorMessage(error))
         return undefined
       })
       : await manager.create(input).catch((error) => {
-        this.postToWebview({ type: 'instanceFormError', message: error instanceof Error ? error.message : String(error) })
+        this.postInstanceFormError(errorMessage(error))
         return undefined
       })
     if (!result) return
     const error = result.issues.find((issue) => issue.severity === 'error')
     if (!result.instance || error) {
-      this.postToWebview({ type: 'instanceFormError', message: error?.message ?? 'Instance was not saved' })
+      this.postInstanceFormError(error?.message ?? 'Instance was not saved')
       return
     }
-    this.postToWebview({ type: 'instanceFormSaved' })
+    const saved: PanelInstanceFormSavedMessage = { type: PANEL_MESSAGE_TYPES.instanceFormSaved }
+    this.postToWebview(saved)
   }
 
   private startTimer(): void {
     this.stopTimer()
-    this.timer = setInterval(() => void this.refresh(), PANEL_REFRESH_INTERVAL_MS)
+    this.timer = setInterval(() => void this.requestRefresh(), PANEL_REFRESH_INTERVAL_MS)
   }
 
   private stopTimer(): void {
@@ -358,15 +402,32 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     }
   }
 
-  async refresh(): Promise<void> {
-    if (!this.view) {
+  /**
+   * Ask for a dashboard refresh. Concurrent requests are serialized and merged
+   * by {@link createRefreshScheduler}: the panel timer and every webview command
+   * land here, so a slow probe cannot multiply into overlapping refreshes.
+   */
+  requestRefresh(): Promise<void> {
+    return this.refresher.request()
+  }
+
+  /**
+   * Build and post one dashboard snapshot.
+   *
+   * Never rejects: a failure has to become a payload the panel can render, and
+   * the scheduler has to remain usable for the next tick.
+   */
+  private async refreshOnce(): Promise<void> {
+    const view = this.view
+    if (!view) {
       dbg('refresh skipped (no view)')
       return
     }
     try {
+      const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
       const manager = getInstanceManager()
       if (!manager) {
-        await this.view.webview.postMessage({ type: 'update', status: emptyStatus(), instances: [], activeId: '', issues: [], activity: [], browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')), pricing: pricingWindowAt(new Date()) })
+        await view.webview.postMessage(buildPanelUpdate({ status: emptyStatus(), browser, pricing: pricingWindowAt(new Date()) }))
         return
       }
       const dashboard = await manager.dashboard()
@@ -375,10 +436,12 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
       const showDs = home ? hasDeepSeekModel(home) : hasDeepSeekModel()
       const dsStatus = showDs ? await getDsStatus() : undefined
       const balance = showDs ? getDshBalance(home) : undefined
-      const browser = normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
-      await this.view.webview.postMessage({
-        type: 'update',
-        ...dashboard,
+      const update = buildPanelUpdate({
+        status: dashboard.status,
+        instances: dashboard.instances,
+        active: dashboard.active,
+        activeId: dashboard.activeId,
+        issues: dashboard.issues,
         activity,
         browser,
         dsStatus,
@@ -386,29 +449,59 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         showDs,
         pricing: pricingWindowAt(new Date()),
       })
+      this.lastUpdate = update
+      await view.webview.postMessage(update)
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
       console.error('[dsh-launcher-panel] refresh failed:', error)
-      // Keep the known instances and settings issues on screen: sending
-      // `instances: []` turned any refresh failure into "No instances" while the
-      // manager still had them, so creating one then reported "already used".
-      const manager = getInstanceManager()
-      const issues = manager?.issues() ?? []
       try {
-        await this.view.webview.postMessage({
-          type: 'update',
-          status: emptyStatus(),
-          instances: manager?.instanceStatuses() ?? [],
-          activeId: manager?.activeInstanceId() ?? '',
-          issues: [...issues, { index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${msg}` }],
-          activity: getActivity().concat([{ id: -1, text: `✗ Status refresh failed: ${msg}`, busy: false }]),
-          browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')),
-          balance: undefined,
-          pricing: pricingWindowAt(new Date()),
-        })
+        await this.postRefreshFailure(view, errorMessage(error))
       } catch {
-        // Webview is gone; nothing more to do.
+        // The fallback itself failed (webview gone); the scheduler must stay
+        // usable for the next tick, so swallow it here.
       }
+    }
+  }
+
+  /**
+   * Post the last good snapshot plus the failure, instead of a fresh empty one.
+   *
+   * Resetting to `emptyStatus()` claimed the server was stopped (and dropped
+   * `active`/`showDs`/`dsStatus`, which disabled Start and showed "+ New" while
+   * instances still existed). Reusing the last snapshot keeps the panel honest:
+   * the status block is marked `unknown` and rendered as such.
+   */
+  private async postRefreshFailure(view: vscode.WebviewView, reason: string): Promise<void> {
+    const manager = getInstanceManager()
+    const previous = this.lastUpdate
+    const issues = manager?.issues() ?? []
+    const status: PanelStatus = previous
+      ? { ...previous.status, unknown: true, running: false, starting: false, installing: false, stopping: false, checking: false, updating: false, url: '' }
+      : { ...emptyStatus(), unknown: true }
+    // Prefer whatever the manager can still answer (it may hold fresher state
+    // than the last snapshot); fall back to the snapshot when it cannot — a
+    // failed bootstrap returns empty lists and would blank the instance view.
+    const freshInstances = manager?.instanceStatuses() ?? []
+    const instances = freshInstances.length > 0 ? freshInstances : (previous?.instances ?? [])
+    const activeId = manager?.activeInstanceId() || previous?.activeId || ''
+    const active = manager ? (manager.statusOf(activeId) ?? previous?.active) : previous?.active
+    const home = active?.home
+    const fallback = buildPanelUpdate({
+      status,
+      instances,
+      active,
+      activeId,
+      issues: [...issues, { index: -1, field: 'entry', severity: 'error', message: `Status refresh failed: ${reason}` }],
+      activity: getActivity().concat([{ id: -1, text: `✗ Status refresh failed: ${reason}`, busy: false }]),
+      browser: normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser')),
+      dsStatus: previous?.dsStatus,
+      balance: previous?.balance,
+      showDs: previous?.showDs ?? (home ? hasDeepSeekModel(home) : false),
+      pricing: pricingWindowAt(new Date()),
+    })
+    try {
+      await view.webview.postMessage(fallback)
+    } catch {
+      // Webview is gone; nothing more to do.
     }
   }
 }

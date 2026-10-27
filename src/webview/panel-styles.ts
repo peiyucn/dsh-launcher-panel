@@ -87,9 +87,6 @@ export const PANEL_CSS = `
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lap-danger); flex: none; }
   .dot.running { background: var(--lap-success); box-shadow: 0 0 0 3px var(--lap-success-bg); }
   .dot.stopped { background: var(--lap-fg2); opacity: .5; box-shadow: none; }
-  /* The tab strip already carries the instance's status dot. The card's copy
-     would be the same state twice in one view, so the card keeps only text. */
-  .status > #dot { display: none; }
   /* dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
      几何 / 时长 / 减动效兜底逐字照 StateDot.module.css —— 整圈 1.5s 匀速旋转，arc 的
      stroke-dasharray 同步呼吸（两者同相）；--spinner-size 决定渲染尺寸，默认取官方

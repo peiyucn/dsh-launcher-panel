@@ -48,7 +48,7 @@ function keyframesBody(css: string, name: string): string {
   assert.fail(`@keyframes ${name} 的花括号不配对`)
 }
 
-const script = panelScript({ peakWindows: '[]', defaultBrowser: 'internal' })
+const script = panelScript({ peakWindows: '[]', defaultBrowser: 'built-in' })
 const body = panelBody({ version: '0.0.0-test' })
 
 test('面板指示器与官方 StateDot 同形：圆弧 spinner，不再是点阵', () => {

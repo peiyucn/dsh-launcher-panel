@@ -48,8 +48,22 @@ const DS_STATUS_CACHE_TTL_MS = 60 * 1000
 const FETCH_TIMEOUT_MS = 8_000
 const BALANCE_FETCH_TIMEOUT_MS = 10_000
 
+/**
+ * How long a "DeepSeek is configured" answer is reused. The panel asks on every
+ * refresh (every 4s while visible); without this the answer cost up to four
+ * synchronous file reads per tick. Configuration changes are picked up within
+ * the TTL, which is well below the time it takes a user to click Balance.
+ */
+const HAS_DEEPSEEK_MODEL_CACHE_TTL_MS = 30_000
+
+/** Cap for the per-home "is DeepSeek configured" cache (one entry per instance). */
+const HAS_DEEPSEEK_MODEL_CACHE_MAX = 32
+
 let dsStatusCache: { status: DsStatus; at: number } | undefined
+/** Coalesces concurrent cold-cache status fetches into one request. */
+let dsStatusInFlight: Promise<DsStatus> | undefined
 const balanceCache = new Map<string, { balance: DshBalance | null; error?: string; at: number }>()
+const hasDeepSeekModelCache = new Map<string, { value: boolean; at: number }>()
 
 async function fetchJson(url: string, timeoutMs: number, headers: Record<string, string> = {}): Promise<unknown> {
   const controller = new AbortController()
@@ -66,9 +80,18 @@ async function fetchJson(url: string, timeoutMs: number, headers: Record<string,
 export async function getDsStatus(): Promise<DsStatus> {
   const now = Date.now()
   if (dsStatusCache && now - dsStatusCache.at < DS_STATUS_CACHE_TTL_MS) return dsStatusCache.status
-  const result = await fetchDsStatus()
-  dsStatusCache = { status: result, at: now }
-  return result
+  // The refresh timer and a webview command can both ask while the cache is
+  // cold (a status fetch takes up to 2×8s); without this gate each would start
+  // its own request and the later answer would overwrite the earlier one.
+  if (dsStatusInFlight) return dsStatusInFlight
+  const attempt = fetchDsStatus().then((result) => {
+    dsStatusCache = { status: result, at: Date.now() }
+    return result
+  })
+  dsStatusInFlight = attempt.finally(() => {
+    dsStatusInFlight = undefined
+  })
+  return dsStatusInFlight
 }
 
 async function fetchDsStatus(): Promise<DsStatus> {
@@ -240,11 +263,35 @@ export function readDefaultModel(home = resolveDshHome()): { provider: string; m
  * Whether DeepSeek is configured: the default Agent model uses a DeepSeek
  * provider/model, or a DeepSeek API key is present. The panel shows the
  * DeepSeek API status card only when this is true.
+ *
+ * Cached per resolved home for {@link HAS_DEEPSEEK_MODEL_CACHE_TTL_MS}: the panel
+ * refreshes on a timer and this predicate does several synchronous file reads.
  */
 export function hasDeepSeekModel(home = resolveDshHome()): boolean {
-  if (readCredential('DEEPSEEK_API_KEY', home)) return true
-  const sel = readDefaultModel(home)
-  return sel !== undefined && /deepseek/i.test(`${sel.provider} ${sel.model}`)
+  const key = path.resolve(home)
+  const now = Date.now()
+  const cached = hasDeepSeekModelCache.get(key)
+  if (cached && now - cached.at < HAS_DEEPSEEK_MODEL_CACHE_TTL_MS) return cached.value
+  let value = !!readCredential('DEEPSEEK_API_KEY', home)
+  if (!value) {
+    const selection = readDefaultModel(home)
+    value = selection !== undefined && /deepseek/i.test(`${selection.provider} ${selection.model}`)
+  }
+  // One entry per home is bounded by the instance count, but enforce a cap so a
+  // pathological settings list cannot grow the cache without limit.
+  if (hasDeepSeekModelCache.size >= HAS_DEEPSEEK_MODEL_CACHE_MAX) hasDeepSeekModelCache.clear()
+  hasDeepSeekModelCache.set(key, { value, at: now })
+  return value
+}
+
+/**
+ * Test hook: drop the module-level caches so a test starts from a cold state
+ * (the TTLs are minutes long and would otherwise leak between tests).
+ */
+export function resetDsCachesForTest(): void {
+  dsStatusCache = undefined
+  dsStatusInFlight = undefined
+  hasDeepSeekModelCache.clear()
 }
 
 /** Query the DeepSeek account balance using the key configured in one DSH home. */

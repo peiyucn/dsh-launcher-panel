@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { dsComponentLabel, parseDsStatus, readCredentialFromFile, readDefaultModel } from '../src/ds.ts'
+import { dsComponentLabel, getDsStatus, hasDeepSeekModel, parseDsStatus, readCredentialFromFile, readDefaultModel, resetDsCachesForTest } from '../src/ds.ts'
 
 function withTempFile(content: string, fn: (file: string) => unknown): unknown {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-test-'))
@@ -195,5 +195,100 @@ test('readDefaultModel returns undefined when the section is absent', () => {
     rmSync(dir, { recursive: true, force: true })
     if (prev === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = prev
+  }
+})
+
+/**
+ * Run one test against a scratch DSH home with the environment made
+ * deterministic: a real `DEEPSEEK_API_KEY` in the test runner's environment
+ * would otherwise win over the home files (the credential lookup checks the
+ * environment first) and make these assertions meaningless.
+ */
+function withDsHome(fn: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-home-'))
+  const prevHome = process.env.DSH_HOME
+  const prevKey = process.env.DEEPSEEK_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  process.env.DSH_HOME = dir
+  try {
+    resetDsCachesForTest()
+    fn(dir)
+  } finally {
+    resetDsCachesForTest()
+    rmSync(dir, { recursive: true, force: true })
+    if (prevHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prevHome
+    if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY
+    else process.env.DEEPSEEK_API_KEY = prevKey
+  }
+}
+
+test('hasDeepSeekModel caches the per-home answer until the cache is dropped', () => {
+  withDsHome((dir) => {
+    assert.equal(hasDeepSeekModel(dir), false)
+    writeFileSync(join(dir, '.credentials.yaml'), 'DEEPSEEK_API_KEY: sk-test\n')
+    // The panel asks on every 4s refresh; reusing the answer is the point.
+    assert.equal(hasDeepSeekModel(dir), false, 'the answer must be reused inside the TTL window')
+    resetDsCachesForTest()
+    assert.equal(hasDeepSeekModel(dir), true, 'a cold read sees the new credential')
+  })
+})
+
+test('hasDeepSeekModel also accepts a DeepSeek default Agent model', () => {
+  withDsHome((dir) => {
+    assert.equal(hasDeepSeekModel(dir), false)
+    writeFileSync(join(dir, 'settings.yaml'), 'agent-default-model:\n  provider: deepseek\n  model: deepseek-chat\n')
+    resetDsCachesForTest()
+    assert.equal(hasDeepSeekModel(dir), true)
+  })
+})
+
+test('getDsStatus coalesces concurrent cold-cache fetches', async () => {
+  resetDsCachesForTest()
+  const originalFetch = globalThis.fetch
+  const releases: Array<() => void> = []
+  let calls = 0
+  globalThis.fetch = (async () => {
+    calls += 1
+    await new Promise<void>((resolve) => releases.push(resolve))
+    return { ok: true, json: async () => ({ data: { page: { components: [] }, active_changes: [] } }) }
+  }) as unknown as typeof fetch
+  try {
+    const first = getDsStatus()
+    const second = getDsStatus()
+    await Promise.resolve()
+    assert.equal(calls, 1, 'the second call must join the in-flight request')
+    releases.shift()?.()
+    const [a, b] = await Promise.all([first, second])
+    assert.equal(a.state, 'ok')
+    assert.deepEqual(a, b)
+    // A cached answer must not trigger another fetch.
+    await getDsStatus()
+    assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+    resetDsCachesForTest()
+  }
+})
+
+test('getDsStatus falls back to unknown when every host fails', async () => {
+  resetDsCachesForTest()
+  const originalFetch = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => {
+    calls += 1
+    throw new Error('offline')
+  }) as unknown as typeof fetch
+  try {
+    const status = await getDsStatus()
+    assert.equal(status.state, 'unknown')
+    assert.equal(calls, 2, 'both status hosts are tried')
+    // The fallback is cached like any other answer, so a dead network does not
+    // turn every refresh tick into two more requests.
+    await getDsStatus()
+    assert.equal(calls, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+    resetDsCachesForTest()
   }
 })

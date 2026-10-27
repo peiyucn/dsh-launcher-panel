@@ -26,6 +26,16 @@ export interface MenuStatus {
 const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'settings-gear', action: 'settings' }
 
 /**
+ * The instance name as the menu should show it: trimmed, with whitespace-only
+ * names treated as "no name". Both the action labels and the summary header go
+ * through this helper so one of them cannot end up with a stray separator that
+ * the other drops.
+ */
+function instanceLabel(instanceName?: string): string {
+  return instanceName?.trim() ?? ''
+}
+
+/**
  * Contextual quick-pick menu for the status bar DSH Launcher Panel item:
  * clicking the item opens this menu (matching the behaviour of other status bar
  * entries) instead of starting the server directly.
@@ -34,7 +44,7 @@ export function buildStatusMenuItems(
   status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
   instanceName?: string,
 ): StatusMenuItem[] {
-  const name = instanceName && instanceName.trim() !== '' ? instanceName.trim() : ''
+  const name = instanceLabel(instanceName)
   const openLabel = name ? `Open ${name} Web UI` : 'Open Web UI'
   const stopLabel = name ? `Stop ${name} Web UI` : 'Stop DSH Web UI'
   const startLabel = name ? `Start ${name} & Open Web UI` : 'Start & Open Web UI'
@@ -81,7 +91,8 @@ function stateWord(status: MenuStatus): string {
  * only shown while the server is up — otherwise it would read like a claim.
  */
 export function buildStatusMenuSummary(status: MenuStatus, instanceName?: string): string {
-  const parts = instanceName ? [instanceName] : []
+  const name = instanceLabel(instanceName)
+  const parts = name ? [name] : []
   parts.push(stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode')
   parts.push(status.dshVersion ? `dsh v${status.dshVersion}` : 'dsh version unknown')
   // displayUrl() always yields "http://127.0.0.1:<port>"; the scheme is noise in

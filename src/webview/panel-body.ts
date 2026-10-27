@@ -3,11 +3,30 @@
  *
  * Extracted verbatim from the webview template. One value is substituted: the
  * extension version shown in the footer. Element ids here are the contract with
- * {@link panelScript}, so the two belong together even though they are separate
- * files.
+ * the client script (`panel-script.ts`) — `test/panel-contract.test.ts` checks
+ * that every id the script looks up exists here.
  *
  * @module webview/panel-body
  */
+
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+
+/**
+ * Escape one HTML text/attribute value.
+ *
+ * The client script has its own `esc` for runtime values; this module cannot
+ * share it (the script must stay a self-contained string), so the footer value
+ * is escaped here.
+ */
+function esc(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
+}
 
 export interface PanelBodyValues {
   /** Extension version shown in the footer line. */
@@ -45,14 +64,13 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
     <div class="instance-issues" id="instanceIssues"></div>
     <div class="status">
-      <span class="dot" id="dot"></span>
       <div class="status-text">
         <span class="status-main" id="statusText">Checking…</span>
         <span class="status-sub" id="statusSub"></span>
       </div>
       <div class="status-actions">
         <span class="status-sep" aria-hidden="true"></span>
-        <button class="icon-btn" id="editInstanceBtn" title="Edit this instance's name, home, profile and browser settings" aria-label="Edit instance">✎</button>
+        <button class="icon-btn" id="editInstanceBtn" title="Edit this instance's name, home, auto-open and browser settings" aria-label="Edit instance">✎</button>
         <button class="icon-btn" id="deleteInstanceBtn" title="Remove this instance from the launcher; DSH data is kept" aria-label="Delete instance">🗑</button>
       </div>
     </div>
@@ -123,7 +141,7 @@ export function panelBody(values: PanelBodyValues): string {
       <button class="icon-btn" id="settingsBtn" title="Open the global extension settings">⚙ Global Settings</button>
       <div class="lap-select">
         <button type="button" class="lap-select-trigger" id="browserSelectBtn" aria-haspopup="listbox" aria-expanded="false" title="Browser">
-          <span class="lap-select-label" id="browserSelectLabel">Built-in</span>
+          <span id="browserSelectLabel">Built-in</span>
           <svg class="lap-select-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="lap-select-menu" id="browserSelectMenu" role="listbox" hidden>
@@ -137,7 +155,7 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="version-spacer"></span>
       <span class="plugin-version" id="nodeVersionFooter">node —</span>
       <span class="plugin-version">·</span>
-      <span class="plugin-version" id="pluginVersion">dsh-launcher-panel v${values.version}</span>
+      <span class="plugin-version" id="pluginVersion">dsh-launcher-panel v${esc(values.version)}</span>
     </div>
   </section>
   <div class="instance-modal" id="instanceModal" hidden>

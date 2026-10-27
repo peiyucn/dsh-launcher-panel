@@ -75,3 +75,31 @@ test('status menu summary follows the in-flight states and the source mode', () 
 test('status menu summary says when the dsh version is unknown', () => {
   assert.equal(buildStatusMenuSummary({ ...summaryBase, dshVersion: '' }), 'Stopped · pkg mode · dsh version unknown')
 })
+
+test('instance names are trimmed the same way in the menu and the summary', () => {
+  const items = buildStatusMenuItems({ ...base, running: true }, '  Work  ')
+  assert.equal(items[0].label, 'Open Work Web UI')
+  assert.equal(
+    buildStatusMenuSummary({ ...summaryBase, running: true }, '  Work  '),
+    'Work · Running · pkg mode · dsh v0.1.2-alpha.1 · 127.0.0.1:3080',
+  )
+})
+
+test('whitespace-only instance names leave no empty segment in either place', () => {
+  // Regression: the summary used to keep the raw string, so a blank name showed
+  // a leading " · " that the menu labels had already dropped.
+  for (const name of ['   ', '\t\n']) {
+    assert.equal(buildStatusMenuSummary(summaryBase, name), 'Stopped · pkg mode · dsh v0.1.2-alpha.1')
+    const items = buildStatusMenuItems(base, name)
+    assert.equal(items[0].label, 'Start & Open Web UI')
+    assert.equal(items[1].label, 'Open Dashboard')
+  }
+})
+
+test('stopping and updating still offer only the dashboard', () => {
+  const both = { ...base, stopping: true, updating: true }
+  assert.deepEqual(actions(both), ['dashboard', 'settings'])
+  // The summary reports the in-flight state; no action depends on which word
+  // wins, so the documented priority (updating before stopping) is pinned here.
+  assert.equal(buildStatusMenuSummary({ ...summaryBase, stopping: true, updating: true }), 'Updating · pkg mode · dsh v0.1.2-alpha.1')
+})

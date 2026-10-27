@@ -2,10 +2,12 @@
  * Dashboard client script (runs inside the webview).
  *
  * Extracted verbatim from the webview template. It is a *function* rather than
- * a constant because three values must be substituted at render time:
+ * a constant because two values are substituted at render time:
  *
- * - `peakWindows` — the configured peak windows, from {@link PEAK_WINDOWS_BJ_HOURS}
- * - `defaultBrowser` — the fallback browser mode, from {@link DEFAULT_BROWSER}
+ * - `peakWindows` — the peak windows, serialized from `PEAK_WINDOWS_BJ_HOURS`
+ *   (`pricing.ts`)
+ * - `defaultBrowser` — the fallback browser mode from `DEFAULT_BROWSER`
+ *   (`env.ts`), JSON-serialized by this function before injection
  *
  * Keeping them as parameters makes each substitution site explicit; the rest of
  * the script is untouched text. The script is a plain string that the host
@@ -16,20 +18,28 @@
  */
 
 export interface PanelScriptValues {
-  /** Peak windows as Beijing hours, serialized into the script. */
+  /** Peak windows as Beijing hours, already serialized into a JS literal. */
   peakWindows: string
-  /** Default browser mode, used when none is reported. */
+  /**
+   * Default browser mode, used when none is reported. Injected through
+   * `JSON.stringify` (not string concatenation) so a value with quotes cannot
+   * break out of the generated JS string literal.
+   */
   defaultBrowser: string
 }
 
 export function panelScript(values: PanelScriptValues): string {
+  // JSON.stringify keeps the value inside its JS string literal; escaping `<`
+  // additionally keeps a value containing "</script>" from closing the host's
+  // inline <script> element (JSON.parse still yields the original character).
+  const defaultBrowserLiteral = JSON.stringify(values.defaultBrowser).replace(/</g, '\\u003c')
   return `    const vscode = acquireVsCodeApi()
     vscode.postMessage({ command: 'ready' })
     const LOADING_TIMEOUT_MS = 6000
     const ELAPSED_INTERVAL_MS = 1000
     // dsh 官方 ongoing 指示器（ui-primitives StateDot 的 ongoing 分支）：SVG 圆弧 spinner。
     // 几何 / 时长 / 减动效兜底逐字照 StateDot.module.css（1.5s 匀速旋转 + arc 的
-    // stroke-dasharray 呼吸，两者同相），上色用面板自己的 --lap-ongoing；class 与
+    // stroke-dasharray 呼吸，两者同相），上色用面板自己的 --lap-fg2；class 与
     // keyframes 在 panel-styles.ts。
     // ⚠️ 这里以前画的是官方的「点阵」（更老的 StateDot matrix 分支），官方早在
     // 4937343a5e 就换成了圆弧 spinner，本次跟进 —— 面板与两个插件面板同时统一。
@@ -42,6 +52,10 @@ export function panelScript(values: PanelScriptValues): string {
     let gotUpdate = false
     let instanceList = []
     let currentInstanceId = ''
+    // Last rendered activity: text drives auto-scroll, HTML avoids repainting an
+    // unchanged 200-line log on every refresh tick.
+    let lastActivityText = ''
+    let lastLogHtml = ''
     let formMode = 'new'
     let formId = ''
     let formHomePrefix = ''
@@ -87,7 +101,6 @@ export function panelScript(values: PanelScriptValues): string {
       if (starting || installing || stopping || updating) {
         const justStarted = startElapsed()
         if (justStarted) statusSub.textContent = 'Waited 0s'
-        setStatusDot('working')
         statusText.textContent = stopping
           ? 'Stopping…'
           : (updating ? 'Updating dsh…' : (installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'))
@@ -95,10 +108,18 @@ export function panelScript(values: PanelScriptValues): string {
           ? 'Stopping…'
           : (updating ? 'Updating…' : (installing ? 'Installing…' : 'Starting…'))
         startBtn.disabled = true
+      } else if (status.unknown) {
+        // The host could not build a fresh snapshot and is reusing the last
+        // good one. Saying "Stopped" here would lie about a server that may be
+        // running; say what is actually known.
+        stopElapsed()
+        startBtn.disabled = false
+        startBtn.textContent = '▶ Start'
+        statusText.textContent = 'Status unknown'
+        statusSub.textContent = 'Status refresh failed — retrying…'
       } else {
         stopElapsed()
         startBtn.disabled = false
-        setStatusDot(running ? 'running' : 'stopped')
         statusText.textContent = running ? 'Running' : 'Stopped'
         statusSub.textContent = running ? (status.url || '') : ''
         startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
@@ -355,6 +376,12 @@ export function panelScript(values: PanelScriptValues): string {
     // keep in step. A year without a calendar has no holiday override, so a
     // peak-window weekday is simply Peak.
     const PEAK_WINDOWS_BJ = ${values.peakWindows}
+    // Serialized with JSON.stringify, never interpolated as a bare quoted
+    // literal: the value ends up inside a nonce-guarded script element, so a
+    // string containing a quote must not be able to terminate the literal and
+    // inject code (see the webview audit's S2). The '<' character is escaped
+    // so the value cannot close the surrounding script element either.
+    const DEFAULT_BROWSER = ${defaultBrowserLiteral}
     function renderPricing(pricing) {
       const el = document.getElementById('dsPricing')
       el.textContent = pricing === 'peak' ? 'Peak' : 'Off-peak'
@@ -426,7 +453,7 @@ export function panelScript(values: PanelScriptValues): string {
     const browserSelectMenu = document.getElementById('browserSelectMenu')
     const browserSelectLabel = document.getElementById('browserSelectLabel')
     function setBrowserUI(value) {
-      const v = value === 'external' ? 'external' : '${values.defaultBrowser}'
+      const v = value === 'external' ? 'external' : DEFAULT_BROWSER
       browserSelectLabel.textContent = v === 'external' ? 'External' : 'Built-in'
       browserSelectMenu.querySelectorAll('.lap-select-option').forEach((o) => {
         o.setAttribute('aria-selected', String(o.dataset.value === v))
@@ -518,17 +545,6 @@ export function panelScript(values: PanelScriptValues): string {
     function stopElapsed() {
       if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = undefined }
     }
-    // 状态圆点三种形态：working = dsh 点阵（启动/安装/停止中），running = 绿色实心，
-    // 其余 = 红色实心。点阵只在切换时重建一次，不随每次状态刷新写 DOM。
-    const STATUS_DOT_CLASSES = { working: 'dot matrix', running: 'dot running', stopped: 'dot' }
-    function setStatusDot(state) {
-      const dot = document.getElementById('dot')
-      dot.className = STATUS_DOT_CLASSES[state] || STATUS_DOT_CLASSES.stopped
-      const on = state === 'working'
-      if (on === (dot.dataset.matrix === '1')) return
-      dot.dataset.matrix = on ? '1' : ''
-      dot.innerHTML = on ? SPINNER_SVG : ''
-    }
     function startElapsed() {
       if (elapsedTimer) return false
       since = Date.now()
@@ -549,22 +565,27 @@ export function panelScript(values: PanelScriptValues): string {
         return
       }
       if (m.type === 'instanceFormSaved') { closeInstanceForm(); return }
-      if (m.type !== 'update') return
+      if (m.type !== 'update') {
+        // Surface protocol drift in the (hidden) webview console instead of
+        // dropping the message without a trace.
+        console.debug('[dsh] ignored unknown panel message type: ' + String(m.type))
+        return
+      }
       gotUpdate = true
       document.getElementById('loadingOverlay').classList.add('hidden')
       if (refreshingBalance) {
         refreshingBalance = false
         document.getElementById('balanceBtn').disabled = false
       }
-      setBrowserUI(m.browser || '${values.defaultBrowser}')
+      setBrowserUI(m.browser || DEFAULT_BROWSER)
       instanceList = Array.isArray(m.instances) ? m.instances : []
       currentInstanceId = typeof m.activeId === 'string' ? m.activeId : ''
       const log = document.getElementById('log')
       const entries = Array.isArray(m.activity) ? m.activity : []
       const newline = String.fromCharCode(10)
       const text = entries.map((e) => e.text).join(newline)
-      const hasNew = log.dataset.activity !== text
-      log.dataset.activity = text
+      const hasNew = lastActivityText !== text
+      lastActivityText = text
       let logHtml = entries.map((e) => {
         const txt = esc(e.text)
         if (!e.busy) return txt
@@ -573,8 +594,15 @@ export function panelScript(values: PanelScriptValues): string {
         if (close === -1) return txt
         return txt.slice(0, close + 2) + SPINNER_SVG + txt.slice(close + 3)
       }).join(newline)
-      log.innerHTML = logHtml || '(no activity yet)'
-      if (hasNew) log.scrollTop = log.scrollHeight
+      logHtml = logHtml || '(no activity yet)'
+      // Compare the rendered HTML, not just the text: a busy flag can flip while
+      // the text stays identical. Only re-parse when something actually changed
+      // (the log is repainted on every 4s update otherwise).
+      if (logHtml !== lastLogHtml) {
+        lastLogHtml = logHtml
+        log.innerHTML = logHtml
+        if (hasNew) log.scrollTop = log.scrollHeight
+      }
       const dsCard = document.getElementById('dsCard')
       if (dsCard) dsCard.style.display = m.showDs === false ? 'none' : ''
       renderRunning(m.status)
