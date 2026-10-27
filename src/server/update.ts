@@ -14,16 +14,23 @@
  * can take minutes on a checkout that is far behind, and a decision made before
  * it is not evidence about the world after it.
  *
+ * A failed update always says so: the setup steps report their own failure and
+ * every terminal branch here adds a one-line outcome, so the panel never stops
+ * at "Updating…" (the bug a start-only failure gate used to cause).
+ *
  * @module server/update
  */
 
-import { dshVersionAtLeast } from '../versions.ts'
-import { newestReleaseTag } from '../versions.ts'
-import { decideSourceUpdate, type UpdateCheckOutcome } from '../versions.ts'
+import {
+  decideSourceUpdate,
+  dshVersionAtLeast,
+  newestReleaseTag,
+  type UpdateCheckOutcome,
+} from '../versions.ts'
 import { GIT_FETCH_TIMEOUT_MS } from '../timing.ts'
 import { runFile } from '../proc.ts'
 import type { NpmChannel } from '../env.ts'
-import { commitIsContained, explainGitFailure, listReleaseTags } from './release-tags.ts'
+import { commitIsContained, explainGitFailure, listReleaseTags, releaseVersion } from './release-tags.ts'
 import { ensureDshInstalled, ensurePnpmAvailable, latestDshVersion, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 import type { InstallHost } from './install.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './checkout.ts'
@@ -56,6 +63,37 @@ export interface UpdateHost {
   /** The install/checkout hosts the update reuses for its own steps. */
   installHost: InstallHost
   checkoutHost: CheckoutHost
+}
+
+/** The newest official release on origin: the tag, its bare version, its commit. */
+interface SourceRelease {
+  tag: string
+  version: string
+  commit: string
+}
+
+/**
+ * Resolve the newest official release tag on origin, or the reason listing it
+ * failed. Shared by the check and the update so both answer "what is newest?"
+ * the same way and report the same failure text.
+ */
+async function resolveSourceTarget(checkout: string): Promise<{ release: SourceRelease } | { error: string }> {
+  const listed = await listReleaseTags(checkout)
+  if ('error' in listed) return { error: listed.error }
+  const newest = newestReleaseTag(listed.tags)
+  if (newest === undefined) return { error: 'origin lists no official dsh release tag' }
+  return {
+    release: { tag: newest.tag, version: releaseVersion(newest.tag), commit: newest.commit },
+  }
+}
+
+/**
+ * Explain a containment probe that could not answer. A dead git proxy is the
+ * usual cause and has its own one-line diagnosis (see `explainGitFailure`).
+ */
+async function explainContainmentFailure(checkout: string): Promise<string> {
+  const cause = await explainGitFailure(checkout)
+  return cause ?? 'git could not compare the newest release tag with the checkout'
 }
 
 /**
@@ -93,15 +131,17 @@ export async function checkDshUpdateStatus(host: UpdateHost): Promise<DshUpdate>
   // Compare by *commit*, not by fetching: the listing already carries the sha
   // the tag resolves to, so containment is a purely local question (is that
   // commit in HEAD?) that needs no network beyond the one listing.
-  const listed = await listReleaseTags(checkout)
-  if ('error' in listed) {
-    return { hasUpdate: false, label: '', failed: true, failedReason: listed.error }
+  const resolved = await resolveSourceTarget(checkout)
+  if ('error' in resolved) {
+    return { hasUpdate: false, label: '', failed: true, failedReason: resolved.error }
   }
-  const newest = newestReleaseTag(listed.tags)
-  // Contained means the checkout sits on that tag or is already past it (e.g.
-  // master after the tag) — updating would move the checkout backwards.
-  const contained = newest !== undefined && await commitIsContained(checkout, newest.commit)
-  return decideSourceUpdate(newest, contained)
+  const containment = await commitIsContained(checkout, resolved.release.commit)
+  if (containment === 'probe-failed') {
+    // An unanswered question is not "not contained": reporting an update here
+    // could move the checkout backwards on a git timeout.
+    return { hasUpdate: false, label: '', failed: true, failedReason: await explainContainmentFailure(checkout) }
+  }
+  return decideSourceUpdate({ tag: resolved.release.tag, commit: resolved.release.commit }, containment === 'contained')
 }
 
 /** The in-flight update state, owned by this module. */
@@ -140,7 +180,10 @@ async function runDshUpdateInner(host: UpdateHost): Promise<void> {
   const cfg = host.readConfig()
   if (cfg.runMode === 'pnpm') {
     const pnpm = await ensurePnpmAvailable(host.installHost)
-    if (!pnpm) return
+    if (!pnpm) {
+      host.addActivity('↑ Update failed — pnpm is not available (see the messages above)')
+      return
+    }
     const latest = await latestDshVersion(cfg.npmChannel, host.dbg, pnpm.command)
     if ('error' in latest) {
       host.addActivity(latest.pnpmUnusable
@@ -154,32 +197,33 @@ async function runDshUpdateInner(host: UpdateHost): Promise<void> {
     }
     host.addActivity(`↑ Updating dsh to v${latest.version}…`)
     if (!mayProceed(host)) return
-    if (await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg), host.installHost)) {
-      host.addActivity('↑ dsh updated')
-      host.invalidateUpdateCache()
+    if (!(await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg), host.installHost))) {
+      host.addActivity('↑ Update failed — dsh was not updated (see the terminal output above)')
+      return
     }
+    host.addActivity(`↑ dsh updated to v${latest.version}`)
+    host.invalidateUpdateCache()
     return
   }
   const checkout = host.findSourceCheckout()
   if (!checkout) {
-    host.addActivity('↑ No source checkout configured')
+    host.addActivity('↑ Update failed — no source checkout is configured')
     return
   }
   // Source updates pin the newest official release tag (never upstream master
   // and never the npm channel — that only governs pkg installs).
-  const listed = await listReleaseTags(checkout)
-  if ('error' in listed) {
-    host.addActivity(`↑ Update check failed (network) — ${listed.error}`)
+  const resolved = await resolveSourceTarget(checkout)
+  if ('error' in resolved) {
+    host.addActivity(`↑ Update failed — ${resolved.error}`)
     return
   }
-  const newest = newestReleaseTag(listed.tags)
-  if (newest === undefined) {
-    host.addActivity('↑ Update check failed — origin lists no official dsh release tag')
+  const { tag, version, commit } = resolved.release
+  const containment = await commitIsContained(checkout, commit)
+  if (containment === 'probe-failed') {
+    host.addActivity(`↑ Update failed — ${await explainContainmentFailure(checkout)}`)
     return
   }
-  const tag = newest.tag
-  const version = tag.slice('dsh-v'.length)
-  if (await commitIsContained(checkout, newest.commit)) {
+  if (containment === 'contained') {
     host.addActivity('↑ dsh is already up to date')
     return
   }
@@ -203,12 +247,16 @@ async function runDshUpdateInner(host: UpdateHost): Promise<void> {
   host.addActivity(`↑ Updating dsh to v${version}…`)
   const ok = await host.runInTerminal('Update DeepSeek Harness', 'git', ['-C', checkout, 'checkout', '--detach', tag])
   if (!ok) {
-    host.addActivity('↑ dsh update failed')
+    host.addActivity(`↑ Update failed — git checkout ${tag} did not finish (see the terminal output above)`)
     return
   }
-  // A different tag usually carries a different lockfile: refresh the
-  // checkout's setup so the next start runs the released tree.
-  const ready = await ensureCheckoutReady(checkout, host.checkoutHost)
-  host.addActivity(ready ? '↑ dsh updated' : '↑ dsh updated — the checkout setup still needs to finish before the next start')
+  // The tag switch succeeded: the next start runs the released tree. A different
+  // tag usually carries a different lockfile, so refresh the checkout's setup now
+  // and tell the two outcomes apart instead of claiming success either way.
+  if (await ensureCheckoutReady(checkout, host.checkoutHost)) {
+    host.addActivity(`↑ dsh updated to v${version}`)
+  } else {
+    host.addActivity(`⚠ dsh is now on v${version}, but its checkout setup did not finish — run Start again to finish pnpm install + build`)
+  }
   host.invalidateUpdateCache()
 }

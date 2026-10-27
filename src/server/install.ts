@@ -8,9 +8,9 @@
  * `source` side by side under the launcher's base dir.
  *
  * Anything that touches the running server's state (the version shown in the
- * panel, the "starting" phase, the terminal a setup runs in) is passed in as a
- * dependency rather than reached for, so this module stays testable and the
- * lifecycle stays in server.ts.
+ * panel, the "installing" phase, the terminal a setup runs in) is passed in as a
+ * dependency rather than reached for, so this module keeps no lifecycle state of
+ * its own and the caller stays its only owner.
  *
  * @module server/install
  */
@@ -23,13 +23,14 @@ import { npmSpecForChannel, type NpmChannel } from '../env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../timing.ts'
 import { resolveCommandEntry, runResolved } from '../proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from '../pnpm.ts'
+import { reportStepFailure } from './terminal.ts'
 
 /**
  * What the install layer needs from the lifecycle it runs inside.
  *
  * Passing these in keeps the direction of dependency one-way: the install code
- * never imports server.ts, so server.ts stays the only module that owns the
- * server's state.
+ * never imports the lifecycle owner, so the caller stays the only module that
+ * owns the server's state.
  */
 export interface InstallHost {
   /** Report progress/failure into the panel feed; returns the entry id. */
@@ -48,8 +49,6 @@ export interface InstallHost {
   setDshVersion: (version: string) => void
   /** dsh availability, for the status line. */
   setDshState: (state: 'unknown' | 'ok' | 'missing') => void
-  /** Whether the start flow is still active (a Stop may have intervened). */
-  isStarting: () => boolean
   /** Diagnostic line to the log file only. */
   dbg: (line: string) => void
 }
@@ -198,16 +197,18 @@ export async function ensureDshInstalled(
     host.addActivity('✗ could not write the dsh install manifest — check write permissions')
     return false
   }
-  // The phase is already 'starting' (set at the top of ensureRunningUnlocked).
+  // A start-flow host shows the `installing` phase for the duration of this run;
+  // during an Update the wrapper is the identity function.
   host.addActivity(`▶ Installing dsh v${version} (pnpm install)…`)
   const args = ['install', '--dir', dir]
   if (allowBuild) args.push('--dangerously-allow-all-builds')
   const ok = await host.runInstalling(() => host.runInTerminal(`Install dsh v${version}`, pnpmCmd, args))
   if (!ok || installedDshVersion(dir) !== version) {
-    if (host.isStarting()) {
-      host.addActivity('✗ dsh install failed — see the terminal output above')
-      void vscode.window.showErrorMessage('DeepSeek Harness: dsh install failed. Check the terminal output.')
-    }
+    reportStepFailure(
+      host,
+      '✗ dsh install failed — see the terminal output above',
+      'DeepSeek Harness: dsh install failed. Check the terminal output.',
+    )
     return false
   }
   return true
@@ -231,7 +232,7 @@ export async function preparePkgStart(
     // 已装即所跑：不查注册表（离线可启动）、不随通道切换重装/降级。
     // 顺手修复历史残局（失败的安装尝试可能留下 manifest 与已装版本不一致的状态）——
     // writeInstallManifest 内部已确认 manifest 归属，所以 pkgPath 指向用户项目时
-    // 不会覆盖人家的 manifest。写失败不阻断启动（spawnPkg 已禁用
+    // 不会覆盖人家的 manifest。写失败不阻断启动（启动命令已禁用
     // verify-deps-before-run，pnpm 不会自动重装）。
     if (!writeInstallManifest(installed, dir)) {
       host.dbg('install manifest not rewritten (absent ownership or write failure); continuing with the installed dsh')
@@ -298,20 +299,25 @@ export async function ensurePnpmAvailable(host: InstallHost): Promise<{ command:
   if (found) return { command: found, allowBuild: pnpmSupportsDangerouslyAllowAllBuilds(await pnpmVersion(found)) }
   host.setDshState('missing')
   host.addActivity('✗ pnpm not found — installing it now (npm install -g pnpm)')
-  // The phase is already 'starting' (set at the top of ensureRunningUnlocked).
   host.addActivity('▶ Installing pnpm (npm install -g pnpm)…')
   const ok = await host.runInstalling(() => host.runInTerminal('Install pnpm', 'npm', ['install', '-g', 'pnpm']))
   if (!ok) {
-    if (host.isStarting()) {
-      host.addActivity('✗ pnpm install failed — run `npm install -g pnpm` in a terminal, then try again')
-      void vscode.window.showErrorMessage('DeepSeek Harness: pnpm install failed. Run "npm install -g pnpm" in a terminal, then try again.')
-    }
+    reportStepFailure(
+      host,
+      '✗ pnpm install failed — run `npm install -g pnpm` in a terminal, then try again',
+      'DeepSeek Harness: pnpm install failed. Run "npm install -g pnpm" in a terminal, then try again.',
+    )
     return undefined
   }
-  const after = await findPnpm()
+  // Refresh the session cache: the just-installed shim must not be hidden by the
+  // "pnpm was not found" answer cached before the install.
+  const after = await findPnpm(true)
   if (!after) {
-    host.addActivity('✗ pnpm installed but not on PATH — restart VS Code, then try again')
-    void vscode.window.showErrorMessage('DeepSeek Harness: pnpm was installed but is not on PATH yet. Restart VS Code, then try again.')
+    reportStepFailure(
+      host,
+      '✗ pnpm installed but not on PATH — restart VS Code, then try again',
+      'DeepSeek Harness: pnpm was installed but is not on PATH yet. Restart VS Code, then try again.',
+    )
     return undefined
   }
   host.setDshState('unknown')
@@ -371,12 +377,13 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
   host.addActivity(`▶ Cloning deepseek-harness → ${chosen}`)
   const ok = await host.runInstalling(() => host.runInTerminal('Clone deepseek-harness', 'git', ['clone', 'https://github.com/deepseek-ai/deepseek-harness.git', chosen]))
   if (!ok || !isDshCheckout(chosen)) {
-    // Suppress the failure report when Stop interrupted the clone: the user
-    // asked for it, so the terminal error is noise, not news.
-    if (host.isStarting()) {
-      host.addActivity('✗ clone failed — see the terminal output above')
-      void vscode.window.showErrorMessage('DeepSeek Harness: could not clone deepseek-harness. Check your network and git, then try again.')
-    }
+    // Report the failure even when a Stop interrupted the clone: the start flow
+    // will not continue, and the user needs to know why nothing happened.
+    reportStepFailure(
+      host,
+      '✗ clone failed — see the terminal output above',
+      'DeepSeek Harness: could not clone deepseek-harness. Check your network and git, then try again.',
+    )
     return undefined
   }
   host.addActivity('✓ deepseek-harness cloned')

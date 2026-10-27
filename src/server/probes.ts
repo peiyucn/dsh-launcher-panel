@@ -49,13 +49,33 @@ export function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TI
   })
 }
 
+/**
+ * Release a probe response's body.
+ *
+ * undici keeps a connection out of its pool until the body is consumed or
+ * cancelled; these probes only read the status, and they run every few hundred
+ * milliseconds while a server starts, so leaving the body open would pile up
+ * sockets. Best effort: a body that is already closed is fine.
+ */
+async function drainBody(res: Response): Promise<void> {
+  try {
+    await res.body?.cancel()
+  } catch {
+    // Body already disturbed or closed: nothing left to release.
+  }
+}
+
 /** Whether a GET against `url` answers 2xx (resolves without throwing). */
 export async function httpOk(url: string, timeoutMs = HTTP_PROBE_TIMEOUT_MS): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: controller.signal })
-    return res.ok
+    try {
+      return res.ok
+    } finally {
+      await drainBody(res)
+    }
   } catch {
     return false
   } finally {
@@ -75,7 +95,11 @@ export async function tokenAccepted(url: string, timeoutMs = HTTP_PROBE_TIMEOUT_
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: controller.signal, redirect: 'manual' })
-    return res.status === 303 || res.ok
+    try {
+      return res.status === 303 || res.ok
+    } finally {
+      await drainBody(res)
+    }
   } catch {
     return false
   } finally {

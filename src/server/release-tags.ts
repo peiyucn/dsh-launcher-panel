@@ -17,6 +17,46 @@ import { parseLocalProxySettings } from '../git.ts'
 import { parseRemoteReleaseTags, type RemoteReleaseTag } from '../versions.ts'
 import { isPortOpen } from './probes.ts'
 
+/** Prefix every official dsh release tag carries (`dsh-v0.1.7-alpha.1`). */
+export const RELEASE_TAG_PREFIX = 'dsh-v'
+
+/**
+ * Whether the release commit is already contained in the checkout's HEAD.
+ *
+ * `probe-failed` is deliberately distinct from `not-contained`: a git command
+ * that never ran to completion (spawn failure, timeout, kill) answers nothing,
+ * and treating that as "not contained" would offer an update that may move the
+ * checkout backwards. The update check reports `probe-failed` as a failed check.
+ */
+export type CommitContainment = 'contained' | 'not-contained' | 'probe-failed'
+
+/**
+ * Classify one `git merge-base --is-ancestor <commit> HEAD` result.
+ *
+ * - exit 0 — the commit is an ancestor of HEAD (or HEAD itself): contained.
+ * - exit 1 — documented as "not an ancestor": not contained.
+ * - exit 128 — the object is unknown locally because the tag was never
+ *   fetched; fetching it is exactly what an update does, so this stays
+ *   "not contained".
+ * - no exit code — spawn failure/timeout/kill, i.e. the command never ran to
+ *   completion: `probe-failed`.
+ *
+ * Pure, so the mapping is testable without a repository.
+ */
+export function classifyContainment(result: { ok: boolean; code?: number }): CommitContainment {
+  if (result.ok) return 'contained'
+  if (result.code === 1 || result.code === 128) return 'not-contained'
+  return 'probe-failed'
+}
+
+/**
+ * The bare version of an official release tag (`dsh-v0.1.2-rc.1` → `0.1.2-rc.1`).
+ * Only the official prefix is stripped; an unrecognized tag is returned as-is.
+ */
+export function releaseVersion(tagName: string): string {
+  return tagName.startsWith(RELEASE_TAG_PREFIX) ? tagName.slice(RELEASE_TAG_PREFIX.length) : tagName
+}
+
 /**
  * A git command failed. When git is configured to use a local proxy whose port
  * nothing is listening on (a VPN/proxy app that was switched off), every
@@ -59,11 +99,11 @@ export async function listReleaseTags(checkout: string): Promise<{ tags: RemoteR
   return { tags: parseRemoteReleaseTags(r.stdout) }
 }
 
-/** Whether `commit` is already contained in the checkout's HEAD (on it, or past it). */
-export async function commitIsContained(checkout: string, commit: string): Promise<boolean> {
-  // `--is-ancestor` exits 0 for an ancestor *or* the commit itself, and 1 for a
-  // commit HEAD does not contain. An unknown object exits 128 — treated as "not
-  // contained", which is the same answer the user needs: update available.
+/**
+ * Whether `commit` is already contained in the checkout's HEAD (on it, or past
+ * it). See {@link classifyContainment} for why this is three-valued.
+ */
+export async function commitIsContained(checkout: string, commit: string): Promise<CommitContainment> {
   const r = await runFile('git', ['-C', checkout, 'merge-base', '--is-ancestor', commit, 'HEAD'], GIT_OP_TIMEOUT_MS)
-  return r.ok
+  return classifyContainment(r)
 }

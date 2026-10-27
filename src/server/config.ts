@@ -14,6 +14,7 @@
  */
 
 import * as vscode from 'vscode'
+import { dbg } from './activity.ts'
 import {
   DEFAULT_INSTANCE_PORT_BASE,
   DEFAULT_PORT,
@@ -61,8 +62,8 @@ export function readConfig(): DshConfig {
   // Read the persisted settings every time: dsh.runMode is the single source
   // of truth, so both the panel toggle and the Settings UI stay in sync.
   const c = vscode.workspace.getConfiguration('dsh')
-  // Clamp the port to the valid TCP range; an out-of-range value from Settings
-  // Sync or manual edits would otherwise make every probe throw.
+  // Validate the port instead of trusting it: an out-of-range value from
+  // Settings Sync or manual edits would otherwise make every probe throw.
   const port = c.get<number>('port') ?? DEFAULT_PORT
   const portBase = c.get<number>('instancePortBase') ?? DEFAULT_INSTANCE_PORT_BASE
   // 旧键名（dsh.mode / dsh.channel / dsh.path）兜底读取：migrateLegacyDshConfig
@@ -97,8 +98,15 @@ export async function migrateLegacyDshConfig(): Promise<void> {
     if (c.get(newKey) !== undefined) continue
     const legacy = c.get(oldKey)
     if (legacy === undefined) continue
-    await c.update(newKey, legacy, vscode.ConfigurationTarget.Global)
-    await c.update(oldKey, undefined, vscode.ConfigurationTarget.Global)
+    try {
+      await c.update(newKey, legacy, vscode.ConfigurationTarget.Global)
+      await c.update(oldKey, undefined, vscode.ConfigurationTarget.Global)
+    } catch (error) {
+      // Migration runs at activation with no caller able to handle a rejection:
+      // a profile whose settings cannot be written must not abort activation.
+      // readConfig still falls back to the legacy key for this session.
+      dbg(`legacy dsh setting "${oldKey}" not migrated: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 }
 

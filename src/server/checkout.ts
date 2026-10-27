@@ -24,6 +24,7 @@ import {
 } from '../paths.ts'
 import { GIT_OP_TIMEOUT_MS } from '../timing.ts'
 import { runFile } from '../proc.ts'
+import { reportStepFailure } from './terminal.ts'
 
 // The two filesystem predicates (checkoutReady / checkoutDepsStale) live in
 // paths.ts: they are pure stat checks with no VS Code dependency, so keeping
@@ -38,8 +39,6 @@ export interface CheckoutHost {
   runInTerminal: (title: string, command: string, args: string[], env?: Record<string, string>) => Promise<boolean>
   /** Wrap a step so the panel shows the `installing` phase for its duration. */
   runInstalling: <T>(task: () => Promise<T>) => Promise<T>
-  /** Whether the start flow is still active (a Stop may have intervened). */
-  isStarting: () => boolean
 }
 
 /**
@@ -100,15 +99,16 @@ export async function ensureCheckoutReady(checkout: string, host: CheckoutHost, 
       host.addActivity('ℹ Fresh clone — running the one-time setup (pnpm install + build) automatically')
     }
     if (!depsReady) {
-      // The phase is already 'starting' (set at the top of ensureRunningUnlocked),
-      // so setup needs no extra flag handling — the panel spinner is driven by it.
+      // A start-flow host shows the `installing` phase for the duration of this
+      // run; during an Update the wrapper is the identity function.
       host.addActivity(`▶ Setup: pnpm --dir "${checkout}" install`)
       const installOk = await host.runInstalling(() => host.runInTerminal('Setup deepseek-harness (pnpm install)', 'pnpm', ['--dir', checkout, 'install', '--frozen-lockfile']))
       if (!installOk) {
-        if (host.isStarting()) {
-          host.addActivity('✗ pnpm install failed')
-          void vscode.window.showErrorMessage('DeepSeek Harness: pnpm install failed. Check the terminal output.')
-        }
+        reportStepFailure(
+          host,
+          '✗ pnpm install failed',
+          'DeepSeek Harness: pnpm install failed. Check the terminal output.',
+        )
         return false
       }
     }
@@ -145,10 +145,11 @@ export async function ensureCheckoutReady(checkout: string, host: CheckoutHost, 
       { [DSH_BUILD_PROFILE_SELECTOR]: DSH_BUILD_PROFILE_OFFICIAL },
     ))
     if (!buildOk) {
-      if (host.isStarting()) {
-        host.addActivity('✗ pnpm run build failed')
-        void vscode.window.showErrorMessage('DeepSeek Harness: pnpm run build failed. Check the terminal output.')
-      }
+      reportStepFailure(
+        host,
+        '✗ pnpm run build failed',
+        'DeepSeek Harness: pnpm run build failed. Check the terminal output.',
+      )
       return false
     }
   }

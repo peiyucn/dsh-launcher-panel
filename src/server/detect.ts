@@ -87,6 +87,8 @@ export async function detectDsh(cfg: DetectConfig, host: DetectHost): Promise<Ds
       ? { state: 'unknown', path: chosen }
       : { state: 'unknown', path: '' }
   }
+  // `findPnpm` is session-cached (pnpm.ts): this path runs on every status
+  // refresh, and probing an external `where pnpm` every few seconds is wasteful.
   if (!(await findPnpm())) return { state: 'missing', path: '' }
   const dir = pkgInstallDir(cfg)
   // 'ok' once installed; show the path as soon as it exists (install started).

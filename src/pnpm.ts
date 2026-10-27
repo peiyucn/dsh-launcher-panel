@@ -69,8 +69,24 @@ export function pickPnpmFromPath(matches: readonly string[], platform: NodeJS.Pl
  *
  * The returned value is always something `resolveCommand`/`spawn` can run — a
  * full path, never a bare name (see `pickPnpmFromPath` for why that matters).
+ *
+ * The answer is cached for the session: resolving it spawns `where`/`which`,
+ * and the status refresh asks again every few seconds. Pass `refresh` after
+ * installing pnpm so the new shim is picked up without a window reload.
+ *
+ * @param refresh - drop the cached answer and probe again.
  */
-export async function findPnpm(): Promise<string | undefined> {
+export function findPnpm(refresh = false): Promise<string | undefined> {
+  if (refresh) pnpmResolution = undefined
+  pnpmResolution ??= probePnpm()
+  return pnpmResolution
+}
+
+/** Session cache for {@link findPnpm}; a resolved `undefined` means "not found". */
+let pnpmResolution: Promise<string | undefined> | undefined
+
+/** One PATH/shim probe (the body of {@link findPnpm} before caching). */
+async function probePnpm(): Promise<string | undefined> {
   const picked = pickPnpmFromPath(await findOnPath('pnpm'))
   if (picked !== undefined) return picked
   if (process.platform !== 'win32') return undefined
