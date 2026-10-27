@@ -271,8 +271,8 @@ export async function preparePkgStart(
     installDir = chosen
   }
   host.addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
-  // The panel shows the version that is about to run (buildWebArgs also reads
-  // this to decide --no-open).
+  // The panel shows the version that is about to run (the start-args helper also
+  // reads this to decide --no-open).
   host.setDshVersion(version)
   if (!(await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir, host))) return undefined
   return version

@@ -1,20 +1,20 @@
 /**
- * The launcher's two output sinks: the panel activity feed and the log files.
+ * The launcher's activity feed and its console log file.
  *
- * There are two files and they are deliberately distinct. `client.log` records
- * launcher activity; `server.log` holds dsh's own stdout/stderr — the server
- * redirects its output into that file and holds it open, so keeping them
- * separate is what stops the launcher's writes from being lost to a lock.
+ * `client.log` records launcher activity (start/stop, installs, diagnostics).
+ * Server output is a per-instance concern — each `InstanceRuntime` keeps its own
+ * `server.log` and mirrors only the startup output into the panel, so this
+ * module never touches a server log.
  *
  * The activity feed is bounded ({@link ACTIVITY_MAX_LINES}) because it lives for
- * the whole extension session while a busy server can emit lines continuously.
+ * the whole extension session while a busy launcher can emit lines continuously.
  *
  * @module server/activity
  */
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ACTIVITY_MAX_LINES, LOG_RELOAD_LINES, MODULE_PROGRESS_EVERY } from '../timing.ts'
+import { ACTIVITY_MAX_LINES, LOG_RELOAD_LINES } from '../timing.ts'
 
 /** One line in the panel activity feed; `busy` marks an in-progress operation. */
 export interface ActivityEntry {
@@ -26,43 +26,17 @@ export interface ActivityEntry {
 const activity: ActivityEntry[] = []
 let activitySeq = 0
 
-/** The launcher activity log (`client.log`) and the server output log. */
+/** The launcher activity log (`client.log`). */
 let consolePath = ''
-let logPath = ''
-
-/** Server output lines captured for the current run (0 = the child died silently). */
-let serverOutputLines = 0
-/** Module-load lines seen so far, for the periodic progress note. */
-let moduleLoadCount = 0
-
-/** Reset the per-run output counters. Called when a server is spawned. */
-export function resetRunCounters(): void {
-  moduleLoadCount = 0
-  serverOutputLines = 0
-}
-
-/** Server output lines captured for the current run. */
-export function outputLineCount(): number {
-  return serverOutputLines
-}
 
 /** The launcher activity log path (empty before the first start). */
 export function activityLogFile(): string {
   return consolePath
 }
 
-/** The server output log path (empty before the first start). */
-export function serverLogFile(): string {
-  return logPath
-}
-
-/** Point both sinks at the log folder and replay the tail into the feed. */
+/** Point the log sink at the log folder and replay the tail into the feed. */
 export function setLogPath(value: string): void {
-  // Both logs live in one folder (client.log = launcher activity, server.log
-  // = server output). The server redirects to the latter (holding it open),
-  // so keeping them distinct avoids the launcher's writes being lost to locks.
   consolePath = value
-  logPath = path.join(path.dirname(value), 'server.log')
   try {
     if (fs.existsSync(consolePath)) {
       const lines = fs.readFileSync(consolePath, 'utf8').split(/\r?\n/).filter((l) => l.length > 0)
@@ -93,7 +67,7 @@ export function dbg(line: string): void {
 }
 
 /** Append one entry to the feed without touching the log file. */
-export function pushActivity(entry: string, isBusy = false): number {
+function pushActivity(entry: string, isBusy = false): number {
   const id = ++activitySeq
   activity.push({ id, text: entry, busy: isBusy })
   if (activity.length > ACTIVITY_MAX_LINES) activity.splice(0, activity.length - ACTIVITY_MAX_LINES)
@@ -106,27 +80,6 @@ export function addActivity(line: string, isBusy = false): number {
   const id = pushActivity(entry, isBusy)
   appendLog(entry)
   return id
-}
-
-/** Append one server-output line to the activity feed only (already in the log file). */
-export function displayLine(line: string): void {
-  const trimmed = line.trimEnd()
-  if (!trimmed) return
-  // Both output paths funnel through here — the piped spawn and the
-  // hidden-console tail that reads the server log — so this counts every line
-  // the run produced (0 = the child died without printing anything).
-  serverOutputLines++
-  // NODE_DEBUG=module is extremely verbose; keep individual lines out of the
-  // console feed (they stay in the server log file), but surface a periodic
-  // count so a slow source startup still shows progress.
-  if (/^MODULE\s/.test(trimmed)) {
-    moduleLoadCount++
-    if (moduleLoadCount % MODULE_PROGRESS_EVERY === 0) {
-      pushActivity(`[${new Date().toLocaleTimeString()}] ℹ Loading modules… (${moduleLoadCount})`)
-    }
-    return
-  }
-  pushActivity(`[${new Date().toLocaleTimeString()}] ${trimmed}`)
 }
 
 /** The panel activity feed (Start/Stop command dynamics), newest last. */
@@ -159,27 +112,16 @@ export async function withBusy<T>(label: string, task: () => Promise<T>): Promis
   }
 }
 
-/**
- * Clear the console log: the in-memory feed and the persisted files.
- *
- * A locked server log is reported into the feed rather than thrown: the running
- * server holds that file open, so a Clear during a run cannot succeed and the
- * user needs to know why.
- */
+/** Clear the in-memory feed and the persisted console log (best effort). */
 export function clearConsole(): void {
   activity.length = 0
-  for (const file of [consolePath, logPath]) {
-    if (!file) continue
-    try {
-      fs.mkdirSync(path.dirname(file), { recursive: true })
-      fs.writeFileSync(file, '')
-    } catch {
-      // Only a real lock (EBUSY/EPERM from the running server) is worth
-      // telling the user about; a missing folder is handled by the mkdir above.
-      if (file === logPath) {
-        pushActivity('⚠ Server log is locked by the running server — Stop first, then Clear')
-      }
-    }
+  if (!consolePath) return
+  try {
+    fs.mkdirSync(path.dirname(consolePath), { recursive: true })
+    fs.writeFileSync(consolePath, '')
+  } catch {
+    // A failure here only means the log file keeps the old lines; the feed is
+    // already cleared and the next append recreates the file.
   }
 }
 
@@ -190,51 +132,5 @@ export function fileSizeSafe(p: string): number {
     return fs.statSync(p).size
   } catch {
     return 0
-  }
-}
-
-/** Truncate the server log so each run starts clean (best effort). */
-export function truncateServerLog(): void {
-  if (!logPath) return
-  try {
-    fs.writeFileSync(logPath, '')
-  } catch {
-    // Best effort: a just-stopped server may still hold the file open.
-  }
-}
-
-/**
- * Read the newest web access token out of the server log.
- *
- * The log is the single output sink on every platform, so it is also where dsh
- * ≥ 0.1.2-alpha.1's startup URL lands.
- *
- * @param extract - pulls a token out of one log line (kept as a parameter so
- *   this module does not own the token's shape).
- * @returns the token, or undefined when the log does not carry one yet.
- */
-export function scanLogForToken(extract: (line: string) => string | undefined): string | undefined {
-  try {
-    const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/)
-    // Newest line first: with dsh.clearServerLogOnStart off, the log may hold
-    // several runs, and the current run's token is the most recent one.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const token = extract(lines[i])
-      if (token) return token
-    }
-  } catch {
-    // log not written yet
-  }
-  return undefined
-}
-
-/** Ensure the log folder exists, reporting failure through the caller's message. */
-export function ensureLogDir(): { ok: true } | { ok: false; dir: string } {
-  const dir = path.dirname(logPath)
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    return { ok: true }
-  } catch {
-    return { ok: false, dir }
   }
 }

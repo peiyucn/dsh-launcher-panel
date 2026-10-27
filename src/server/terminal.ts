@@ -21,25 +21,11 @@ export interface TerminalHost {
   addActivity: (line: string, isBusy?: boolean) => number
 }
 
-/** The in-flight setup/update terminal task, so Stop can terminate it. */
-let activeTerminalTask: vscode.TaskExecution | undefined
-
-/** Terminate the in-flight task, if any (a Stop is interrupting setup). */
-export function terminateActiveTask(): void {
-  void activeTerminalTask?.terminate()
-}
-
-/** Forget the tracked task (it ended on its own). */
-function clearActiveTask(execution: vscode.TaskExecution): void {
-  if (activeTerminalTask === execution) activeTerminalTask = undefined
-}
-
 /**
  * Run a command in a visible VS Code terminal.
  *
  * `env` entries are merged into the terminal process environment, which is how
- * the source-mode build requests dsh's official client profile. The in-flight
- * execution is tracked so Stop can terminate it mid-setup.
+ * the source-mode build requests dsh's official client profile.
  *
  * @returns true when the command exited 0.
  */
@@ -61,13 +47,11 @@ export async function runInTerminal(
     const disposable = vscode.tasks.onDidEndTaskProcess((event) => {
       if (execution !== undefined && event.execution === execution) {
         disposable.dispose()
-        clearActiveTask(execution)
         resolve(event.exitCode === 0)
       }
     })
     void vscode.tasks.executeTask(task).then((ex) => {
       execution = ex
-      activeTerminalTask = ex
     }, () => {
       disposable.dispose()
       host.addActivity(`✗ could not run "${title}" in a terminal`)

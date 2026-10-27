@@ -13,22 +13,13 @@ import {
   openUrl,
 } from './actions.ts'
 import { DEFAULT_BROWSER, NONCE_LENGTH, normalizeBrowser } from './env.ts'
+import { fetchDshBalance, getDshBalance, getDsStatus, hasDeepSeekModel } from './ds.ts'
 import { getInstanceManager } from './instance-manager.ts'
 import { PEAK_WINDOWS_BJ_HOURS, pricingWindowAt } from './pricing.ts'
 import { describeDshUpdate } from './versions.ts'
 import { PANEL_REFRESH_INTERVAL_MS } from './timing.ts'
-import {
-  addActivity,
-  applyMode,
-  clearConsole,
-  dbg,
-  fetchDshBalance,
-  getActivity,
-  getDshBalance,
-  getDsStatus,
-  hasDeepSeekModel,
-  withBusy,
-} from './server.ts'
+import { addActivity, clearConsole, dbg, getActivity, withBusy } from './server/activity.ts'
+import { writeRunMode } from './server/config.ts'
 import { PANEL_CSS } from './webview/panel-styles.ts'
 import { panelBody } from './webview/panel-body.ts'
 import { panelScript } from './webview/panel-script.ts'
@@ -191,7 +182,7 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
             void vscode.window.showWarningMessage('Stop all DSH instances before switching run mode.')
             break
           }
-          await applyMode(message.value)
+          await writeRunMode(message.value)
           manager?.invalidateDetection()
           await manager?.refresh()
         }

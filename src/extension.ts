@@ -13,7 +13,8 @@ import { DshPanelProvider } from './panel.ts'
 import { getInstanceManager, InstanceManager, setInstanceManager } from './instance-manager.ts'
 import { dshBaseDir } from './paths.ts'
 import { STATUS_BAR_REFRESH_INTERVAL_MS } from './timing.ts'
-import { dbg, migrateLegacyDshConfig, setLogPath, stopLogTail } from './server.ts'
+import { dbg, setLogPath } from './server/activity.ts'
+import { migrateLegacyDshConfig } from './server/config.ts'
 import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './statusMenu.ts'
 
 const STATUS_SPIN_INTERVAL_MS = 150
@@ -189,5 +190,4 @@ export function deactivate(): void {
   // DSH Launcher Panel: Stop command. Log pumps belong to this host and stop with
   // it; each server keeps writing its own log file regardless.
   getInstanceManager()?.dispose()
-  stopLogTail()
 }

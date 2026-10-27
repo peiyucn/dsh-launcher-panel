@@ -1,5 +1,3 @@
-import type { ServerStatus } from './server.ts'
-
 export type StatusMenuAction = 'start' | 'stop' | 'open' | 'dashboard' | 'settings'
 
 export interface StatusMenuItem {
@@ -10,14 +8,20 @@ export interface StatusMenuItem {
 }
 
 /**
- * What the status-bar menu may read to summarize the current run. A Pick, not
- * the whole ServerStatus, so the menu cannot start depending on state it has no
- * business reading.
+ * What the status-bar menu may read to summarize the current run. A narrow
+ * interface, not the whole dashboard status, so the menu cannot start depending
+ * on state it has no business reading.
  */
-export type MenuStatus = Pick<
-  ServerStatus,
-  'running' | 'starting' | 'installing' | 'stopping' | 'updating' | 'dshVersion' | 'mode' | 'url'
->
+export interface MenuStatus {
+  running: boolean
+  starting: boolean
+  installing: boolean
+  stopping: boolean
+  updating: boolean
+  dshVersion: string
+  mode: 'pnpm' | 'source'
+  url: string
+}
 
 const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'settings-gear', action: 'settings' }
 
@@ -27,7 +31,7 @@ const OPEN_SETTINGS: StatusMenuItem = { label: 'Open Global Settings', icon: 'se
  * entries) instead of starting the server directly.
  */
 export function buildStatusMenuItems(
-  status: Pick<ServerStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
+  status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
   instanceName?: string,
 ): StatusMenuItem[] {
   const name = instanceName && instanceName.trim() !== '' ? instanceName.trim() : ''
