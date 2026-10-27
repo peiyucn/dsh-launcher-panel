@@ -10,6 +10,7 @@ import {
   nextPort,
   normalizeHome,
   normalizeInstances,
+  resolveActiveId,
   resolveInitialInstances,
   sameHome,
   validateInstance,
@@ -185,6 +186,15 @@ test('sameHome and isNestedHome compare normalized directories', () => {
   assert.equal(isNestedHome(homeDir, path.join(homeDir, 'child')), true)
   assert.equal(isNestedHome(homeDir, homeDir), false)
   assert.equal(isNestedHome(homeDir, path.join(homeDir, '..', 'other')), false)
+})
+
+test('resolveActiveId keeps this window choice, then the persisted seed, then the first instance', () => {
+  const one = instance({ id: 'one' })
+  const two = instance({ id: 'two', name: 'Two', port: 3081 })
+  assert.equal(resolveActiveId([one, two], 'two', 'one'), 'two', 'a live window keeps its own active instance')
+  assert.equal(resolveActiveId([one, two], 'removed', 'one'), 'one', 'a removed active id falls back to the persisted seed')
+  assert.equal(resolveActiveId([one, two], 'removed', 'also-removed'), 'one', 'then to the first instance')
+  assert.equal(resolveActiveId([], 'x', 'y'), '', 'an empty list has no active instance')
 })
 
 test('resolveInitialInstances synthesizes the legacy Default on a first run', () => {

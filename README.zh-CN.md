@@ -52,7 +52,7 @@
 | dsh.clearServerLogOnStart | true | 每次启动前清空该实例的服务端日志，使其只含本次运行内容。 |
 | dsh.sourceDebug | false | source 模式打印模块加载进度（`NODE_DEBUG=module`）。输出很多：console 只显示周期性计数，完整明细在服务端日志。 |
 | dsh.instances | `[]` | 实例列表：`{ id, name, home, profile, port, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。机器本地，不同步。 |
-| dsh.activeInstance | 空 | 当前活动实例 id；空则回退到第一个实例。机器本地，不同步。 |
+| dsh.activeInstance | 空 | 新开窗口的初始活动实例；窗口打开期间各自保持自己的活动实例，其他窗口切换不会影响本窗口；空则回退到第一个实例。机器本地，不同步。 |
 | dsh.instanceBrand | true | 在 Web UI 的 DeepSeek Harness 官方 wordmark 下方显示实例名。launcher 会在每个 profile 维护一个很小的本地 client bundle，文字跟随 DSH 当前语言；不需要手动安装插件。机器本地，不同步。 |
 
 ## 说明

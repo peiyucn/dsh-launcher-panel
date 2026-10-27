@@ -310,7 +310,7 @@
           "type": "string",
           "scope": "machine",
           "default": "",
-          "description": "Id of the active instance; empty falls back to the first instance."
+          "description": "Initial active instance for a newly opened window (each window keeps its own active instance while open). Empty falls back to the first instance."
         },
         "dsh.instanceBrand": {
           "order": 15,

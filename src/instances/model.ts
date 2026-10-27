@@ -401,3 +401,16 @@ export function validateInstance(
 export function instanceHome(instance: DshInstance, options: InstanceModelOptions): string {
   return instance.home === '' ? path.resolve(options.defaultHome) : path.resolve(instance.home)
 }
+
+/**
+ * Pick the active instance for this window: the current one if it still exists,
+ * else the persisted setting (seed for a new window), else the first instance.
+ * The persisted value is shared by every window on the machine, so it must never
+ * override a live window's own choice.
+ */
+export function resolveActiveId(instances: readonly DshInstance[], ...candidates: (string | undefined)[]): string {
+  for (const candidate of candidates) {
+    if (candidate !== undefined && candidate !== '' && instances.some((instance) => instance.id === candidate)) return candidate
+  }
+  return instances[0]?.id ?? ''
+}

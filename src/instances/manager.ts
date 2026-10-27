@@ -5,6 +5,7 @@ import { MIN_INSTANCE_PORT_BASE } from '../shared/env.ts'
 import {
   instanceHome,
   nextPort,
+  resolveActiveId,
   sameHome,
   validateInstance,
   type DshInstance,
@@ -80,7 +81,7 @@ export class InstanceManager {
   }
 
   /** Match runtimes to settings by id: a runtime owns its child and log pump, so it must be reused. */
-  private applySettings(next: NormalizedInstances): void {
+  private applySettings(next: NormalizedInstances, keepActiveId?: string): void {
     const previous = this.runtimes
     const runtimes = new Map<string, InstanceRuntime>()
     for (const instance of next.instances) {
@@ -91,7 +92,7 @@ export class InstanceManager {
     for (const [id, runtime] of previous) {
       if (!runtimes.has(id)) runtime.dispose()
     }
-    this.settings = next
+    this.settings = { ...next, activeId: resolveActiveId(next.instances, keepActiveId, next.activeId) }
     this.runtimes = runtimes
   }
 
@@ -323,7 +324,9 @@ export class InstanceManager {
 
   async reloadSettings(): Promise<void> {
     await this.ready().catch(() => undefined)
-    this.applySettings(readInstanceSettings())
+    // Keep this window's active instance: the settings file is shared by every
+    // window on the machine, so another window's choice must not switch our tab.
+    this.applySettings(readInstanceSettings(), this.activeId)
   }
 
   homeOf(instance: DshInstance): string {

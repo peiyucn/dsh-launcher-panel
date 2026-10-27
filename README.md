@@ -52,7 +52,7 @@ Settings → search "dsh":
 | dsh.clearServerLogOnStart | true | Clear each instance's server log at launch, so it holds only the current run. |
 | dsh.sourceDebug | false | Print module-loading progress in source mode (`NODE_DEBUG=module`). Very verbose: the console shows a periodic count, the full detail goes to the server log. |
 | dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. Machine-local, not synced. |
-| dsh.activeInstance | empty | Id of the active instance; empty falls back to the first instance. Machine-local, not synced. |
+| dsh.activeInstance | empty | Initial active instance for a newly opened window. Each window keeps its own active instance while open, so switching in another window does not change this one. Empty falls back to the first instance. Machine-local, not synced. |
 | dsh.instanceBrand | true | Show the instance name below the official DeepSeek Harness wordmark in the Web UI. The launcher maintains a tiny local client bundle per profile; the line follows the current DSH language. No manual plugin install. Machine-local, not synced. |
 
 ## Notes

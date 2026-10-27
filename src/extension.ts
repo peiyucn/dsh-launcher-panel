@@ -23,10 +23,12 @@ export function activate(context: vscode.ExtensionContext): void {
     dbg(`manager initialization failed: ${errorText(error)}`)
   })
 
-  // External settings edits reach this manager; reloading reuses running runtimes.
+  // Other windows share the user settings file, so a list change must reload.
+  // `dsh.activeInstance` is deliberately ignored: it only seeds a new window,
+  // and each window keeps its own active instance while open.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!event.affectsConfiguration('dsh.instances') && !event.affectsConfiguration('dsh.activeInstance')) return
+      if (!event.affectsConfiguration('dsh.instances')) return
       void manager.reloadSettings().catch((error) => {
         dbg(`instance settings reload failed: ${errorText(error)}`)
       })

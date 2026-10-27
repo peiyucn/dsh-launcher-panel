@@ -86,7 +86,7 @@ interface DshInstance {
 | 键 | 类型 | scope | 默认 | 说明 |
 |---|---|---|---|---|
 | `dsh.instances` | `DshInstance[]` | `machine` | `[]` | 实例列表；面板写入全局用户设置 |
-| `dsh.activeInstance` | `string` | `machine` | `''` | 活动实例 ID；空/无效时回退到第一个实例 |
+| `dsh.activeInstance` | `string` | `machine` | `''` | 新窗口的初始活动实例；窗口打开期间活动实例是每窗口内存状态，其他窗口的切换不影响本窗口；空/无效时回退到第一个实例 |
 | `dsh.instancePortBase` | `number` | `machine` | `31000` | 新实例端口根；5 位，范围 10000–65535；新实例取 base+1、base+2…… |
 | `dsh.instanceBrand` | `boolean` | `machine` | `true` | 在实例 profile 内维护 launcher 自有的 client bundle，在 Web UI wordmark 下方显示实例名；关闭时移除该 bundle（已在 0.3.0 发布，本节补充记录） |
 
@@ -314,7 +314,7 @@ node · launcher
 - **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
 - **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
 - **Settings**：页面底部，无边框、无标题；放 Global Settings、浏览器选择和 node/launcher 版本。
-- **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。
+- **同步**：tab 选择是每个窗口各自的内存状态；`dsh.activeInstance` 只作为新窗口的初始值（同机多窗口共享 user settings，不能把它当 per-window 持久化）。状态栏/快速选择/命令在本窗口切换时 tab 跟随；其他窗口切换 active 不影响本窗口。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。
 - **共享 home 警告**：在 tab 名旁显示警告标记，tooltip 说明「与 <name> 共用 DSH 数据，不能同时运行」。
 - **创建/编辑表单**：面板内 modal（`+` / Edit）；字段为名称、home、auto-open、browser，无 profile/端口字段。提交后由扩展侧校验，错误回填到 modal 内错误行；Create/Save 在提交期间禁用，失败后恢复。删除用 VS Code 原生确认弹窗（`showWarningMessage(..., { modal: true })`），文案写明「只从 launcher 移除；`<home>` 下的 DSH 数据不删除」。命令面板的 `dsh.instance.new` / `dsh.instance.edit` 走原生 InputBox 序列，不弹面板 modal。
