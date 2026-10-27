@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.4] - 2026-10-27
+
+- The panel console and its log files now follow each instance: a tab shows only that instance's launcher activity and startup output. Each instance owns `logs/instances/<id>/client.log` and `server.log`, and Clear only clears the current instance. Extension-wide events (install, update, detection, window activity) stay in the shared `logs/client.log`.
+- Each VS Code window keeps its own active instance. Switching the active instance in another window no longer changes this window's tab; `dsh.activeInstance` is only the initial value for a newly opened window.
+- Stop on an instance whose server was adopted or whose port is held by a process the launcher did not start now asks for confirmation before killing that process; previously it could kill the port owner silently.
+- Update and setup failures now show up in the activity feed and as error messages instead of being silently dropped, and a terminal step that hangs is reported after 15 minutes instead of holding the start/update lock for the rest of the session.
+- The status bar menu now lists every instance (name, port, state, home) with per-instance actions Open / Start / Restart / Stop / Make Active. New commands `dsh.instance.start`, `dsh.instance.stop` and `dsh.instance.restart`; `dsh.instance.open` accepts an instance id.
+- Unexpected exits now report the exit code and the log path, and a startup error no longer leaves the panel stuck at Starting.
+- A failed panel refresh no longer reports Stopped or disables Start: it keeps the last known instances and shows an unknown status. Refreshes are coalesced, so slow probes no longer pile up.
+- A source checkout path with a trailing separator or surrounding whitespace is now recognised on Windows.
+- The activity feed and launcher logs are bounded (line length, line count and file size), and the instance-brand bundle is written atomically and never overwrites files it does not own.
+
 ## [0.3.3] - 2026-10-26
 
 - The panel console now shows only each launch's startup output. A running dsh no longer keeps filling it with its periodic plugin log lines (model listings and similar); the complete log stays in the instance's `server.log`, linked from the panel.

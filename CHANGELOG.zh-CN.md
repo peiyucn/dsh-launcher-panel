@@ -4,6 +4,18 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.3.4] - 2026-10-27
+
+- 面板 Console 与它的日志文件改为按实例隔离：每个 tab 只显示该实例的 launcher 活动与启动输出；每个实例有自己的 `logs/instances/<id>/client.log` 与 `server.log`，Clear 只清当前实例。与实例无关的扩展级事件（安装、更新、检测、窗口活动）仍写共享的 `logs/client.log`。
+- 每个 VS Code 窗口保持自己的活动实例：在其他窗口切换活动实例不再改变本窗口的 tab；`dsh.activeInstance` 只作为新开窗口的初始值。
+- 对「接管来的服务」或「端口被 launcher 未启动的进程占用」的实例执行 Stop 时，现在会先确认再结束该进程；此前可能静默杀掉端口占用者。
+- 更新与安装失败不再被静默吞掉：会进活动流并弹出错误提示；终端步骤卡住超过 15 分钟会报告失败，不再把启动/更新锁占满整个会话。
+- 状态栏菜单列出全部实例（名称、端口、状态、home）并提供单实例动作 Open / Start / Restart / Stop / Make Active；新增 `dsh.instance.start`、`dsh.instance.stop`、`dsh.instance.restart` 命令，`dsh.instance.open` 支持实例 id。
+- 意外退出会报告退出码与日志路径；启动异常不再让面板永久停在 Starting。
+- 面板刷新失败不再谎报 Stopped 或禁用 Start：保留上次已知实例并显示未知状态；刷新已合并为单飞，慢探测不再叠加。
+- Windows 上带尾部分隔符或首尾空白的源码检出路径现在能被正确识别。
+- 活动流与 launcher 日志有界（单行长度、行数、文件大小）；实例品牌 bundle 改为原子写入，且不会覆盖不属于自己的文件。
+
 ## [0.3.3] - 2026-10-26
 
 - 面板 Console 只显示每次启动过程的输出。运行中的 dsh 不会再把它周期性的插件日志（模型列表之类）一直灌进 Console；完整日志仍在实例的 `server.log` 里，面板可点击打开。
