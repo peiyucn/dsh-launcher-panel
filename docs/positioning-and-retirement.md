@@ -4,7 +4,7 @@
 > `AGENTS.md` 只引用本文、不复述内容，避免指令文件膨胀。
 > 本文是开发文档：不进 README / CHANGELOG，也不进 VSIX。
 
-最后复查：2026-09-30（dsh `v0.2.0-rc.2`）
+最后复查：2026-10-27（dsh `v0.2.1-rc.3`，本机 source 检出 `1f81c047fc`）
 
 ## 一、定位：控制台，不是启动器
 
@@ -19,7 +19,7 @@
 「启动 DSH 并打开 Web UI」这句话的**入口价值**会被官方客户端蚕食；**控制价值**不会——因为官方客户端恰好把版本与构建权收走了：
 
 * 桌面端把整棵 dsh 树与 primary runtime 打进应用（`apps/desktop/scripts/electron-builder-config.mjs` 的 `files` / `extraResources`）
-* 端口与启动参数硬编码（`apps/desktop-host/src/index.ts:28` → `--no-open --port 19387`）
+* 端口与启动参数硬编码（`apps/desktop-host/src/index.ts:30` → `--no-open --host 127.0.0.1 --port 0`；端口 0 由系统分配）
 * 走 `electron-updater` 自动更新，并带强制更新策略（`dshMandatoryUpdatePolicy`）
 
 ## 二、为什么不做深度 IDE 集成
@@ -65,9 +65,9 @@ C 的现状基线：官方 ACP 是**明确仅面向自动化**的，决策记录
 * **A 触发** → 控制台价值消失：退役，或降级为纯个人自用、不再发布。
 * **B / C 触发** → 先判断官方是否覆盖「控制台」那一半：覆盖则退役；不覆盖则砍掉入口部分（Start / 浏览器选择），保留控制台部分。
 
-## 四、现状基线（2026-09-30 实测）
+## 四、现状基线（2026-09-30 实测；2026-10-27 复核）
 
-以下结论只代表该日状态，复现命令见第五节。
+以下结论只代表该日状态，复现命令见第五节。2026-10-27 复核时**未联网重跑** npm 包、`download.deepseek.com` feeds 与官网下载页（表中第 1、2、3、4、5、6 行），这些行保留 2026-09-30 实测值，**当前状态未验证**；本地 dsh 检出已更新到 `v0.2.1-rc.3`，本机可验证的行（仓库结构、`apps/desktop-host` 代码）已按新检出更新。
 
 | 检查 | 结果 |
 |---|---|
@@ -80,16 +80,19 @@ C 的现状基线：官方 ACP 是**明确仅面向自动化**的，决策记录
 | DSH 仓库 `packages/`、`apps/` 下带 `engines.vscode` 的包 | 无 |
 | DSH 仓库的 `@types/vscode` / `vsce` 依赖 | 无（`vscode` 仅出现在 `@vscode/ripgrep` 依赖与 `packages/host/open-in-app` 的编辑器目录） |
 
-结论：**桌面端已通过公开渠道发布**（0.2.0-rc.2 同日上线，nightly 通道有制品、stable 通道未开）。
+结论：**桌面端已通过公开渠道发布**（2026-09-30 观测：0.2.0-rc.2 同日上线，nightly 通道有制品、stable 通道未开；该行属联网实测，2026-10-27 未复核，**当前状态未验证**）。
 
 **但这不触发退役判据 A**：`apps/desktop-host/src/index.ts:22` 仍把 `installAnchor` 写死在
 `runtimeDir/node_modules/@deepseek-ai/dsh/package.json`（即应用自带的整棵 dsh 树），
-启动参数仍是 `['--no-open', '--port', '19387']`（`:30`），**没有任何"指向外部 dsh 安装 / 选择
-版本或通道"的入口**。`0.2.0-rc.2` 新增的 `apps/desktop/src/command-installation.ts` /
+启动参数现在是 `['--no-open', '--host', '127.0.0.1', '--port', '0']`（`:30`；端口 0 = 系统分配，
+相对 2026-09-30 的硬编码 `19387` 并没有引入「选端口 / 版本 / 通道」入口），**没有任何"指向外部
+dsh 安装 / 选择版本或通道"的入口**。`0.2.0-rc.2` 新增的 `apps/desktop/src/command-installation.ts` /
 `command-management.ts` 做的是另一件事：把**随包自带的**那个 launcher 以 symlink 方式装进
 PATH 并留 receipt 以便卸载 —— 它服务的是"命令行里也能用 dsh"，不是"让用户选 dsh"。
 故「官方客户端把版本与构建权收走」这一条依然成立，本扩展的控制台定位不变。
-官方亦尚无 VS Code 侧动作（判据 B / C 未触发）。
+2026-10-27 按第五节命令复核（本机 `dsh-v0.2.1-rc.3`）：判据 A 的「外部安装 / 选版本 / 选通道」入口扫描
+无命中，判据 B 的 `engines.vscode` 扫描无命中，判据 C 的 ACP 决策记录仍在，故 B / C 仍未触发；
+判据 A 的联网发布渠道状态未复核（**未验证**）。
 
 ## 五、复查方式
 

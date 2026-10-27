@@ -1,12 +1,12 @@
 # DSH 多实例管理规格
 
-> 状态：草案 v0.1 · 2026-10-24
+> 状态：**已实现**（0.3.x 起；2026-10-27 按当前 `dev` 实现复核，本文件随实现更新）· 原草案 v0.1 2026-10-24
 > 范围：`dsh-launcher-panel` 的实例管理功能。
 > 一句话：把扩展从「管理一个 DSH 服务」升级为「管理 N 个独立的 DSH 实例」；每个实例只描述 `DSH_HOME`、profile、port 等运行坐标。
 
 ## 一、背景
 
-现状是单实例模型：
+升级前（0.2.x 及以前）是单实例模型：
 
 - 一个 `dsh.port`；
 - 一个默认 `~/.dsh` home；
@@ -31,7 +31,7 @@
 ### 非目标
 
 - **不做实例用途策略。** 不提供任何用途模板，不判断两个实例是否应该隔离，不检查 profile 里的模型、provider、preset、权限或工作区。
-- **不管理 profile 内容。** 不写 `cordis.patch.yml`，不注入 API key，不复制 credentials / sessions / workspaces，不导入导出实例。
+- **不管理用户 profile 内容。** 不注入 API key，不复制 credentials / sessions / workspaces，不导入导出实例，不改写用户自己的 `cordis.patch.yml`。**例外**：`dsh.instanceBrand`（默认开启）会在实例 profile 内维护 launcher 自有的 client bundle（`<home>/profiles/<profile>/node_modules/@dsh-launcher/instance-brand/`，其中含生成的 `cordis.patch.yml`，并在 profile `package.json` 的 `dsh.profile.bundles` 里登记该 bundle；关闭时移除）。见「十三、安全与归属」。
 - **不管理 DSH 工作区。** 实例只决定启动哪个 home/profile；具体工作区仍由 DSH Web UI 选择。
 - **不管理 DSH 安装。** 仍是一份共享安装；不做每实例独立版本、独立二进制或独立更新。
 - **不删除 DSH 数据。** 删除实例只从 launcher 列表移除，不删 home、sessions、日志。
@@ -75,7 +75,7 @@ interface DshInstance {
 
 - 实例对象**不包含** model、provider、preset、API key、权限、工作区、环境变量值。
 - `dsh.runMode`（pkg/src）是**全局**运行来源，不是实例字段：所有实例共用同一份 dsh 树，切换模式前必须停止全部实例。
-- `id` 不可编辑；`name`、`home`、浏览器选项可编辑。新建实例的 `profile` 固定为 `web`（高级设置里已有的其他 profile 不被表单覆盖）。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
+- `id` 不可编辑；`name`、`home`、auto-open 与浏览器覆盖可编辑。`profile` 只在创建/迁移时写入（新建固定 `web`，迁移也固定 `web`），界面不提供编辑入口——编辑保存时保留 `dsh.instances` 中的当前值，手改 settings 写入的自定义 profile 不会被表单覆盖。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
 - `home` 的修改不移动、不复制任何数据，只改变下次启动指向。
 - 实例对象可以安全地出现在 `settings.json` 里：没有秘密。
 
@@ -88,6 +88,7 @@ interface DshInstance {
 | `dsh.instances` | `DshInstance[]` | `machine` | `[]` | 实例列表；面板写入全局用户设置 |
 | `dsh.activeInstance` | `string` | `machine` | `''` | 活动实例 ID；空/无效时回退到第一个实例 |
 | `dsh.instancePortBase` | `number` | `machine` | `31000` | 新实例端口根；5 位，范围 10000–65535；新实例取 base+1、base+2…… |
+| `dsh.instanceBrand` | `boolean` | `machine` | `true` | 在实例 profile 内维护 launcher 自有的 client bundle，在 Web UI wordmark 下方显示实例名；关闭时移除该 bundle（已在 0.3.0 发布，本节补充记录） |
 
 `dsh.instances` 的 schema 至少包含 `id`、`name`、`home`、`profile`、`port`，并允许 `autoOpenBrowser`、`browser`；`additionalProperties: false`，避免拼写错误静默进入配置。
 
@@ -117,7 +118,7 @@ interface DshInstance {
   - 首次安装时 `dsh.pkgPath` / `dsh.srcPath` 的写入失败同样只警告、不阻断 Start。
 - 如果 `dsh.instances` 已有内容，不覆盖。
 - `dsh.port` 保留在 schema 中并标注 deprecated；迁移后不再读取。
-- README / CHANGELOG 必须写明这次迁移和 `dsh.port` 的变化。
+- README / CHANGELOG 已写明这次迁移和 `dsh.port` 的变化（0.3.0）。
 
 ### 读取与校验
 
@@ -131,32 +132,36 @@ interface DshInstance {
 
 ### 表单字段
 
+两个入口，字段与校验规则一致：
+
+- **面板内 modal**：`+` / Edit 按钮打开（`panel.ts` 的 `openInstanceForm`，webview 侧 `instanceForm` 消息渲染 modal）。
+- **命令面板原生输入**：`dsh.instance.new` / `dsh.instance.edit` 走 VS Code 原生 `showInputBox` / `showQuickPick` 序列（`actions.ts`）。
+
 | 字段 | 必填 | 默认 | 说明 |
 |---|---|---|---|
-| 名称 | 是 | `Instance N` | 唯一，大小写不敏感，去首尾空白 |
-| home | 是 | `~/.dsh-<slug>` | 默认跟随名称；手动改过后不再自动跟随 |
-| 端口 | 是 | 自动分配 | 从 `dsh.instancePortBase + 1` 起找空闲端口；`Default` 保持 3080 |
-| 自动打开浏览器 | 否 | 继承全局 | 高级选项 |
-| 浏览器 | 否 | 继承全局 | `built-in` / `external`，高级选项 |
+| 名称 | 是 | 面板 `Instance <N>`（N=现有实例数+1）；命令面板 `Instance` | 唯一，大小写不敏感，去首尾空白，≤64 字符 |
+| home | 是 | `~/.dsh-<slug>` | 默认跟随名称；手动改过后不再自动跟随；可留空表示默认 home |
+| 自动打开浏览器 | 否 | 继承全局 | 覆盖 `dsh.autoOpenBrowser` |
+| 浏览器 | 否 | 继承全局 | `built-in` / `external`，覆盖 `dsh.browser` |
 
-- 第一个实例（迁移场景）默认 home 是 `~/.dsh`；新建实例默认 `~/.dsh-<slug>`（slug 由名称生成，表单里名称变化时 home 跟着变，手动改 home 后停止跟随）。
-- 表单必须有「浏览…」选择已有目录；新建不存在的 home 走文本输入。
-- profile 固定为 `web`，不在表单里显示；现有高级配置里的其他 profile 不会被表单覆盖。
-- 端口由 launcher 在创建时按 `dsh.instancePortBase` 自动分配；表单不显示端口输入框。
+- 第一个实例（迁移场景）默认 home 是 `~/.dsh`；新建实例默认 `~/.dsh-<slug>`（slug 由名称生成，面板表单里名称变化时 home 跟着变，手动改 home 后停止跟随）。
+- 表单没有「浏览…」目录选择按钮：home 用文本输入，可填不存在的路径（Start 时创建）或已有目录。
+- profile 固定为 `web`，不在表单里显示；`dsh.instances` 里手改的自定义 profile 在编辑保存时保留。
+- 端口由 launcher 在创建时按 `dsh.instancePortBase` 自动分配（`suggestPort()`：base+1、base+2……，跳过已配置与已占用端口，越过 65535 时回绕到 10000）；两个表单都不显示端口输入框。
 
 ### 创建步骤
 
-1. **前端校验**：名称、home 的基本格式；重复检查；给出内联错误。profile 固定 web，端口由 launcher 分配。
-2. **后端复验**：不信任 webview，扩展侧重新跑全部校验。
+1. **提交**：面板 modal 把字段序列化成 `saveInstanceForm` 消息交给扩展；命令面板路径直接调用 `manager.create()`。扩展侧解析/校验，错误经 modal 错误区或错误提示返回；不信任 webview。
+2. **校验**：名称唯一性（大小写不敏感）、home 合法（见「十、校验规则」）、auto-open/browser 枚举；profile 固定 `web`，端口由 launcher 分配。
 3. **准备 home**：
-   - 路径不存在：创建目录（只创建目标目录，不递归删除任何东西）。
+   - 路径不存在：`create()` 里创建目录（只创建目标目录，不递归删除任何东西）。
    - 路径存在且是文件：拒绝。
-   - 路径存在且非空、但不像 DSH home：提示「这不是空的 DSH 数据目录，继续会把 DSH 数据混进去」，要求显式确认。
+   - 路径存在且非空：直接使用，不额外确认，也不删除/覆盖其中内容（profile 内容由 DSH 自己管理）。
 4. **profile 可以先不存在**：
    - 已存在：直接使用，不重置。
-   - 不存在：创建阶段不阻塞；Start 时再让 DSH 自己初始化（shipped `web` 用首次 `dsh web --dump-config`，自定义 profile 用 `--from-default-profile web`）。不要手工复制模板。
-5. **写实例**：校验通过即写入 `dsh.instances`，并设为活动实例；home 目录可以本次创建；profile 缺失不是创建失败。
-6. **不自动启动**：创建完成即停；用户再点 Start。可以提供「Create & Start」作为后续增强，v1 不做。
+   - 不存在：创建阶段不阻塞；Start 时再让 DSH 自己初始化（shipped `web` 用 `dsh web --dump-config`，自定义 profile 用 `--profile <p> --from-default-profile web --dump-config`）。不要手工复制模板。
+5. **写实例**：校验通过即写入 `dsh.instances`，并设为活动实例；home 目录可以本次创建；profile 缺失不是创建失败。写失败则报错、不改内存（见「五、首次运行 / 旧设置迁移」）。
+6. **不自动启动**：创建完成即停；用户再点 Start。不提供「Create & Start」。
 
 ### 首次安装 / 空机器
 
@@ -184,12 +189,12 @@ interface DshInstance {
 ### 编辑
 
 - `name`：随时可改；只影响显示。
-- `home`、`profile`：只在实例停止时可改；运行中先提示停止。
-- 修改 home/profile **不移动、不复制**任何数据；表单必须显示这句警告。
-- 端口由 launcher 分配，不在编辑表单里；改 home/profile 不触发端口重编。
-- 修改 home 后重新读取 profile 列表；如果新 home 下没有该 profile，提示创建或换一个。
+- `home`：只在实例停止时可改；运行中先提示停止（`manager.update()` 对 running/starting/stopping/installing 直接拒绝）。
+- **`profile` 与端口不可在界面编辑**：面板 modal 与命令面板都只提交 name/home/auto-open/browser，保存时保留 `dsh.instances` 中的当前 `profile` 与 `port`（`panel.ts` 的 `saveInstanceForm` edit 分支取 `current.port` / `current.profile`；`actions.ts` 同理）。手改 settings 才能换 profile。
+- 修改 home **不移动、不复制**任何数据；面板表单提示「changing it does not move data」。
+- 端口由 launcher 分配，不在编辑表单里；改 home 不触发端口重编。
 - `id` 不可改。
-- 如果改成的 home 正被另一个运行中实例使用，拒绝保存或要求先停另一个。
+- 改成的 home 与另一个实例相同：保存只产生「home is shared…」警告（配置层允许共享），真正启动第二个时被 `isHomeRunning()` 拒绝并提示先停另一个；home 互相嵌套时同样只警告。
 
 ### 删除
 
@@ -222,29 +227,31 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 
 ### Start
 
-1. 校验实例：home 存在、profile 存在、port 合法且未被其他运行实例占用。
-2. 同一规范化 home 已有运行中实例：拒绝，提示先停另一个。
-3. 如 DSH 未安装：走现有全局安装流程；安装期间该实例为 `starting`/安装态，不并发安装。
-4. 用与单实例相同的命令解析启动：
+1. 端口已开：尝试接管（`adopt()`：先探 `http://127.0.0.1:<port>/`，旧版 dsh 需要 token 时从实例日志读 token 再探 token URL）；不是 DSH 的进程则报错「port … is already in use by another process」，**不杀占用者**。
+2. 同一规范化 home 已有实例在运行：拒绝，提示先停另一个。
+3. 有全局 dsh 更新在进行：拒绝并提示等待。
+4. 创建 home 目录（不存在时），再走共享安装/检测流程（`prepare()`）；dsh 缺失时该实例显示安装态，不并发安装。
+5. 确认 profile 存在；缺失时让 DSH 自己初始化（`web` 用 `dsh web --dump-config`，自定义 profile 用 `--profile <p> --from-default-profile web --dump-config`），不手工复制模板。
+6. 启动子进程：
    - 子进程环境加 `DSH_HOME=<实例 home>`；
-   - 参数带 `--port <实例 port>`；
-   - profile 按实例的 `profile` 选择（默认 `web`）；
-   - `--no-open` 逻辑、`hideConsole`、`sourceDebug` 等沿用现有实现。
-5. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`；`clearServerLogOnStart` 只清该实例的日志。
-6. 等待端口/URL；解析 token；标记 `running`；按实例的浏览器设置打开。
-7. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
-8. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。
+   - 参数为 `[<profile>, '--port', '<port>']`，dsh 版本足够新时追加 `--no-open`；
+   - pkg 模式经 `pnpm exec dsh` 启动，source 模式经 `node --import tsx/esm apps/cli/src/bin.ts` 启动；
+   - `hideConsole` → `windowsHide`；source 模式且 `sourceDebug` 时加 `NODE_DEBUG=module`。
+7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`；`clearServerLogOnStart` 只清该实例的日志。
+8. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
+9. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
+10. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。
 
 ### Stop
 
-- 优先杀 tracked child（Windows 用 `taskkill /T`，沿用现有 `killPid`）。
-- 没有 tracked child 时（例如扩展重启后接管的实例），只有在用户确认「端口被非本扩展启动的进程占用」后才按端口 owner 杀；不要静默杀掉陌生进程。
-- 轮询端口关闭；超时进入 `error`，不要假装已停止。
+- 优先杀 tracked child（Windows 用 `taskkill /T`，见 `killPid`）。
+- 没有 tracked child 时（例如扩展重启后接管的实例，或端口被陌生进程占用）：默认**不杀**（`manager.stop()` 默认 `killUntracked=false`）。`Stop` 先弹 VS Code 原生确认 modal（实例名 + 端口 + 「只在该进程是本实例的 DSH 服务器时才继续」），确认后才按端口 owner 杀。
+- 轮询端口关闭；超时进入 `error`，不要假装已停止；没停下时给出可见警告。
 - Stop 一个实例不影响其他实例。
 
 ### 意外退出
 
-- 子进程 `close` 且不是主动 Stop：标记 `stopped`（附退出码）或 `error`；清除 PID；不自动重启。
+- 子进程 `close` 且不是主动 Stop：标记 `stopped`，并记录 `error = "dsh exited unexpectedly (exit code N) — see <logPath>"`（面板错误行与活动流都能看到原因与日志路径）；清除 PID/URL；不自动重启。
 - 面板显示「已退出」和日志路径。
 
 ### 扩展重启 / 接管
@@ -254,7 +261,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
   - 端口开：标记 `running`（接管），尽量从该实例日志恢复 URL/token；
   - 端口关：`stopped`。
 - 接管实例的 Stop 走上面的「确认后杀端口 owner」路径。
-- 如果端口被其他应用占用但不是 DSH：显示 `running (external)` 或 `error`，Stop 需要明确确认。
+- 接管成功时状态标记为 `running (external)`；端口被非 DSH 进程占用时标记 `untrackedPort`（状态栏菜单显示 `port held by an untracked process`），Stop 需确认后才杀（见上）。
 
 ## 九、UI 与命令
 
@@ -301,7 +308,7 @@ node · launcher
 - **Instances 内容**：
   - 状态/URL；**Start / New Tab / Stop 都在这个区内**（Start 在 running 时变成 New Tab）。
   - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
-  - **home/package** 归为一组；profile 只在 Edit 表单里配置，不在 Instances 区显示。**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
+  - **home/package** 归为一组；profile 不在 Instances 区显示，也不在 Edit 表单里编辑（新建固定 `web`；手改 settings 才能换 profile）。**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
   - 编辑表单只改名称、home、auto-open、browser；名称变化时，若 home 仍是自动格式，会同步改成 `.dsh-{new name}`；改 home 不移动数据。profile 固定 web，不在表单里。
 - **Runtime（最上方）**：`deepseek harness` 版本、mode（pkg/src）、Update/⟳；这些是共享的。
 - **Console/日志**：独立 section，跟随当前 tab；日志 tail 和 server log 路径切换；`Clear`/`debug` 默认跟随当前 tab。
@@ -310,29 +317,34 @@ node · launcher
 - **同步**：tab 选择 = `dsh.activeInstance`；状态栏/快速选择/命令切换时 tab 跟随。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。
 - **共享 home 警告**：在 tab 名旁显示警告标记，tooltip 说明「与 <name> 共用 DSH 数据，不能同时运行」。
-- **创建/编辑表单**：面板内 modal，带内联校验；Create/Save 合法前禁用；删除用确认 modal，明确「不删数据」。
+- **创建/编辑表单**：面板内 modal（`+` / Edit）；字段为名称、home、auto-open、browser，无 profile/端口字段。提交后由扩展侧校验，错误回填到 modal 内错误行；Create/Save 在提交期间禁用，失败后恢复。删除用 VS Code 原生确认弹窗（`showWarningMessage(..., { modal: true })`），文案写明「只从 launcher 移除；`<home>` 下的 DSH 数据不删除」。命令面板的 `dsh.instance.new` / `dsh.instance.edit` 走原生 InputBox 序列，不弹面板 modal。
 
 ### 状态栏
 
-- 显示活动实例的名称/状态；运行中沿用现有背景色。
-- 多个实例运行时，tooltip 汇总运行数量和端口。
-- 点击打开快速选择：列出所有实例（名称、端口、home、状态），可选中、启动、停止、打开。
-- `dsh.statusMenu` 保留，内容扩展为实例列表 + 现有动作。
+- 显示活动实例的名称（`DSH Launcher Panel · <name>`）与状态；运行中沿用现有背景色（`dsh.statusBar.runningBackground` / `dsh.statusBar.runningForeground`），启动/安装/更新时喷水动画。
+- tooltip 显示状态、运行中 URL、活动实例名；多个实例运行时附带「N instances running」。
+- 点击打开快捷菜单（`dsh.statusMenu`）：
+  - 首行是运行摘要（实例名 · 状态 · pkg/src mode · dsh 版本 · 运行中 URL）；
+  - 下面列出**全部实例**：名称 + `:port` + 状态（active 的标 `· active`，接管显示 `running (external)`，陌生端口显示 `port held by an untracked process`），detail 显示 home；
+  - 选中实例后弹出该实例可用的动作子菜单（Open / Start / Restart / Stop / Make Active，按状态过滤）；
+  - 底部是全局动作（Start/Open Web UI / Open Dashboard / Stop，按当前状态）+ Open Global Settings。
+- 命令面板另有 `dsh.instance.select` 快速选择活动实例。
 
 ### 命令
 
-| 命令 | 行为 |
-|---|---|
-| `dsh.start` / `dsh.stop` | 现有命令；作用于活动实例 |
-| `dsh.instance.new` | 打开创建表单 |
-| `dsh.instance.edit` | 编辑活动实例（或从快速选择选一个） |
-| `dsh.instance.delete` | 删除活动实例（确认） |
-| `dsh.instance.select` | 快速选择活动实例 |
-| `dsh.instance.start` / `.stop` | 带实例 ID 的精确操作，供面板按钮调用 |
-| `dsh.instance.open` | 打开指定实例的 Web UI |
-| `dsh.instance.restart` | stop → start（可选，v1 可只做面板按钮） |
+| 命令 | 注册/贡献 | 行为 |
+|---|---|---|
+| `dsh.start` / `dsh.stop` | 已注册 + contributes | 作用于**活动实例** |
+| `dsh.instance.start` / `dsh.instance.stop` / `dsh.instance.restart` | 已注册 + contributes（0.3.x 重构批次补上） | 带实例 ID 的精确操作；无参数（命令面板调用）时作用于活动实例。面板按钮通过 webview 消息直接调用 `action*` 并传实例 ID |
+| `dsh.instance.new` | 已注册 + contributes | 创建实例（命令面板路径为原生 InputBox 序列，面板路径为 modal） |
+| `dsh.instance.edit` | 已注册 + contributes | 编辑实例；可选参数为实例 ID，缺省用活动实例 |
+| `dsh.instance.delete` | 已注册 + contributes | 删除实例（原生确认弹窗）；可选参数为实例 ID |
+| `dsh.instance.select` | 已注册 + contributes | 快速选择活动实例 |
+| `dsh.instance.open` | 已注册 + contributes | 打开实例 Web UI；可选参数为实例 ID，缺省用活动实例 |
+| `dsh.statusMenu` | 已注册（内部，不贡献） | 状态栏快捷菜单入口 |
 
-面板按钮必须传实例 ID，不能依赖「当前活动」的隐式状态，避免切换竞态。
+- 面板按钮必须传实例 ID，不能依赖「当前活动」的隐式状态，避免切换竞态。
+- 命令参数统一经 `instanceIdArg()` 归一化：命令面板调用不带参数 → 落到活动实例；面板/菜单调用带 ID。
 
 ### 日志与账户
 
@@ -344,35 +356,35 @@ node · launcher
 
 ### 名称
 
-- 去首尾空白后非空；建议 ≤ 64 字符；不允许控制字符。
+- 去首尾空白后非空；≤ 64 字符（`MAX_INSTANCE_NAME_LENGTH`）；不允许控制字符。
 - 大小写不敏感唯一。
 
 ### ID
 
-- `crypto.randomUUID()`；不可编辑；不允许重复。
+- 默认 `crypto.randomUUID()`；不可编辑；不允许重复；读取 settings 时要求是路径安全字符串（≤80，`INSTANCE_ID_PATTERN`），因为日志目录用它。
 
 ### home
 
-- 支持 `~` 展开；`path.resolve` 后必须是绝对路径。
-- 不能是文件；不存在则创建目录；必须可写。
-- 不能位于 launcher 自己的安装/日志目录 `~/.dsh-launcher-panel` 内。
-- 不能等于 DSH 安装目录。
+- 支持 `~` 展开；`path.resolve` 后必须是绝对路径；空字符串表示默认 home（`resolveDshHome()`）。
+- 不允许控制字符。
+- 不能位于 launcher 自己的目录内：`~/.dsh-launcher-panel`、托管 pkg 安装目录、托管 source 检出目录（含嵌套子目录）。
+- 创建时：路径不存在则创建目录；路径是文件则拒绝；不可写会在创建目录 / 启动时报错（没有预检）。
 - 允许空格、非 ASCII、UNC 路径（按平台能力）。
-- 精确重复的 home：允许配置，但同一 home 同时只能跑一个实例；UI 显示共享标记。
-- 嵌套 home：允许但警告（两个数据根会互相包含，备份/清理容易混淆）。
+- 精确重复的 home：允许配置，创建/编辑时给出「home is shared with …」警告；同一 home 同时只能跑一个实例（启动时拒绝）。
+- 嵌套 home：允许，创建/编辑时给出「home overlaps with …」警告（两个数据根互相包含，备份/清理容易混淆）；读取 settings 的规范化只对共享 home 告警，嵌套不告警。
 
 ### profile
 
-- `^[A-Za-z0-9][A-Za-z0-9._-]*$`，长度有上限；拒绝 `.`、`..`、路径分隔符。
+- `^[A-Za-z0-9][A-Za-z0-9._-]*$`，长度 ≤64（`MAX_PROFILE_LENGTH`）；拒绝 `.`、`..`、路径分隔符；默认 `web`。
 - 必须存在于 `<home>/profiles/<profile>`，或在创建时初始化。
 - 不校验 profile 内容。
 
 ### port
 
 - 整数，1–65535；拒绝 0。
-- 实例间唯一（配置层）。
-- 创建/启动时在 `127.0.0.1` 上做 bind 检查；被外部进程占用则报错。
-- 自动建议从 3080 开始，跳过已配置端口和已占用端口。
+- 实例间唯一（配置层）：读取 settings 时重复端口是 warning，创建/编辑时是 error。
+- 启动前在 `127.0.0.1` 上探测：被非 DSH 进程占用则 error 且不杀占用者；已被 DSH 占用则尝试接管。
+- 自动分配：从 `dsh.instancePortBase + 1` 开始，跳过已配置端口和已占用端口；base 在范围顶端时回绕到 10000。
 
 ### 同一 home 并发
 
@@ -393,13 +405,13 @@ node · launcher
 | 场景 | 行为 |
 |---|---|
 | 创建时 home 创建失败/不可写 | 报错，不写实例 |
-| 创建时 profile 初始化失败 | 报错，不写实例；home 保留，提示可重试 |
+| 启动时 profile 初始化失败 | `error`；实例保留，显示原因与重试入口（创建阶段不初始化 profile，见 §六） |
 | 创建时端口被占 | 报错，建议换端口 |
 | 启动时 home/profile 缺失 | `error`，提示编辑实例或初始化 profile |
 | 启动时端口被占 | `error`，不杀占用者 |
 | 启动超时/进程早退 | `error`，显示日志路径 |
 | 停止超时 | `error`，不要显示 stopped |
-| 接管时端口是陌生进程 | 标记 external；Stop 需确认后才杀 |
+| 接管时端口是陌生进程 | 标记 `untrackedPort`（菜单显示 `port held by an untracked process`）；Stop 需确认后才杀 |
 | 设置条目非法 | 面板显示错误行；不自动改写 settings |
 | 并发 Start/Stop | 每实例合并/幂等；不出现双进程或假 stopped |
 | 全局更新时仍有实例运行 | 阻止并提示先停止 |
@@ -411,22 +423,23 @@ node · launcher
 - 子进程一律 `spawn` + 参数数组，不拼 shell；home 通过环境变量传递；profile 名先校验。
 - 日志/面板不打印密钥；launch token 的现有处理保持不变。
 - 删除实例不删 home；任何删除目录的动作都必须单独确认并校验归属。
-- 不自动改写 `cordis.patch.yml`、sessions、workspaces。
+- 不自动改写用户自己的 `cordis.patch.yml`、sessions、workspaces；`dsh.instanceBrand` 例外：launcher 只写自己的 bundle 目录（含其生成的 patch 文件）并在 profile `package.json` 的 `dsh.profile.bundles` 中登记/移除该 bundle。
 - 实例列表是机器本地配置；不要写入 workspace settings（避免同步/跨机器路径问题）。
 
 ## 十四、测试
 
-### 单元（`test/*.test.ts`，不依赖 vscode）
+### 单元（`test/*.test.ts`，不依赖 vscode；随实现更新）
 
 - 实例正常化：`~` 展开、相对路径拒绝、空 home 回退默认、profile 去空白。
-- 名称/ID/端口/profile 校验；重复检测。
+- 名称/ID/端口/profile 校验；重复检测；共享/嵌套 home 警告。
 - 端口自动建议：跳过已配置、跳过已占用、无可用端口报错。
 - 同一 home 并发守卫；共享 home 检测。
 - 旧设置迁移：`dsh.port` → Default 实例；已有实例不覆盖；迁移标记。
 - 活动实例回退：无效 ID → 第一个；空列表 → 无。
-- 启动参数/环境构建：`DSH_HOME`、`--port`、profile。
+- 启动参数/环境构建：`DSH_HOME`、`--port`、profile、`--no-open` 版本门槛。
 - 状态机纯函数：start/fail/stop/exit 的合法迁移；不允许 `starting` 直接回 `stopped` 而不清理。
 - 日志路径：按 id 分目录；`clearServerLogOnStart` 只清当前实例。
+- 面板/契约回归：payload 键覆盖客户端消费字段、命令集合、转义。
 
 ### 手工矩阵
 
@@ -434,17 +447,17 @@ node · launcher
 2. 新建实例：新 home、`web` profile、新端口 → 初始化、启动、打开、停止。
 3. 两个实例同时运行：各自端口、日志、sessions 独立；停一个不影响另一个。
 4. 已有 home + 已有 profile：直接挂载，不初始化、不重置。
-5. 自定义 profile：从 `web` 模板创建；已存在时不覆盖。
+5. 自定义 profile（手改 `dsh.instances` 的场景）：从 `web` 模板创建；已存在时不覆盖。
 6. 端口冲突：配置重复、外部占用、启动时冲突，三种都报错。
 7. 共享 home：两个实例配置允许；同时启动第二个被拒绝。
-8. 编辑：运行中改 home/profile 要求先停；改 home 不移动数据；端口不通过面板编辑。
+8. 编辑：运行中改 home 要求先停；改 home 不移动数据；profile/端口不可通过面板编辑。
 9. 删除：运行中先停；只移除列表；home 仍在。
 10. 扩展重启：实例仍在运行 → 激活后接管，状态 running；Stop 正常。
 11. 更新：有实例运行时阻止；停止全部后更新；不自动重启。
 12. VS Code 内置浏览器同时打开两个实例的 UI，token 各自正确。
 13. 面板切换实例：日志、活动、账户/余额跟随当前实例。
 14. 非法 settings：不崩、不静默改文件、有可见错误。
-15. tab 条：切换、状态点、溢出滚动、`+` 固定；`+` 新建后追加并选中；删除后选中相邻 tab；运行中改端口/删除被阻止；外部命令切换 active 时 tab 跟随；键盘左右/Home/End。
+15. tab 条：切换、状态点、溢出滚动、`+` 固定；`+` 新建后追加并选中；删除后选中相邻 tab；运行中编辑/删除被阻止；外部命令切换 active 时 tab 跟随；键盘左右/Home/End。
 
 ### 验证
 
@@ -454,27 +467,27 @@ node · launcher
 
 ## 十五、文档与发布
 
-- `README.md` / `README.zh-CN.md`：新增 Instances 章节和设置表；说明 `DSH_HOME`、profile、port、机器本地、删除不删数据、共享 home 不能同时运行。
-- `CHANGELOG.md` / `CHANGELOG.zh-CN.md`：按用户可感知变化写一条功能条目；旧 `dsh.port` 迁移要写明。
+- `README.md` / `README.zh-CN.md`：已含 Features/Usage/Settings 中的实例说明；`DSH_HOME`、profile、port、机器本地、删除不删数据、共享 home 不能同时运行均有说明。
+- `CHANGELOG.md` / `CHANGELOG.zh-CN.md`：0.3.0 已写功能条目，含旧 `dsh.port` 迁移；后续实例相关改动按用户可感知变化补条目。
 - 本文 `docs/instances-spec.md` 是开发文档，不进 README / CHANGELOG / VSIX。
 - 发布走项目既有流程：`dev` → `verify` → `main` → owner 当次确认 → tag。本规格只定义功能，不构成发布许可。
 
-## 十六、分期
+## 十六、分期（历史记录：四个 Stage 均已于 0.3.0 前完成）
 
 1. **Stage 1：纯模型** — 实例类型、设置 schema、迁移、校验、端口建议、单元测试；不碰 UI。
 2. **Stage 2：运行时** — InstanceManager / InstanceRuntime、每实例进程/日志/状态/接管；保持单实例命令可用。
 3. **Stage 3：UI 与命令** — 面板实例 tab 条 + 内容面板、创建/编辑/删除表单、状态栏、快速选择、命令。
 4. **Stage 4：全局收尾** — 安装/更新与多实例的交互、README/CHANGELOG、手工矩阵、`verify`。
 
-每阶段独立 commit；Stage 2 完成前不改用户可见 UI，降低回滚成本。
+（历史决策）每阶段独立 commit；Stage 2 完成前不改用户可见 UI，降低回滚成本。
 
 ## 十七、验收标准
 
 - 升级现有用户后，无需重新配置即可看到并启动 Default 实例；`dsh.port` 值被正确继承。
-- 创建新 home + 新 profile + 新端口的实例，能初始化、启动、打开、停止；日志在独立目录。
+- 创建新 home + 新端口的实例：profile 可先不存在（Start 时由 DSH 从 `web` 模板初始化），能启动、打开、停止；日志在独立目录。
 - 两个实例可同时运行，互不影响；端口冲突、共享 home 并发、缺失 profile 都有明确错误。
 - 面板以 tab 条呈现实例；`+` 可新建；切换 tab 同步活动实例、日志、状态栏；tab 溢出可横向滚动且 `+` 始终可见。
-- 每个 tab 可改端口（停止时）、Start/Stop/Open、Delete（停止时）；运行中编辑端口/删除有明确提示。
+- 每个 tab 可 Start/New Tab/Open、Delete（停止时）；端口与 profile 不可在界面编辑；运行中编辑/删除有明确提示。
 - 编辑运行中实例会要求先停止；改 home 不移动数据；删除只移除列表。
 - 扩展重启后能接管仍在运行的实例；Stop 行为安全（陌生端口需确认）。
 - 设置中无秘密；删除不删 home；非法设置不导致崩溃或静默改写。
@@ -494,5 +507,5 @@ node · launcher
 | 8 | `dsh.start` / `dsh.stop` 在多实例下是否弹选择 | 作用域活动实例；快速选择提供其他实例 |
 | 9 | 是否支持 workspace 级实例 | v1 不支持；机器本地 |
 | 10 | 是否做实例复制/导入导出 | 后续；v1 只做新建/编辑/删除 |
-| 11 | 端口/名称内联改，home/profile 用 modal？ | 已定：端口由 `dsh.instancePortBase` 自动分配、面板不编辑；名称/home/profile 用 Edit modal |
+| 11 | 端口/名称内联改，home/profile 用 modal？ | **已定（已实现）**：端口由 `dsh.instancePortBase` 自动分配、面板不编辑；名称/home/auto-open/browser 用 Edit modal；profile 不在界面编辑，手改 settings 才能换 |
 | 12 | tab 顺序是否可拖拽 | v1 按 `dsh.instances` 顺序，不支持拖拽；后续 |

@@ -2,7 +2,7 @@
 
 ## 支持版本 / Supported Versions
 
-仅支持最新发布版。/ Only the 最新发布版 is supported.
+仅支持最新发布版。/ Only the latest release is supported.
 
 ## 报告漏洞 / Reporting a Vulnerability
 
@@ -17,4 +17,4 @@ Please report vulnerabilities privately via GitHub Private vulnerability reporti
 - 请附上：复现步骤、影响范围、建议修复；中文或英文均可
 - 我们会在 90 天内响应；修复发布后如你愿意可获公开致谢（也可要求匿名）
 
-依赖漏洞由 Dependabot alerts + security updates 自动跟踪并提修复 PR。
+依赖漏洞由 Dependabot alerts 告警，由维护者手动升级依赖修复；Dependabot 自动升级（security updates）与自动提修复 PR 均未启用。
