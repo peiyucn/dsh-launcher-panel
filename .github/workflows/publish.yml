@@ -13,9 +13,23 @@ jobs:
     environment: marketplace-publish
     permissions:
       contents: write
+      # E18 gate needs to read the Dependabot and code scanning alert counts.
+      security-events: read
+      vulnerability-alerts: read
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Require zero open security alerts (E18)
+        # E18（根规范）：发布硬门禁。三类未处理告警全部为 0 才允许继续；任一查询失败、
+        # 凭据缺失或计数非 0 都在这里中止，后面的打包与发布步骤不会运行。
+        # Dependabot / CodeQL 用 GITHUB_TOKEN 读；secret scanning 读不了（403
+        # "Resource not accessible by integration"），所以用只读 fine-grained PAT。
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN_ALERTS: ${{ github.token }}
+          SECRET_SCAN_TOKEN: ${{ secrets.SECURITY_ALERTS_TOKEN }}
+        run: bash scripts/check-security-alerts.sh
 
       - uses: actions/setup-node@v7
         with:
