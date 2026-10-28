@@ -1,0 +1,3 @@
+# The repo is checked out on Windows (core.autocrlf) and on Linux CI runners.
+# Shell scripts must stay LF so `bash scripts/*.sh` works on both sides.
+*.sh text eol=lf
