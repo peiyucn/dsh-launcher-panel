@@ -129,19 +129,18 @@ push 后立即查询一次未处理的 Dependabot 告警，确认清零才继续
 
 * **开发分支**：`dev`；`main` 只接受发布合并（fast-forward）。本项目不是单分支项目
 * **验证**：`npm run verify`（typecheck + test + compile + package）全绿；push 前必须通过
-* **E18 告警门禁（interface 验收）**：`publish.yml` 的 `publish` job 须在发布前置步骤查询 Dependabot / CodeQL / secret scanning 未处理告警数，任一非 0 或查询失败即中止发布（fail-closed），不得只靠人工核对。**当前未实现**——`publish.yml` 尚无该步骤；补齐前不得打 tag
+* **E18 告警门禁（interface 验收）**：`publish.yml` 的 `publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`，查询 Dependabot / CodeQL / secret scanning 未处理告警数；任一非 0、查询失败或凭据缺失即中止发布（fail-closed），不得只靠人工核对。Dependabot / CodeQL 用 `GITHUB_TOKEN` 读，secret scanning 用 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，`marketplace-publish` 环境级 secret）
 * **发布（tag 触发）**：
   1. 按 G 段与《项目专属章节 · 发布前检查》审计
   2. 两份 CHANGELOG 加新版本条目（置顶）→ `package.json` 版本号 → README 有功能变更则同步
   3. `npm run verify` 全绿 + `git diff --check` 干净
   4. `dev` → `main`（fast-forward）并 push
   5. E17 门禁：执行 `git tag` / 市场发布等不可逆动作前，须 owner 当次明确确认；停在该动作之前，一句话报出「要发什么、版本号、目标通道、影响范围」，未回话即视为未批准；此前的批准不适用于本次
-  6. E18 门禁：按本节《E18 告警门禁》确认门禁生效且本次发布前查询结果为 0；门禁未实现前不得打 tag
-  7. `git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"` 并 push → workflow 打包 VSIX、发布市场、建 GitHub Release（说明拼两份 CHANGELOG 当版条目）
-  8. 发布完成后切回 `dev`
+  6. `git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"` 并 push → workflow 先跑 E18 告警门禁（失败即止）→ 打包 VSIX、发布市场、建 GitHub Release（说明拼两份 CHANGELOG 当版条目）
+  7. 发布完成后切回 `dev`
 * **本地制品**：`releases/`；`npm run package` 先 `mkdir` 再 `vsce package --out releases`（vsce 只在 `--out` 指向已存在目录时接上文件名）。`releases/`、`*.vsix` 进 `.gitignore` 与 `.vscodeignore`；CI / publish 一律从 `releases/*.vsix` 取件，制品不得散落仓库根
 * **依赖维护**：手动升级；security updates 与 `dependabot.yml` 保持关闭；收到告警按 E22 走补丁版；依赖不进产物时 CHANGELOG 如实写「无用户可感知的变化」
-* **发布凭据**：`VSCE_PAT` 只放 `marketplace-publish` 环境级 secret，仓库级不保留
+* **发布凭据**：`VSCE_PAT`、`SECURITY_ALERTS_TOKEN` 只放 `marketplace-publish` 环境级 secret，仓库级不保留
 * **发布红线**：已发布版本与 tag 不可覆盖、不可挪动；市场同版本重发被拒——错误只能发新版本修正
 
 ## 代码审计
@@ -272,9 +271,10 @@ owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一�
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
 | `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package`（VSIX 出 `releases/`） |
-| `publish.yml` | push `v*.*.*` tag | 打包（VSIX 出 `releases/`）+ 发布市场 + GitHub Release（说明拼两份 CHANGELOG 当版条目） |
+| `publish.yml` | push `v*.*.*` tag | E18 告警门禁（Dependabot / CodeQL / secret scanning 任一未处理即中止）→ 打包（VSIX 出 `releases/`）+ 发布市场 + GitHub Release（说明拼两份 CHANGELOG 当版条目） |
 
 * publish job 挂 `environment: marketplace-publish`（Deployments 留记录）；**不设审批门禁**（tag 即发布）；**无 release-control**（通道变更一律发新版本号）
+* **E18 门禁位置**：`publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`；`GITHUB_TOKEN` 只能读 Dependabot（`vulnerability-alerts: read`）与 CodeQL（`security-events: read`），secret scanning 必须走 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，环境级 secret）——该 secret 未配置或查询失败时 workflow 直接中止（fail-closed）
 * 有测试的仓库，test job 输出报告（JUnit artifact）
 
 ## 工具与网络
