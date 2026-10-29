@@ -230,23 +230,26 @@ owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一�
 
 单仓库可按其 AGENTS 登记例外。
 
-### 本项目核验结果（2026-10-27 逐项复核）
+### 本项目核验结果（2026-10-29 逐项复核）
 
-* **F1 全部开启**：Dependabot alerts 启用（未处理 0）；CodeQL default setup configured（weekly，JS/TS + actions，未处理告警 0，最近分析 results_count=0）；secret scanning + push protection 启用（未处理 0）；private vulnerability reporting 启用；`SECURITY.md` 存在于 main 且 sha 与本地一致
+* **F1 全部开启**：Dependabot alerts 启用（未处理 0）；CodeQL default setup configured（weekly，actions + JS/TS；最近一次分析 2026-10-27，results_count=0，未处理告警 0）；secret scanning 与 push protection 启用（未处理 0）；private vulnerability reporting 启用；`SECURITY.md` 存在于 main 且 sha 与本地一致（`f44a6d1`）
 * **F3 全部关闭**：secret scanning 非提供商模式 disabled、validity checks disabled、Dependabot security updates disabled，且无 `.github/dependabot.yml`
-* **F5 三层**：main 经典保护 = 要求对话解决 + 不允许绕过 + 无 required status checks；main / dev 各一条 ruleset（rules：deletion、non_fast_forward、creation；bypass_actors 空）；合并设置仅 squash（merge commit / rebase 关闭）
-* **F6**：无交互限制、Issues 开放；owner 直推由「无 required status checks + 非强推」保障
-* **发布环境 / 凭据**：`marketplace-publish` 环境无审批门禁、有 Deployment 记录；仓库级 secret 0、环境级 secret 仅 `VSCE_PAT`
+* **F5 三层**：main 经典保护 = 要求对话解决 + 不允许绕过（enforce_admins）+ 无 required status checks；main / dev 各一条 active ruleset（rules：deletion、non_fast_forward、creation；bypass_actors 空）；合并设置仅 squash（merge commit / rebase 关闭）
+* **F6**：Issues 开放、无交互限制（Discussions 未开启）；owner 直推由「无 required status checks + 非强推」保障
+* **发布环境 / 凭据**：`marketplace-publish` 环境无保护规则（无审批门禁）与分支策略限制；有 Deployment 记录；仓库级 secret 0；环境级 secret = `VSCE_PAT`、`SECURITY_ALERTS_TOKEN`
 * **核验命令（自含，只读 GET）**：
   `gh api repos/peiyucn/dsh-launcher-panel --jq '{security_and_analysis,allow_squash_merge,allow_merge_commit,allow_rebase_merge}'`；
   `gh api 'repos/peiyucn/dsh-launcher-panel/dependabot/alerts?state=open&per_page=100' --jq 'length'`；
   `gh api repos/peiyucn/dsh-launcher-panel/code-scanning/default-setup`；
   `gh api 'repos/peiyucn/dsh-launcher-panel/code-scanning/alerts?state=open' --jq 'length'`；
+  `gh api 'repos/peiyucn/dsh-launcher-panel/code-scanning/analyses?per_page=1' --jq '.[0].results_count'`；
   `gh api 'repos/peiyucn/dsh-launcher-panel/secret-scanning/alerts?state=open' --jq 'length'`；
   `gh api repos/peiyucn/dsh-launcher-panel/private-vulnerability-reporting`；
   `gh api repos/peiyucn/dsh-launcher-panel/rulesets`（及每条 ruleset 详情）；
   `gh api repos/peiyucn/dsh-launcher-panel/branches/main/protection`；
-  `gh api repos/peiyucn/dsh-launcher-panel/environments/marketplace-publish/secrets`
+  `gh api repos/peiyucn/dsh-launcher-panel/environments/marketplace-publish`（保护规则 / 分支策略）；
+  `gh api repos/peiyucn/dsh-launcher-panel/environments/marketplace-publish/secrets`；
+  `gh api repos/peiyucn/dsh-launcher-panel/actions/secrets --jq '.total_count'`
 
 ## CI 与自动发布
 
@@ -275,6 +278,7 @@ owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一�
 
 * publish job 挂 `environment: marketplace-publish`（Deployments 留记录）；**不设审批门禁**（tag 即发布）；**无 release-control**（通道变更一律发新版本号）
 * **E18 门禁位置**：`publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`；`GITHUB_TOKEN` 只能读 Dependabot（`vulnerability-alerts: read`）与 CodeQL（`security-events: read`），secret scanning 必须走 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，环境级 secret）——该 secret 未配置或查询失败时 workflow 直接中止（fail-closed）
+* **E18 门禁验证（2026-10-29）**：临时探针分支挂 `marketplace-publish` 环境、用真实 `SECURITY_ALERTS_TOKEN` 跑通该脚本（三类未处理告警均 0，job success）；探针分支已删除，Deployments 留 1 条探针记录
 * 有测试的仓库，test job 输出报告（JUnit artifact）
 
 ## 工具与网络
