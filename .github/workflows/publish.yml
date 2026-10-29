@@ -25,6 +25,8 @@ jobs:
         # 凭据缺失或计数非 0 都在这里中止，后面的打包与发布步骤不会运行。
         # Dependabot / CodeQL 用 GITHUB_TOKEN 读；secret scanning 读不了（403
         # "Resource not accessible by integration"），所以用只读 fine-grained PAT。
+        # 外部调用必须带超时：API 卡住时在 5 分钟内失败而不是挂到默认 6 小时（G6）。
+        timeout-minutes: 5
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN_ALERTS: ${{ github.token }}
