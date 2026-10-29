@@ -278,7 +278,7 @@ owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一�
 
 * publish job 挂 `environment: marketplace-publish`（Deployments 留记录）；**不设审批门禁**（tag 即发布）；**无 release-control**（通道变更一律发新版本号）
 * **E18 门禁位置**：`publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`；`GITHUB_TOKEN` 只能读 Dependabot（`vulnerability-alerts: read`）与 CodeQL（`security-events: read`），secret scanning 必须走 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，环境级 secret）——该 secret 未配置或查询失败时 workflow 直接中止（fail-closed）
-* **E18 门禁验证（2026-10-29）**：临时探针分支挂 `marketplace-publish` 环境、用真实 `SECURITY_ALERTS_TOKEN` 跑通该脚本（三类未处理告警均 0，job success）；探针分支已删除，Deployments 留 1 条探针记录
+* **E18 门禁验证（2026-10-29）**：临时探针分支挂 `marketplace-publish` 环境、用真实 `SECURITY_ALERTS_TOKEN` 跑通该脚本（三类未处理告警均 0，job success）；探针分支、其 workflow run 与 Deployment 记录均已清理
 * 有测试的仓库，test job 输出报告（JUnit artifact）
 
 ## 工具与网络
