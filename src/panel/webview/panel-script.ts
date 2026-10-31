@@ -52,6 +52,7 @@ export function panelScript(values: PanelScriptValues): string {
       instanceFormSave: document.getElementById('instanceFormSave'),
       instanceFormError: document.getElementById('instanceFormError'),
       instanceModal: document.getElementById('instanceModal'),
+      stopBtn: document.querySelector('button[data-cmd="stop"]'),
     }
     const modeOptions = document.querySelectorAll('.mode-option')
     const whenRunning = document.querySelectorAll('.when-running')
@@ -111,6 +112,12 @@ export function panelScript(values: PanelScriptValues): string {
         el.statusText.textContent = running ? 'Running' : 'Stopped'
         el.statusSub.textContent = running ? (status.url || '') : ''
         el.startBtn.textContent = running ? '↗ New Tab' : (status.dsh === 'missing' ? 'Install & Start' : '▶ Start')
+      }
+      // Stop stays clickable while starting (it cancels the start) but not while a Stop is
+      // already in flight; the in-flight label is the only place the click is acknowledged.
+      if (el.stopBtn) {
+        el.stopBtn.disabled = stopping
+        el.stopBtn.textContent = stopping ? 'Stopping…' : '■ Stop'
       }
       const mode = status.mode === 'source' ? 'source' : 'pnpm'
       modeOptions.forEach((b) => {
@@ -304,8 +311,15 @@ export function panelScript(values: PanelScriptValues): string {
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
       b.addEventListener('click', () => {
-        // Start is greyed instantly; the next status update re-enables it.
+        // Acknowledge the click instantly: Start and Stop are greyed until the next status
+        // update, and Stop also relabels itself because an adopted-server scan takes ~1s.
         if (b.dataset.cmd === 'start') b.disabled = true
+        if (b.dataset.cmd === 'stop') {
+          b.disabled = true
+          b.textContent = 'Stopping…'
+          el.startBtn.disabled = true
+          el.statusText.textContent = 'Stopping…'
+        }
         vscode.postMessage({ command: b.dataset.cmd, value: currentInstanceId })
       })
     })

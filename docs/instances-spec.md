@@ -310,6 +310,7 @@ node · launcher
 - **`+`**：打开创建表单（modal）；成功后 append tab 并选中。
 - **Instances 内容**：
   - 状态/URL；**Start / New Tab / Stop 都在这个区内**（Start 在 running 时变成 New Tab）。
+  - **点击反馈**：点 Stop 后按钮立即置灰并显示 `Stopping…`、状态行显示 `Stopping…`（runtime 在进程识别前就进入 `stopping`）；随后由状态更新落到 Stopped 或可见错误。接管实例的进程识别（约 1s）也在这段反馈内完成。
   - **Edit/Delete** 放在状态行右侧，用竖线隔开，图标按钮 + tooltip；运行中禁用，停止后 Delete 确认；只移除列表，不删数据。
   - **home/package** 归为一组；profile 不在 Instances 区显示，也不在 Edit 表单里编辑（新建固定 `web`；手改 settings 才能换 profile）。**不显示端口**，运行中的 URL 已经带端口。端口由 launcher 分配（`dsh.instancePortBase`），面板不编辑。
   - 编辑表单只改名称、home、auto-open、browser；名称变化时，若 home 仍是自动格式，会同步改成 `.dsh-{new name}`；改 home 不移动数据。profile 固定 web，不在表单里。

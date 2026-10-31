@@ -293,8 +293,11 @@ export class InstanceRuntime {
     this.url = ''
     this.error = ''
     this.logPump.stop()
-    // A stale `running` (the port vanished before refresh noticed) still has to settle to stopped.
-    if (this.state !== 'stopped') this.transition(this.state === 'running' ? 'lost' : 'cleanup')
+    // Settle from the state Stop was entered from: a stale `running` (the port vanished
+    // before refresh noticed), the early `stopping` flip, or error/starting.
+    if (this.state === 'running') this.transition('lost')
+    else if (this.state === 'stopping') this.transition('stop-complete')
+    else if (this.state !== 'stopped') this.transition('cleanup')
     this.activity('■ Stopped')
     return true
   }
@@ -302,6 +305,9 @@ export class InstanceRuntime {
   private async stopInternal(): Promise<boolean> {
     this.clearStartWatchdog()
     this.installing = false
+    // Flip to stopping before the port scan: the scan takes about a second on an adopted
+    // instance, and every UI surface should react to the click at once instead of looking idle.
+    if (nextState(this.state, 'stop') !== undefined) this.transition('stop')
     const tracked = this.hasTrackedChild()
     const portOpen = tracked ? false : await isListening(this.instance.port, STOP_POLL_PROBE_MS)
     let identified: number[] = []
@@ -318,7 +324,6 @@ export class InstanceRuntime {
       return this.fail(`port ${this.instance.port} is in use, but no DSH server for this instance could be identified — not killed`)
     }
     if (plan === 'cleanup') return this.finishCleanup()
-    this.transition('stop')
     this.logPump.stop()
     if (plan === 'kill-tracked') {
       await this.killTracked()
@@ -346,9 +351,16 @@ export class InstanceRuntime {
     return this.stopPromise
   }
 
+  /** A start or stop is in flight; port probes must not race their state changes. */
+  private isTransitioning(): boolean {
+    return this.state === 'starting' || this.state === 'stopping'
+  }
+
   async refresh(): Promise<void> {
-    if (this.state === 'starting' || this.state === 'stopping') return
+    if (this.isTransitioning()) return
     const open = await isListening(this.instance.port)
+    // Stop/Start can begin while the port probe was in flight; do not adopt or report for them.
+    if (this.isTransitioning()) return
     if (open) {
       if (this.state === 'running') {
         this.untrackedPort = false

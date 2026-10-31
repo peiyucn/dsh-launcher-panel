@@ -93,6 +93,14 @@ test('Stop never asks for confirmation and never kills an unidentified port owne
   assert.match(runtimeSource(), /no DSH server for this instance could be identified/, 'an unidentified port owner is reported, not killed')
 })
 
+test('Stop flips to stopping before the adopted-server scan so the UI reacts to the click', () => {
+  const source = runtimeSource()
+  const flip = source.indexOf("if (nextState(this.state, 'stop') !== undefined) this.transition('stop')")
+  const scan = source.indexOf('findDshServerPidsByPort(this.instance.port)')
+  assert.ok(flip >= 0, 'stopInternal must mark the runtime stopping')
+  assert.ok(scan > flip, 'the stopping flip must come before the ~1s process scan')
+})
+
 test('runtime delegates spawn, health, profile and process handling to their own modules', () => {
   const source = runtimeSource()
   for (const module of ['spawn', 'health', 'profile', 'process', 'log-pump']) {
