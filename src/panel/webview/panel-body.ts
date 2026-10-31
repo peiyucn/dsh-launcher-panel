@@ -101,11 +101,14 @@ export function panelBody(values: PanelBodyValues): string {
     </div>
   </section>
   <section class="section" id="dsCard">
-    <button type="button" class="section-head section-toggle" id="dsToggle" aria-expanded="false" aria-controls="dsBody" title="Expand or collapse DeepSeek status">
-      <span class="section-title">DeepSeek API</span>
-      <span class="ds-pricing" id="dsPricing" title=""></span>
-      <span class="section-chevron" aria-hidden="true">▸</span>
-    </button>
+    <div class="section-head">
+      <button type="button" class="section-toggle" id="dsToggle" aria-expanded="false" aria-controls="dsBody" title="Expand or collapse DeepSeek status">
+        <span class="section-title">DeepSeek API</span>
+        <span class="ds-pricing" id="dsPricing" title=""></span>
+        <span class="section-chevron" aria-hidden="true">▸</span>
+      </button>
+      <button class="ds-open ds-head-link" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">Status ↗</button>
+    </div>
     <div class="ds-body" id="dsBody" hidden>
       <div class="ds-columns">
         <div class="ds-column">
@@ -120,7 +123,7 @@ export function panelBody(values: PanelBodyValues): string {
       <div class="ds-service-block">
         <div class="ds-service-head">
           <span class="ds-column-title">chat-service</span>
-          <button class="ds-open" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser">Open ↗</button>
+          <button class="ds-open" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser">Open chat ↗</button>
         </div>
         <div class="ds-service-items" id="dsServices"></div>
       </div>
@@ -129,7 +132,6 @@ export function panelBody(values: PanelBodyValues): string {
         <span class="ds-balance-label">Account</span>
         <span class="balance-value" id="balanceValue"></span>
         <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
-        <button class="ds-open" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">↗</button>
       </div>
     </div>
   </section>

@@ -62,7 +62,7 @@
 * 实例只描述运行坐标：一个 `DSH_HOME`、其中的 profile、一个自动分配的端口。模型/provider/preset/凭据都在该 home 的 profile 里，launcher 不管理。两个实例可以指向同一个 home，但同一时间只能跑一个（DSH 的 sessions/workspaces/credentials 是共享的）；面板会显示警告。
 * Delete 只从 `dsh.instances` 移除实例，绝不删除 home、sessions 或 workspaces；要清理由你自己处理。
 * Start 先探测该实例端口，端口已开就接管（例如 VS Code 重载后），然后打开它的 Web UI。Stop 会直接停止启动器启动的服务；接管的实例按命令行（`--port` 加 dsh 入口）确认是本实例的 DSH 服务器后同样直接停止，不再弹确认框。端口被无法识别为本实例 DSH 服务器的进程占用时，Stop 不杀，只在面板与活动流里说明。
-* **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API 区默认收起（只显示标题和 Peak/Off-peak），展开后模型 API 和其他 API 分两栏，另有一行 chat-service 分区三个服务的状态与「Open ↗」链接。底部 **Settings** 不设边框。
+* **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API 区默认收起（标题、Peak/Off-peak 和状态页链接），展开后模型 API 和其他 API 分两栏，另有一行 chat-service 分区三个服务的状态与「Open chat ↗」链接。底部 **Settings** 不设边框。
 * Update 检查和更新的是这一份共享 dsh，要求所有实例停止。
 * 关闭 VS Code 不会停止服务；请从面板或命令面板停止。
 * **API Status** 卡片目前只支持 DeepSeek，且仅当当前实例的 home 里配置了 DeepSeek 模型时才显示；余额用当前实例的凭据查询。

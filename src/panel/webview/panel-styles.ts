@@ -67,7 +67,8 @@ export const PANEL_CSS = `
   .section-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--lap-fg); line-height: 16px; }
   .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
   .section-head > .mode-toggle { margin-left: auto; }
-  .section-toggle { width: 100%; height: auto; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .section-toggle { display: flex; align-items: center; gap: 8px; width: 100%; height: auto; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .section-head > .section-toggle { flex: 1 1 auto; width: auto; min-width: 0; }
   .section-toggle:hover .section-title { color: var(--lap-accent); }
   .section-chevron { margin-left: auto; color: var(--lap-fg2); font-size: 10px; transition: transform .12s; }
   .section-toggle[aria-expanded='true'] .section-chevron { transform: rotate(90deg); }
@@ -138,6 +139,7 @@ export const PANEL_CSS = `
   .mini-btn:hover { background: var(--lap-hover); }
   .ds-open { background: transparent; border: none; color: var(--lap-accent); cursor: pointer; padding: 0; font-size: 11px; flex: none; text-decoration: none; margin-left: auto; height: auto; }
   .ds-open:hover { text-decoration: underline; }
+  .ds-head-link { margin-left: 0; font-size: 10px; }
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
@@ -160,7 +162,6 @@ export const PANEL_CSS = `
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
-  .ds-balance-row .ds-open { margin-left: 0; }
   .ds-service-block { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; flex-direction: column; gap: 4px; }
   .ds-service-head { display: flex; align-items: center; gap: 8px; }
   .ds-service-head .ds-open { margin-left: auto; }
