@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.5] - 2026-10-31
+
+- Stop no longer asks for confirmation. A server the launcher started but does not track in this window (for example after a VS Code reload) is now identified by its command line and stopped directly — this also fixes cases where confirming the old dialog left the server running. A port held by a process that cannot be identified as the instance's DSH server is not killed: the reason is reported in the panel and activity log instead.
+- Stop reacts immediately: the button and status line show "Stopping…" on click, and the instance state switches to stopping before the process scan.
+- The panel console's startup output now contains only the current launch; with `dsh.clearServerLogOnStart` off, earlier runs no longer leak into it.
+- Periodic plugin chatter (model listings) is filtered from the console and the launch token is masked; the complete text stays in the instance's `server.log`.
+
 ## [0.3.4] - 2026-10-27
 
 - The panel console and its log files now follow each instance: a tab shows only that instance's launcher activity and startup output. Each instance owns `logs/instances/<id>/client.log` and `server.log`, and Clear only clears the current instance. Extension-wide events (install, update, detection, window activity) stay in the shared `logs/client.log`.

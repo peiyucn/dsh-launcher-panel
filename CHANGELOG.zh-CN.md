@@ -4,6 +4,13 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.3.5] - 2026-10-31
+
+- 停止实例不再弹确认框。扩展重载后接管、或本窗口未跟踪的 DSH 服务器，改为按进程命令行识别后直接停止；这也修复了旧确认框「点了也停不下来」的情况。端口被无法识别为该实例 DSH 服务器的进程占用时不杀进程，只在面板与活动流里说明原因。
+- Stop 点击立即有反馈：按钮与状态行马上显示 `Stopping…`，实例状态在进程识别之前就切到 stopping。
+- 面板 Console 的启动输出只包含本次启动：即使关闭 `dsh.clearServerLogOnStart`，旧运行也不会再混进来。
+- 周期性插件日志（model listing）从 Console 过滤，launch token 打码；完整原文仍在该实例的 `server.log`。
+
 ## [0.3.4] - 2026-10-27
 
 - 面板 Console 与它的日志文件改为按实例隔离：每个 tab 只显示该实例的 launcher 活动与启动输出；每个实例有自己的 `logs/instances/<id>/client.log` 与 `server.log`，Clear 只清当前实例。与实例无关的扩展级事件（安装、更新、检测、窗口活动）仍写共享的 `logs/client.log`。
