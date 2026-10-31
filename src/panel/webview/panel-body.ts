@@ -107,7 +107,7 @@ export function panelBody(values: PanelBodyValues): string {
         <span class="ds-pricing" id="dsPricing" title=""></span>
         <span class="section-chevron" aria-hidden="true">▸</span>
       </button>
-      <button class="ds-open ds-head-link" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)">Status ↗</button>
+      <button class="ds-open ds-head-link" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)" aria-label="Open the DeepSeek status page"><svg class="ds-link-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="ds-body" id="dsBody" hidden>
       <div class="ds-columns">
@@ -123,7 +123,7 @@ export function panelBody(values: PanelBodyValues): string {
       <div class="ds-service-block">
         <div class="ds-service-head">
           <span class="ds-column-title">chat-service</span>
-          <button class="ds-open" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser">Open chat ↗</button>
+          <button class="ds-open ds-chat-link" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser" aria-label="Open chat.deepseek.com"><svg class="ds-link-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H8.7l-3 2.5V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" fill="currentColor"/></svg><span>Open chat</span></button>
         </div>
         <div class="ds-service-items" id="dsServices"></div>
       </div>

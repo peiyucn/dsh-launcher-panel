@@ -137,9 +137,10 @@ export const PANEL_CSS = `
   .loading-spinner { --spinner-size: 28px; }
   .mini-btn { background: transparent; border: 0.5px solid var(--lap-border-soft); border-radius: 8px; color: var(--lap-fg); cursor: pointer; padding: 0 8px; font-size: 10px; font-weight: 500; flex: none; height: 22px; }
   .mini-btn:hover { background: var(--lap-hover); }
-  .ds-open { background: transparent; border: none; color: var(--lap-accent); cursor: pointer; padding: 0; font-size: 11px; flex: none; text-decoration: none; margin-left: auto; height: auto; }
+  .ds-open { display: inline-flex; align-items: center; gap: 4px; background: transparent; border: none; color: var(--lap-accent); cursor: pointer; padding: 0; font-size: 10px; flex: none; text-decoration: none; margin-left: auto; height: auto; }
   .ds-open:hover { text-decoration: underline; }
-  .ds-head-link { margin-left: 0; font-size: 10px; }
+  .ds-link-icon { width: 12px; height: 12px; flex: none; }
+  .ds-head-link { margin-left: 0; }
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
