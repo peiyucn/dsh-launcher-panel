@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import { LOG_TAIL_POLL_MS } from '../../shared/timing.ts'
-import { LOG_READ_BYTES, readRange } from '../../shared/logs.ts'
+import { readRange } from '../../shared/logs.ts'
 
 const LOG_BUFFER_LINES = 500
 
@@ -22,12 +22,18 @@ export class LogTailPump {
     this.resolveSource = resolveSource
   }
 
-  start(): void {
+  /**
+   * Begin tailing `offset` (defaults to the current end of file). A fresh spawn passes the
+   * size captured before spawning, so only this launch's output is captured even when the
+   * server log keeps earlier runs; without an offset, history is skipped as well.
+   */
+  start(offset?: number): void {
     this.stop()
     this.buffer = ''
     this.lines = []
     this.sourcePath = this.resolveSource()
-    this.offset = Math.max(0, (this.stat(this.sourcePath)?.size ?? 0) - LOG_READ_BYTES)
+    const size = this.stat(this.sourcePath)?.size ?? 0
+    this.offset = offset === undefined ? size : Math.max(0, offset)
     this.pump()
     try {
       this.watcher = fs.watch(this.sourcePath, () => this.pump())

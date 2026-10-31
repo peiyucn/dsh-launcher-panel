@@ -13,7 +13,7 @@ export interface SpawnHooks {
   setChild(child: ChildProcess | undefined): void
   setPid(pid: number | undefined): void
   handleUnexpectedExit(code: number | null, signal: NodeJS.Signals | null): void
-  startLogPump(): void
+  startLogPump(offset: number): void
 }
 
 export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
@@ -26,8 +26,13 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
     try { fs.writeFileSync(hooks.logPath(), '') } catch { /* best effort */ }
   }
   let logFd: number
+  let startOffset = 0
   try {
     logFd = fs.openSync(hooks.logPath(), 'a')
+    // Capture the offset before spawn: with clearServerLogOnStart off the file keeps earlier
+    // runs, and the console must show this launch only, not history. Output that appears
+    // between spawn and pump start is still after this offset, so nothing is lost.
+    startOffset = fs.fstatSync(logFd).size
   } catch (error) {
     return hooks.fail(`cannot open the instance log: ${error instanceof Error ? error.message : String(error)}`)
   }
@@ -55,6 +60,6 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
   } finally {
     try { fs.closeSync(logFd) } catch { /* child owns the duplicate */ }
   }
-  hooks.startLogPump()
+  hooks.startLogPump(startOffset)
   return true
 }

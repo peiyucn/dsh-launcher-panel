@@ -145,7 +145,7 @@ export class InstanceRuntime {
       setChild: (child) => { this.child = child },
       setPid: (pid) => { this.pid = pid },
       handleUnexpectedExit: (code, signal) => this.handleUnexpectedExit(code, signal),
-      startLogPump: () => this.logPump.start(),
+      startLogPump: (offset) => this.logPump.start(offset),
     })
   }
 
@@ -396,7 +396,7 @@ export class InstanceRuntime {
       // Best effort; a running server may hold the file.
     }
     this.consoleLog = []
-    if (this.state === 'starting') this.logPump.start()
+    if (this.state === 'starting') this.logPump.start(0)
   }
 
   dispose(): void {
