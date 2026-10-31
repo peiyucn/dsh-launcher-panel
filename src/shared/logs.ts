@@ -45,3 +45,18 @@ export function readTokenFromLog(file: string): string | undefined {
   for (const line of text.split(/\r?\n/)) token = extractWebToken(line) ?? token
   return token
 }
+
+// Periodic plugin chatter (model catalog refreshes) says nothing about whether a launch
+// succeeded; it only buries the useful startup output. The full text stays in server.log.
+const MODEL_LISTING_LINE = /\bmodel listing from \S+ (?:loaded \d+ model\(s\)|failed \()/u
+const LAUNCH_TOKEN = /([?&]token=)[^\s&"']+/gu
+
+/**
+ * Lines from the server log that are safe to show in the panel console: periodic plugin
+ * chatter is dropped and launch tokens are masked (the webview must never receive them).
+ */
+export function sanitizeStartupLines(lines: readonly string[]): string[] {
+  return lines
+    .filter((line) => !MODEL_LISTING_LINE.test(line))
+    .map((line) => line.replace(LAUNCH_TOKEN, '$1***'))
+}

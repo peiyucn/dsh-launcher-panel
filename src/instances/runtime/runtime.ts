@@ -10,7 +10,7 @@ import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState 
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
 import { buildSpawnSpec } from '../../dsh/start-spec.ts'
-import { LOG_TAIL_LINES } from '../../shared/logs.ts'
+import { LOG_TAIL_LINES, sanitizeStartupLines } from '../../shared/logs.ts'
 import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
 import { adoptServer, isListening, loopbackUrl, waitForReady } from './health.ts'
 import { LogTailPump } from './log-pump.ts'
@@ -81,9 +81,10 @@ export class InstanceRuntime {
       this.host.dbg(`[${this.instance.id}] ignored state transition ${this.state} --${event}-->`)
       return
     }
-    // Freeze what this start captured: a running dsh keeps logging plugin chatter.
+    // Freeze what this start captured: a running dsh keeps logging plugin chatter. Periodic
+    // model-listing lines are dropped and launch tokens masked before anything reaches the panel.
     if (this.state === 'starting' && next !== 'starting') {
-      this.consoleLog = this.logPump.tail(LOG_TAIL_LINES)
+      this.consoleLog = sanitizeStartupLines(this.logPump.all()).slice(-LOG_TAIL_LINES)
       this.logPump.stop()
     }
     this.state = next
@@ -384,7 +385,9 @@ export class InstanceRuntime {
 
   /** While starting, live lines; afterwards the startup output frozen at settle time. */
   consoleLines(maxLines = LOG_TAIL_LINES): string[] {
-    return this.state === 'starting' ? this.logPump.tail(maxLines) : this.consoleLog.slice(-maxLines)
+    return this.state === 'starting'
+      ? sanitizeStartupLines(this.logPump.all()).slice(-maxLines)
+      : this.consoleLog.slice(-maxLines)
   }
 
   clearLog(): void {

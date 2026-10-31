@@ -239,7 +239,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
    - pkg 模式经 `pnpm exec dsh` 启动，source 模式经 `node --import tsx/esm apps/cli/src/bin.ts` 启动；
    - `hideConsole` → `windowsHide`；source 模式且 `sourceDebug` 时加 `NODE_DEBUG=module`。
 7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。
-8. 面板 Console 的「startup output」只收**本次 Start 之后**写入的内容（spawn 前记录日志偏移）：即使 `clearServerLogOnStart=false` 保留了历史日志，旧运行的输出也不会混进本次启动输出；完整日志始终在 `server.log`。
+8. 面板 Console 的「startup output」只收**本次 Start 之后**写入的内容（spawn 前记录日志偏移）：即使 `clearServerLogOnStart=false` 保留了历史日志，旧运行的输出也不会混进本次启动输出。显示前还会过滤周期性 plugin 日志（如 `model listing`）并给 launch token 打码；完整原文始终在 `server.log`。
 9. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
 10. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
 11. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。

@@ -65,6 +65,11 @@ export class LogTailPump {
     return this.lines.slice(-maxLines)
   }
 
+  /** Everything buffered, oldest first (bounded by the pump's line buffer). */
+  all(): string[] {
+    return [...this.lines]
+  }
+
   private stat(file: string): fs.Stats | undefined {
     try {
       return fs.statSync(file)
