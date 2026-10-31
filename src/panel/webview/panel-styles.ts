@@ -161,9 +161,10 @@ export const PANEL_CSS = `
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
   .ds-balance-row .ds-open { margin-left: 0; }
-  .ds-chat-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .ds-chat-state { display: inline-flex; align-items: center; gap: 4px; color: var(--lap-fg); font-size: 10px; }
-  .ds-chat-row .ds-open { margin-left: auto; }
+  .ds-service-block { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; flex-direction: column; gap: 4px; }
+  .ds-service-head { display: flex; align-items: center; gap: 8px; }
+  .ds-service-head .ds-open { margin-left: auto; }
+  .ds-service-items { display: flex; flex-wrap: wrap; gap: 4px; }
   .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }

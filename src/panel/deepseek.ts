@@ -15,9 +15,10 @@ export interface DsIncident {
 
 export interface DsStatus {
   state: 'ok' | 'degraded' | 'down' | 'maintenance' | 'unknown'
+  /** Model / other API components. */
   components: DsComponentStatus[]
-  /** Chat service component; undefined when the status page does not list one. */
-  chat: DsComponentStatus | undefined
+  /** Components of the status page's chat-service section (chat, file upload, search). */
+  services: DsComponentStatus[]
   incidents: DsIncident[]
 }
 
@@ -88,7 +89,7 @@ async function fetchDsStatus(): Promise<DsStatus> {
       // Try the next host.
     }
   }
-  return { state: 'unknown', components: [], chat: undefined, incidents: [] }
+  return { state: 'unknown', components: [], services: [], incidents: [] }
 }
 
 const GENERIC_LABEL_WORDS = new Set(['api', 'service', 'services'])
@@ -113,44 +114,69 @@ export function dsComponentLabel(componentName: string): string {
   return lower.replace(/\s+(api\s+)?(service|services)$/, '').replace(/\s+api$/, '').trim() || 'api'
 }
 
+// Non-API services use their full official name as a kebab-case id:
+// "对话服务(Chatservice)" -> chat-service, "上传文件服务(File Upload Service)"
+// -> file-upload-service.
+export function dsServiceLabel(componentName: string): string {
+  const outside = toEnglish(componentName)
+  const parenthetical = (/[（(]([^）)]*)[）)]/.exec(componentName)?.[1] ?? '').trim()
+  const base = outside !== '' ? outside : parenthetical !== '' ? parenthetical : componentName
+  return base
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/([a-z0-9])(service)$/, '$1-$2')
+    .replace(/^-+|-+$/g, '') || 'service'
+}
+
 function isApiComponent(name: string): boolean {
   return /api/i.test(toEnglish(name))
 }
 
-// "对话服务(Chatservice)" has no ASCII outside its parenthetical, which
-// toEnglish() drops, so the chat service is recognised on the raw name.
-function isChatServiceComponent(name: string): boolean {
-  return /chat\s*service/i.test(name)
+// Chinese names carry "服务" and their parenthetical carries "Service", so the
+// raw name identifies a non-API service without dropping either half.
+function isServiceComponent(name: string): boolean {
+  return /service|服务/i.test(name)
 }
 
 export function parseDsStatus(json: any): DsStatus {
   try {
     const page = json?.data?.page ?? {}
+    const sections: any[] = Array.isArray(page.sections) ? page.sections : []
+    // Live page: one "对话服务(Chat Service)" section groups chat, file upload and
+    // search. Prefer its section id; fall back to the name heuristic if the status
+    // page ever stops reporting sections.
+    const chatSectionId = String(sections.find((s: any) => /chat/i.test(String(s?.name ?? '')))?.section_id ?? '')
     const statusById = new Map<string, string>()
     const raw: Array<{ id: string; name: string; order: number }> = []
-    let chatId: string | undefined
+    const rawServices: Array<{ id: string; name: string; order: number }> = []
     for (const c of page.components ?? []) {
       const id = String(c?.component_id ?? '')
       if (!id) continue
       const componentName = String(c?.name ?? '')
-      // Monitor the API services plus the chat service; other components
-      // (file upload, search) are out of scope for this card.
-      if (isChatServiceComponent(componentName)) {
-        chatId = id
-        statusById.set(id, 'operational')
-        continue
-      }
-      if (!isApiComponent(componentName)) continue
-      const name = dsComponentLabel(componentName)
+      const order = Number(c?.order_id ?? 0) || 0
       statusById.set(id, 'operational')
-      raw.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
+      // API components and the chat-service section's components are monitored;
+      // anything else on the status page stays out of this card.
+      const inChatSection = chatSectionId === ''
+        ? isServiceComponent(componentName)
+        : String(c?.section_id ?? '') === chatSectionId
+      if (isApiComponent(componentName)) {
+        raw.push({ id, name: dsComponentLabel(componentName), order })
+      } else if (inChatSection) {
+        rawServices.push({ id, name: dsServiceLabel(componentName), order })
+      }
     }
     raw.sort((a, b) => a.order - b.order)
+    rawServices.sort((a, b) => a.order - b.order)
 
     const incidents: DsIncident[] = []
     for (const ch of json?.data?.active_changes ?? []) {
       const affected = ch?.affected_components ?? []
-      const monitored = affected.some((ac: any) => isApiComponent(String(ac?.name ?? '')) || isChatServiceComponent(String(ac?.name ?? '')))
+      const monitored = affected.some((ac: any) => {
+        const name = String(ac?.name ?? '')
+        return isApiComponent(name) || isServiceComponent(name)
+      })
       if (!monitored) continue
       incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
       for (const ac of affected) {
@@ -160,16 +186,13 @@ export function parseDsStatus(json: any): DsStatus {
       }
     }
 
-    const components: DsComponentStatus[] = raw.map((c) => ({
-      name: c.name,
-      status: (statusById.get(c.id) ?? 'operational') as DsComponentStatus['status'],
-    }))
-    const chat: DsComponentStatus | undefined = chatId === undefined
-      ? undefined
-      : { name: 'chat', status: (statusById.get(chatId) ?? 'operational') as DsComponentStatus['status'] }
+    const statusOf = (id: string): DsComponentStatus['status'] =>
+      (statusById.get(id) ?? 'operational') as DsComponentStatus['status']
+    const components: DsComponentStatus[] = raw.map((c) => ({ name: c.name, status: statusOf(c.id) }))
+    const services: DsComponentStatus[] = rawServices.map((c) => ({ name: c.name, status: statusOf(c.id) }))
 
     let worst = 'operational'
-    for (const c of chat === undefined ? components : [...components, chat]) {
+    for (const c of [...components, ...services]) {
       if ((DS_SEVERITY[c.status] ?? 0) > (DS_SEVERITY[worst] ?? 0)) worst = c.status
     }
     const state: DsStatus['state'] = worst === 'full_outage' || worst === 'partial_outage'
@@ -178,9 +201,9 @@ export function parseDsStatus(json: any): DsStatus {
         ? 'degraded'
         : worst === 'maintenance' ? 'maintenance' : 'ok'
 
-    return { state, components, chat, incidents }
+    return { state, components, services, incidents }
   } catch {
-    return { state: 'unknown', components: [], chat: undefined, incidents: [] }
+    return { state: 'unknown', components: [], services: [], incidents: [] }
   }
 }
 

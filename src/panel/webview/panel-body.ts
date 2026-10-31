@@ -117,10 +117,12 @@ export function panelBody(values: PanelBodyValues): string {
           <div class="ds-components" id="dsComponentsOther"></div>
         </div>
       </div>
-      <div class="ds-chat-row">
-        <span class="ds-balance-label">free-chat-service</span>
-        <span class="ds-chat-state" id="dsChatState"></span>
-        <button class="ds-open" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser">Open ↗</button>
+      <div class="ds-service-block">
+        <div class="ds-service-head">
+          <span class="ds-column-title">chat-service</span>
+          <button class="ds-open" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser">Open ↗</button>
+        </div>
+        <div class="ds-service-items" id="dsServices"></div>
       </div>
       <div class="ds-incidents" id="dsIncidents"></div>
       <div class="ds-balance-row">

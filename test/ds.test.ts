@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { dsComponentLabel, getDsStatus, hasDeepSeekModel, parseDsStatus, readCredentialFromFile, readDefaultModel, resetDsCachesForTest } from '../src/panel/deepseek.ts'
+import { dsComponentLabel, dsServiceLabel, getDsStatus, hasDeepSeekModel, parseDsStatus, readCredentialFromFile, readDefaultModel, resetDsCachesForTest } from '../src/panel/deepseek.ts'
 
 function withTempFile(content: string, fn: (file: string) => unknown): unknown {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-test-'))
@@ -88,7 +88,15 @@ test('dsComponentLabel keeps the service name when only the Chinese half has an 
   assert.equal(dsComponentLabel('DeepSeek V3 Chat API'), 'deepseek-v3-chat')
 })
 
-test('parseDsStatus lists the new search and fetch API services distinctly and the chat service separately', () => {
+test('dsServiceLabel keeps the official kebab-case service name', () => {
+  // Live status-page names in the chat-service section.
+  assert.equal(dsServiceLabel('对话服务(Chatservice)'), 'chat-service')
+  assert.equal(dsServiceLabel('上传文件服务(File Upload Service)'), 'file-upload-service')
+  assert.equal(dsServiceLabel('搜索服务(Search Service)'), 'search-service')
+  assert.equal(dsServiceLabel('Chat Service'), 'chat-service')
+})
+
+test('parseDsStatus lists the API services and the chat-service section separately', () => {
   const json = {
     data: {
       page: {
@@ -96,6 +104,7 @@ test('parseDsStatus lists the new search and fetch API services distinctly and t
           { component_id: '1', name: 'DeepSeek V4 Pro API服务(API Service)', order_id: 1 },
           { component_id: '2', name: 'DeepSeek V4.1 Flash API服务(API Service)', order_id: 2 },
           { component_id: '3', name: '对话服务(Chatservice)', order_id: 1 },
+          { component_id: '7', name: '上传文件服务(File Upload Service)', order_id: 2 },
           { component_id: '4', name: '搜索服务(Search Service)', order_id: 3 },
           { component_id: '5', name: '搜索API服务(Search API Service)', order_id: 3 },
           { component_id: '6', name: '抓取API服务(Fetch API Service)', order_id: 4 },
@@ -105,12 +114,16 @@ test('parseDsStatus lists the new search and fetch API services distinctly and t
     },
   }
   const st = parseDsStatus(json)
-  // The chat service has its own row; the two API services are distinct.
+  // The chat-service section's components have their own row; API services are distinct.
   assert.deepEqual(
     st.components.map((c) => c.name),
     ['deepseek-v4-pro', 'deepseek-v4.1-flash', 'search', 'fetch'],
   )
-  assert.deepEqual(st.chat, { name: 'chat', status: 'operational' })
+  assert.deepEqual(st.services, [
+    { name: 'chat-service', status: 'operational' },
+    { name: 'file-upload-service', status: 'operational' },
+    { name: 'search-service', status: 'operational' },
+  ])
   assert.equal(st.state, 'ok')
 })
 
@@ -139,41 +152,43 @@ test('parseDsStatus maps components, incidents and worst severity', () => {
   assert.equal(st.components[0].name, 'deepseek-v3-chat')
   assert.equal(st.components[0].status, 'partial_outage')
   assert.equal(st.components[1].status, 'operational')
-  assert.equal(st.chat, undefined)
+  assert.deepEqual(st.services, [])
   assert.equal(st.incidents.length, 1)
   assert.equal(st.incidents[0].status, 'investigating')
 })
 
-test('parseDsStatus skips components that are neither API nor chat', () => {
+test('parseDsStatus skips components that are neither API nor service', () => {
   const json = {
     data: {
       page: {
-        components: [{ component_id: '1', name: 'Upload Service', order_id: 1 }],
+        components: [{ component_id: '1', name: 'Web Portal', order_id: 1 }],
       },
       active_changes: [
         {
           change_id: 'c2',
           title: 'Something else',
           status: 'investigating',
-          affected_components: [{ component_id: '9', name: 'Upload Service', status: 'full_outage' }],
+          affected_components: [{ component_id: '9', name: 'Web Portal', status: 'full_outage' }],
         },
       ],
     },
   }
   const st = parseDsStatus(json)
   assert.equal(st.components.length, 0)
-  assert.equal(st.chat, undefined)
+  assert.deepEqual(st.services, [])
   assert.equal(st.incidents.length, 0)
   assert.equal(st.state, 'ok')
 })
 
-test('parseDsStatus reports the chat service and its incidents', () => {
+test('parseDsStatus reports the chat-service section services and their incidents', () => {
   const json = {
     data: {
       page: {
         components: [
           { component_id: '1', name: 'DeepSeek V4 Pro API服务(API Service)', order_id: 1 },
           { component_id: '3', name: '对话服务(Chatservice)', order_id: 1 },
+          { component_id: '4', name: '上传文件服务(File Upload Service)', order_id: 2 },
+          { component_id: '5', name: '搜索服务(Search Service)', order_id: 3 },
         ],
       },
       active_changes: [
@@ -187,17 +202,44 @@ test('parseDsStatus reports the chat service and its incidents', () => {
     },
   }
   const st = parseDsStatus(json)
-  assert.deepEqual(st.chat, { name: 'chat', status: 'degraded' })
+  assert.deepEqual(st.services, [
+    { name: 'chat-service', status: 'degraded' },
+    { name: 'file-upload-service', status: 'operational' },
+    { name: 'search-service', status: 'operational' },
+  ])
   assert.equal(st.components.length, 1)
   assert.equal(st.incidents.length, 1)
   assert.equal(st.incidents[0].title, 'Chat slower than usual')
   assert.equal(st.state, 'degraded')
 })
 
+test('parseDsStatus keeps only the chat-service section services', () => {
+  const json = {
+    data: {
+      page: {
+        components: [
+          { component_id: 'a', name: '对话服务(Chatservice)', section_id: 's-chat', order_id: 1 },
+          { component_id: 'b', name: '上传文件服务(File Upload Service)', section_id: 's-chat', order_id: 2 },
+          { component_id: 'c', name: '网站服务(Website Service)', section_id: 's-site', order_id: 1 },
+          { component_id: 'd', name: '搜索API服务(Search API Service)', order_id: 3 },
+        ],
+        sections: [
+          { section_id: 's-chat', name: '对话服务(Chat Service)', order_id: 5 },
+          { section_id: 's-site', name: '网站服务(Website Service)', order_id: 6 },
+        ],
+      },
+      active_changes: [],
+    },
+  }
+  const st = parseDsStatus(json)
+  assert.deepEqual(st.services.map((s) => s.name), ['chat-service', 'file-upload-service'])
+  assert.deepEqual(st.components.map((c) => c.name), ['search'])
+})
+
 test('parseDsStatus tolerates malformed input without throwing', () => {
   const st = parseDsStatus(null)
   assert.equal(st.components.length, 0)
-  assert.equal(st.chat, undefined)
+  assert.deepEqual(st.services, [])
   assert.equal(st.incidents.length, 0)
 })
 

@@ -45,7 +45,7 @@ export function panelScript(values: PanelScriptValues): string {
       log: document.getElementById('log'),
       balanceValue: document.getElementById('balanceValue'),
       balanceBtn: document.getElementById('balanceBtn'),
-      dsChatState: document.getElementById('dsChatState'),
+      dsServices: document.getElementById('dsServices'),
       dsChatBtn: document.getElementById('dsChatBtn'),
       instanceFormName: document.getElementById('instanceFormName'),
       instanceFormHome: document.getElementById('instanceFormHome'),
@@ -82,7 +82,7 @@ export function panelScript(values: PanelScriptValues): string {
     function incidentLabel(st) {
       return { investigating: 'Investigating', identified: 'Identified', monitoring: 'Monitoring', resolved: 'Resolved' }[st] || st || ''
     }
-    // Chat service states are spelled out next to the dot; component pills rely on color only.
+    // Service states are spelled out in the pill tooltip; the pills rely on color only.
     const COMPONENT_STATE_LABELS = {
       operational: 'Operational',
       degraded: 'Degraded',
@@ -286,14 +286,13 @@ export function panelScript(values: PanelScriptValues): string {
       }
       renderGroup(document.getElementById('dsComponents'), comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
       renderGroup(document.getElementById('dsComponentsOther'), comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
-      const chat = ds.chat
-      if (!chat) {
-        el.dsChatState.textContent = 'Status unavailable'
-      } else {
-        const st = chat.status || 'operational'
-        el.dsChatState.innerHTML = '<span class="cdot ' + compStateClass(st) + '"></span><span>'
-          + esc(COMPONENT_STATE_LABELS[st] || st) + '</span>'
-      }
+      const services = ds.services || []
+      el.dsServices.innerHTML = services.map((s) => {
+        const st = s.status || 'operational'
+        return '<div class="ds-comp" title="' + esc(s.name + ' · ' + (COMPONENT_STATE_LABELS[st] || st)) + '">'
+          + '<span class="cdot ' + compStateClass(st) + '"></span>'
+          + '<span class="ds-comp-name">' + esc(s.name) + '</span></div>'
+      }).join('') || '<div class="ds-empty">—</div>'
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')
