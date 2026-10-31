@@ -4,18 +4,11 @@
 
 ## 项目概况
 
-VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并在 VS Code 内置浏览器中打开它的 Web UI；支持多实例（每个实例 = 一套 `DSH_HOME` + profile + 端口）。
+本仓库是 VS Code 扩展「DSH Launcher Panel」的源码仓库（TypeScript，源码 `src/`；`out/` 与 `releases/` 不入库）。
 
-* TypeScript 实现，源码 `src/`；`out/` 与 `releases/`（本地打包的 `*.vsix`）不入库
-* 模块（依赖单向：L0 纯逻辑 → L1 子系统 → L2 装配）：
-  * **L0 纯逻辑（不 import vscode，可直接单测）**：`env.ts`（默认值与小工具）、`versions.ts`（版本比较与更新判定）、`pricing.ts`（峰谷判定）、`holidays.ts`（法定节假日静态表，手工维护）、`paths.ts`（路径与 dsh 落盘产物）、`timing.ts`（公共超时与上界）、`proc.ts`（子进程封装与输出解码）、`git.ts`、`pnpm.ts`、`instances.ts`（实例模型与校验）、`instance-bootstrap.ts`、`instance-state.ts`（状态迁移、home 占用与 Stop 决策纯函数）、`server/log-read.ts`（日志尾部与 token 读取）、`server/start-spec.ts`（启动参数 / env 规格）、`webview/panel-contract.ts`（面板消息与 update payload 契约）、`webview/panel-refresh.ts`（刷新 single-flight）、`panel-form.ts`（表单 payload 解析）
-  * **L1 子系统**（`src/server/`）：`activity`（活动流与 client.log）、`probes`、`release-tags`、`install`、`checkout`、`detect`、`update`、`node-check`、`config`、`process`（杀进程 / 端口 owner）、`terminal`、`instance-runtime`（单实例进程与状态机）、`instance-store`（实例设置持久化）、`instance-brand`（实例名注入 Web UI 的本地 bundle）。各模块通过 `*Host` 接口接收生命周期状态，不反向 import 上层模块
-  * **L2 装配**：`extension.ts`（激活、状态栏、命令）、`instance-manager.ts`（实例集合、共享安装 / 检测 / 更新、面板快照）、`actions.ts`（命令动作）、`panel.ts`（Dashboard webview）、`statusMenu.ts`、`ds.ts`（DeepSeek 状态 / 余额）；`webview/`（`panel-body` / `panel-styles` / `panel-script`，内联前端三段）
-* 测试：`npm test`（Node 原生类型剥离直跑 `node:test`，`--test-isolation=none`），用例 `test/*.test.ts`，只覆盖不依赖 vscode 的纯逻辑模块（含抽出的状态迁移、启动规格、日志读取、面板契约、表单解析）
-* 本地验证 = `npm run verify`（typecheck + test + compile + package）；VSIX 落在 `releases/`（`npm run package` 会先建目录再调 vsce）
-* **生成物入库**：`resources/dsh-icon.woff`（`npm run build:icon-font`）是生成物，但随版本入库——扩展零运行时依赖、构建要可复现；重新生成后提交 diff 以便评审。节假日表相反：`src/holidays.ts` 是手工静态数据（详见该文件注释），不用脚本抓取
-* **定位与退役判据**：见 `docs/positioning-and-retirement.md`——本文件不复述，避免指令文件膨胀
-* **实例规格**：见 `docs/instances-spec.md`（已实现功能的契约与验收矩阵）；`docs/` 属开发文档，不进 VSIX
+* **本文件只写对开发 agent 的规则与流程**。功能契约与验收矩阵见 `docs/instances-spec.md`，架构与模块边界见 `docs/architecture.md`，定位与退役判据见 `docs/positioning-and-retirement.md`——这些内容不在本文件复述。
+* **生成物入库**：`resources/dsh-icon.woff`（`npm run build:icon-font`）是生成物，但随版本入库——扩展零运行时依赖、构建要可复现；重新生成后提交 diff 以便评审。节假日表相反：`src/holidays.ts` 是手工静态数据（详见该文件注释），不用脚本抓取。
+* `docs/` 属开发文档，不进 VSIX。
 
 ## 文档规范
 
@@ -35,7 +28,7 @@ VS Code 扩展「DSH Launcher Panel」：启动 DeepSeek Harness（dsh），并�
 
 ### 本项目实际文档
 
-`README.md` + `README.zh-CN.md`、`CHANGELOG.md` + `CHANGELOG.zh-CN.md`、`SECURITY.md`、`docs/instances-spec.md`（实例规格，已实现状态）、`docs/positioning-and-retirement.md`（定位与退役判据）。`AGENTS.md` 是唯一 agent 指令文件（不留 `CLAUDE.md` 等其它厂商指令文件）；无 CONTRIBUTING。`docs/` 属开发文档，不进 VSIX。
+`README.md` + `README.zh-CN.md`、`CHANGELOG.md` + `CHANGELOG.zh-CN.md`、`SECURITY.md`、`docs/architecture.md`（架构与模块边界）、`docs/instances-spec.md`（功能契约与验收矩阵）、`docs/positioning-and-retirement.md`（定位与退役判据）。`AGENTS.md` 是唯一 agent 指令文件（不留 `CLAUDE.md` 等其它厂商指令文件）；无 CONTRIBUTING。功能行为以 `docs/instances-spec.md` 为准，AGENTS 只写规则与流程；`docs/` 属开发文档，不进 VSIX。
 
 ## 工程管线
 
@@ -183,12 +176,12 @@ UI 入口防连点；请求可被打断且状态保持一致。
 
 ### 本项目审计热点
 
+* **改动前先读规格**：涉及功能的改动先对照 `docs/instances-spec.md` 的契约与验收矩阵、`docs/architecture.md` 的模块边界；实现、测试、README / CHANGELOG 与规格必须一致（G1），不得只改代码不改文档
 * **文档对齐**：README 中英 Settings 表与 `package.json` `contributes.configuration` 一一对应（键 / 默认值 / 枚举 / scope / 顺序）；文件路径、日志路径、行为描述与实现一致；`docs/instances-spec.md` 与实际行为一致；CHANGELOG 双份覆盖本版全部用户可感知改动
 * **死代码**：grep 每个导出符号与常量确认调用方（含 `test/`）；清未使用的 import / 导出 / 变量 / 类型字段 / CSS 类
-* **多实例状态一致性**：`starting` 必须有超时、异常不得永久卡住；Stop 对无法确认归属的端口 owner 必须显式确认后才杀；意外退出要清 pid/url 并提示退出码与日志路径；同一 home 同时只允许一个实例运行；`deactivate` 不杀实例、重新激活按端口接管
 * **busy 成对收尾**：`addActivity(…, true)` 一律用 `withBusy(label, task)` 包住；`*Host` 只暴露 `withBusy`，不暴露 `finishBusy`——活动流没有回收器，漏收尾会让 spinner 转到会话结束
 * **资源 / 内存泄漏**：timer / watcher / AbortController / 子进程在成功与失败路径都释放；缓存与累积状态有界（活动流行数与单行长度、`client.log` 大小、日志尾部读取上限）；Webview 消息引用不滞留
-* **部分失败**：中途失败状态诚实并校验结果；「没启动」与「还没启动」必须可区分——启动流程必须如实报告进程有没有真的起来；失败路径必须有活动流 / 面板可见反馈
+* **部分失败**：中途失败状态诚实并校验结果；失败路径必须有活动流 / 面板可见反馈
 * **路径**：含空格与非 ASCII 的路径必须能跑；用户配置路径先 `trim` / 规范化再判断；临时 / 缓存目录与持久数据目录区分；`~` 展开与相对路径按实例校验规则处理
 * **安全热点**：子进程一律 `spawn`/`execFile` + 参数数组，绝不拼命令行、绝不用 `shell: true`——参数经 shell 解析就可能变成第二条命令（用户配置的路径尤其如此）。Windows 的 `.cmd`/`.bat` 既不能被 `spawn` 直接调用（Node 的 CVE-2024-27980 防护）也不能交给 shell，用 `proc.ts` 的 `resolveCommandEntry`/`runResolved` 读 shim 后跑它的 Node 入口。用户配置路径先校验再用、展示用 `maskPath`；API key / launch token 不进日志 / 面板 / HTML（发往 webview 的 payload 不带 token URL）；Webview CSP + `esc` 转义；fetch 带超时 + AbortController；外部 URL 白名单
 * **改写文件前先确认归属**：覆写 / 删除前必须确认那是本扩展自己的产物（如 install manifest 按名字识别、实例品牌 bundle 按包名标识），不是就不动——搞错会静默毁掉用户数据，且不可逆
@@ -363,25 +356,12 @@ git 与 agent 宿主进程均不读取系统代理。需要走代理时须显式
 * **dsh 版本差异降级不崩**：只按公开契约读 dsh 的 CLI 输出与配置目录（旧配置键迁移、启动时探测 Node 能力并给诊断）；不认的字段 / 输出走降级路径
 * **运行期不冒泡**：扩展自有入口（webview 消息路由、命令注册、子进程回调、配置变更监听）内部兜住异常——`onMessage` 失败记一条活动流并照常 refresh，面板不会停在旧数据
 * **busy 必须成对收尾**：`addActivity(…, true)` 用 `withBusy(label, task)` 包住。各 `*Host` 只暴露 `withBusy`、不暴露 `finishBusy`，所以手写这对调用写不出来——抛错会漏收尾，而活动流没有回收器，spinner 会转到会话结束
-* **模块顶层不依赖易变导出**：不 import VS Code 内部模块；L0 模块不 import `vscode`
-
-### 多实例运行时契约
-
-* 一个实例 = 一套运行坐标（`DSH_HOME`、profile、端口）+ 一个 `InstanceRuntime`（child / pid / 状态 / URL / 日志 / 启停锁）；实例不描述用途，不存 API key / 模型 / 权限
-* 安装、检测、更新是共享的：所有实例共用一份 dsh，全局操作（安装 / 更新 / 切 runMode）前必须停止全部实例，不得并发安装
-* 同一规范化 home 同一时间只允许一个实例运行；端口由 launcher 分配（`dsh.instancePortBase`），面板不直接编辑端口
-* 删除实例只从列表移除，不删 home / sessions / 日志
-* 状态机：`starting` 必须有独立看门狗兜底；意外退出要清 pid/url、记录退出码与日志路径并可见提示；Stop 只直接杀本窗口 tracked child，没有 tracked child 时（接管 / 陌生端口）必须经用户显式确认才允许杀端口 owner；`adopted` / `untrackedPort` 状态必须如实展示
-* `deactivate` 只停日志泵，不杀实例；重新激活按端口探测接管
-* 配置变更：`dsh.instances` / `dsh.activeInstance` 的外部修改触发 `reloadSettings()`，按 id 复用已有 runtime，不打断运行中进程
-* 实例列表 / 活动实例 / 端口基础值 / 品牌开关是机器本地设置（machine scope，不同步）；运行状态不持久化
-* 实例品牌 bundle 只写 launcher 自己生成的包（写前校验归属、临时文件 + rename 原子替换；上游 Web 客户端内部契约变化时静默失效、不崩）
-* 命令族：`dsh.start` / `dsh.stop` 作用于活动实例；`dsh.instance.start` / `.stop` / `.restart` 带实例 id；`dsh.instance.new` / `.edit` / `.delete` / `.select` / `.open`（edit / delete / open 可带 id）；面板按钮必须传实例 id，不依赖隐式活动状态
+* **模块顶层不依赖易变导出**：不 import VS Code 内部模块；除装配层外不 import `vscode`（可单测的纯逻辑模块清单与分层见 `docs/architecture.md`）
 
 ### 测试规范
 
 * `npm test`：Node 原生类型剥离直跑 `node:test`（`--test-isolation=none`），用例 `test/*.test.ts`
-* 只覆盖不依赖 vscode 的纯逻辑；依赖 vscode 的装配层（`instance-manager` / `instance-runtime` 等）通过抽出纯函数（状态迁移、启动规格、日志读取、面板契约、表单解析）来测试
+* 只覆盖不依赖 vscode 的纯逻辑；依赖 vscode 的装配层（`instances/manager.ts`、`instances/runtime/` 等）通过抽出纯函数（状态迁移、启动规格、日志读取、面板契约、表单解析）来测试
 * 纯逻辑改动必须补测试；手工矩阵见 `docs/instances-spec.md` 的测试章
 
 ### 发布前检查

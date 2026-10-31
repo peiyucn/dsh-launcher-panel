@@ -1,7 +1,7 @@
 # DSH 多实例管理规格
 
 > 状态：**已实现**（0.3.x 起；2026-10-27 按当前 `dev` 实现复核，本文件随实现更新）· 原草案 v0.1 2026-10-24
-> 范围：`dsh-launcher-panel` 的实例管理功能。
+> 范围：`dsh-launcher-panel` 的实例管理功能。**本文件是功能与验收的唯一来源**；`AGENTS.md` 只写工程规则与流程，`docs/architecture.md` 写架构与模块边界。
 > 一句话：把扩展从「管理一个 DSH 服务」升级为「管理 N 个独立的 DSH 实例」；每个实例只描述 `DSH_HOME`、profile、port 等运行坐标。
 
 ## 一、背景
@@ -127,6 +127,7 @@ interface DshInstance {
 - 重复 `id`：保留第一条并告警。
 - 重复 `port`：配置允许存在，但启动时拒绝并提示冲突；新建/编辑表单在写入前就阻止重复。
 - 重复 `home`：允许配置，但同一 home 同时只能跑一个实例；面板显示「共享 home」标记。
+- 外部修改 `dsh.instances` / `dsh.activeInstance` 后重新加载设置：按 id 复用已有 runtime（`reloadSettings()`），不打断运行中进程；`dsh.activeInstance` 只是新窗口的初始活动实例。
 
 ## 六、创建实例
 
