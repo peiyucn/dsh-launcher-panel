@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.6] - 2026-11-01
+
+- The DeepSeek status section is now titled **DeepSeek API Status**. Its status-page link moved into the section header as an arrow icon right after the title; the account row no longer carries it.
+- Expanding the card now shows the official **chat-service** section: `chat-service`, `file-upload-service` and `search-service` each report their live status, and chat-service incidents appear with the other warnings.
+- A new **Open chat** button (chat icon) opens `chat.deepseek.com` in the configured browser, putting the free DeepSeek chat one click away from the panel.
+- Development dependencies (minimatch, qs, glob) were upgraded to patched versions. They are not part of the packaged extension, so there is no user-perceivable change.
+
 ## [0.3.5] - 2026-10-31
 
 - Stop no longer asks for confirmation. A server the launcher started but does not track in this window (for example after a VS Code reload) is now identified by its command line and stopped directly — this also fixes cases where confirming the old dialog left the server running. A port held by a process that cannot be identified as the instance's DSH server is not killed: the reason is reported in the panel and activity log instead.
