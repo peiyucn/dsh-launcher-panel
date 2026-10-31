@@ -88,7 +88,7 @@ test('dsComponentLabel keeps the service name when only the Chinese half has an 
   assert.equal(dsComponentLabel('DeepSeek V3 Chat API'), 'deepseek-v3-chat')
 })
 
-test('parseDsStatus lists the new search and fetch API services distinctly', () => {
+test('parseDsStatus lists the new search and fetch API services distinctly and the chat service separately', () => {
   const json = {
     data: {
       page: {
@@ -105,11 +105,12 @@ test('parseDsStatus lists the new search and fetch API services distinctly', () 
     },
   }
   const st = parseDsStatus(json)
-  // Chat Service modes are still skipped; the two API services are distinct.
+  // The chat service has its own row; the two API services are distinct.
   assert.deepEqual(
     st.components.map((c) => c.name),
     ['deepseek-v4-pro', 'deepseek-v4.1-flash', 'search', 'fetch'],
   )
+  assert.deepEqual(st.chat, { name: 'chat', status: 'operational' })
   assert.equal(st.state, 'ok')
 })
 
@@ -138,35 +139,65 @@ test('parseDsStatus maps components, incidents and worst severity', () => {
   assert.equal(st.components[0].name, 'deepseek-v3-chat')
   assert.equal(st.components[0].status, 'partial_outage')
   assert.equal(st.components[1].status, 'operational')
+  assert.equal(st.chat, undefined)
   assert.equal(st.incidents.length, 1)
   assert.equal(st.incidents[0].status, 'investigating')
 })
 
-test('parseDsStatus skips non-api components and unrelated incidents', () => {
+test('parseDsStatus skips components that are neither API nor chat', () => {
   const json = {
     data: {
       page: {
-        components: [{ component_id: '1', name: 'Chat Service', order_id: 1 }],
+        components: [{ component_id: '1', name: 'Upload Service', order_id: 1 }],
       },
       active_changes: [
         {
           change_id: 'c2',
           title: 'Something else',
           status: 'investigating',
-          affected_components: [{ component_id: '9', name: 'Chat Service', status: 'full_outage' }],
+          affected_components: [{ component_id: '9', name: 'Upload Service', status: 'full_outage' }],
         },
       ],
     },
   }
   const st = parseDsStatus(json)
   assert.equal(st.components.length, 0)
+  assert.equal(st.chat, undefined)
   assert.equal(st.incidents.length, 0)
   assert.equal(st.state, 'ok')
+})
+
+test('parseDsStatus reports the chat service and its incidents', () => {
+  const json = {
+    data: {
+      page: {
+        components: [
+          { component_id: '1', name: 'DeepSeek V4 Pro API服务(API Service)', order_id: 1 },
+          { component_id: '3', name: '对话服务(Chatservice)', order_id: 1 },
+        ],
+      },
+      active_changes: [
+        {
+          change_id: 'c3',
+          title: 'Chat slower than usual',
+          status: 'identified',
+          affected_components: [{ component_id: '3', name: '对话服务(Chatservice)', status: 'degraded' }],
+        },
+      ],
+    },
+  }
+  const st = parseDsStatus(json)
+  assert.deepEqual(st.chat, { name: 'chat', status: 'degraded' })
+  assert.equal(st.components.length, 1)
+  assert.equal(st.incidents.length, 1)
+  assert.equal(st.incidents[0].title, 'Chat slower than usual')
+  assert.equal(st.state, 'degraded')
 })
 
 test('parseDsStatus tolerates malformed input without throwing', () => {
   const st = parseDsStatus(null)
   assert.equal(st.components.length, 0)
+  assert.equal(st.chat, undefined)
   assert.equal(st.incidents.length, 0)
 })
 

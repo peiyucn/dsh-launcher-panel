@@ -16,6 +16,8 @@ export interface DsIncident {
 export interface DsStatus {
   state: 'ok' | 'degraded' | 'down' | 'maintenance' | 'unknown'
   components: DsComponentStatus[]
+  /** Chat service component; undefined when the status page does not list one. */
+  chat: DsComponentStatus | undefined
   incidents: DsIncident[]
 }
 
@@ -86,7 +88,7 @@ async function fetchDsStatus(): Promise<DsStatus> {
       // Try the next host.
     }
   }
-  return { state: 'unknown', components: [], incidents: [] }
+  return { state: 'unknown', components: [], chat: undefined, incidents: [] }
 }
 
 const GENERIC_LABEL_WORDS = new Set(['api', 'service', 'services'])
@@ -111,16 +113,35 @@ export function dsComponentLabel(componentName: string): string {
   return lower.replace(/\s+(api\s+)?(service|services)$/, '').replace(/\s+api$/, '').trim() || 'api'
 }
 
+function isApiComponent(name: string): boolean {
+  return /api/i.test(toEnglish(name))
+}
+
+// "对话服务(Chatservice)" has no ASCII outside its parenthetical, which
+// toEnglish() drops, so the chat service is recognised on the raw name.
+function isChatServiceComponent(name: string): boolean {
+  return /chat\s*service/i.test(name)
+}
+
 export function parseDsStatus(json: any): DsStatus {
   try {
     const page = json?.data?.page ?? {}
     const statusById = new Map<string, string>()
     const raw: Array<{ id: string; name: string; order: number }> = []
+    let chatId: string | undefined
     for (const c of page.components ?? []) {
       const id = String(c?.component_id ?? '')
-      // Only API services are monitored; Chat Service modes are not.
-      if (!id || !/api/i.test(toEnglish(String(c?.name ?? '')).toLowerCase())) continue
-      const name = dsComponentLabel(String(c?.name ?? ''))
+      if (!id) continue
+      const componentName = String(c?.name ?? '')
+      // Monitor the API services plus the chat service; other components
+      // (file upload, search) are out of scope for this card.
+      if (isChatServiceComponent(componentName)) {
+        chatId = id
+        statusById.set(id, 'operational')
+        continue
+      }
+      if (!isApiComponent(componentName)) continue
+      const name = dsComponentLabel(componentName)
       statusById.set(id, 'operational')
       raw.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
     }
@@ -128,10 +149,11 @@ export function parseDsStatus(json: any): DsStatus {
 
     const incidents: DsIncident[] = []
     for (const ch of json?.data?.active_changes ?? []) {
-      const affectsApi = (ch?.affected_components ?? []).some((ac: any) => /api/i.test(toEnglish(String(ac?.name ?? ''))))
-      if (!affectsApi) continue
+      const affected = ch?.affected_components ?? []
+      const monitored = affected.some((ac: any) => isApiComponent(String(ac?.name ?? '')) || isChatServiceComponent(String(ac?.name ?? '')))
+      if (!monitored) continue
       incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
-      for (const ac of ch?.affected_components ?? []) {
+      for (const ac of affected) {
         const id = String(ac?.component_id ?? '')
         const st = String(ac?.status ?? '').trim()
         if (id && DS_SEVERITY[st] !== undefined) statusById.set(id, st)
@@ -142,9 +164,12 @@ export function parseDsStatus(json: any): DsStatus {
       name: c.name,
       status: (statusById.get(c.id) ?? 'operational') as DsComponentStatus['status'],
     }))
+    const chat: DsComponentStatus | undefined = chatId === undefined
+      ? undefined
+      : { name: 'chat', status: (statusById.get(chatId) ?? 'operational') as DsComponentStatus['status'] }
 
     let worst = 'operational'
-    for (const c of components) {
+    for (const c of chat === undefined ? components : [...components, chat]) {
       if ((DS_SEVERITY[c.status] ?? 0) > (DS_SEVERITY[worst] ?? 0)) worst = c.status
     }
     const state: DsStatus['state'] = worst === 'full_outage' || worst === 'partial_outage'
@@ -153,9 +178,9 @@ export function parseDsStatus(json: any): DsStatus {
         ? 'degraded'
         : worst === 'maintenance' ? 'maintenance' : 'ok'
 
-    return { state, components, incidents }
+    return { state, components, chat, incidents }
   } catch {
-    return { state: 'unknown', components: [], incidents: [] }
+    return { state: 'unknown', components: [], chat: undefined, incidents: [] }
   }
 }
 

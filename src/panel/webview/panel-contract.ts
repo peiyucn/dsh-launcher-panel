@@ -5,7 +5,7 @@ import type { PricingWindow } from '../pricing.ts'
 const COMMAND_NAMES = [
   'ready', 'start', 'stop', 'instanceForm', 'saveInstanceForm', 'selectInstance',
   'deleteInstance', 'updateDsh', 'refreshRequirements', 'setMode', 'revealPath', 'openLog',
-  'balance', 'setBrowser', 'openStatus', 'openSettings', 'toggleDebug', 'clearConsole',
+  'balance', 'setBrowser', 'openStatus', 'openChat', 'openSettings', 'toggleDebug', 'clearConsole',
 ] as const
 
 const MESSAGE_TYPE_NAMES = ['update', 'instanceForm', 'instanceFormError', 'instanceFormSaved'] as const

@@ -295,6 +295,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
   Model APIs      │ Other APIs
   ● deepseek...   │ ● search
   ● deepseek...   │ ● fetch
+  Chat service ● Operational  [Open ↗]
   Account ... [Balance] [↗]
 
 Settings (no frame)
@@ -317,7 +318,7 @@ node · launcher
   - 编辑表单只改名称、home、auto-open、browser；名称变化时，若 home 仍是自动格式，会同步改成 `.dsh-{new name}`；改 home 不移动数据。profile 固定 web，不在表单里。
 - **Runtime（最上方）**：`deepseek harness` 版本、mode（pkg/src）、Update/⟳；这些是共享的。
 - **Console/日志**：独立 section，跟随当前 tab；只显示与当前实例相关的 launcher 活动与该实例启动输出，外加少量 launcher 全局事件（安装/更新/检测）；日志路径随 tab 切到该实例的 `client.log` / `server.log`；`Clear` 只清当前实例的这两份日志。
-- **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。
+- **DeepSeek API 状态**：独立 section，**默认收起**，只显示标题、Peak/Off-peak 和展开箭头；点标题展开后显示模型 API / 其他 API 两栏（中间短分割线）、对话服务状态行、余额、状态链接。**Balance** 跟随当前 tab 的 home（账户/余额读取用当前实例 home）。**Chat service** 行显示官方状态页「对话服务（Chatservice）」组件的状态；`Open ↗` 走当前浏览器设置打开 `https://chat.deepseek.com/`（默认内置浏览器）。
 - **Settings**：页面底部，无边框、无标题；放 Global Settings、浏览器选择和 node/launcher 版本。
 - **同步**：tab 选择是每个窗口各自的内存状态；`dsh.activeInstance` 只作为新窗口的初始值（同机多窗口共享 user settings，不能把它当 per-window 持久化）。状态栏/快速选择/命令在本窗口切换时 tab 跟随；其他窗口切换 active 不影响本窗口。
 - **键盘/可访问性**：`role="tablist"` / `role="tab"` / `role="tabpanel"`；左右方向键移动，Home/End，Enter/Space 激活；`+` 是普通 button；切换后焦点回到选中 tab；错误/状态变化用 `aria-live`（避免刷屏）。

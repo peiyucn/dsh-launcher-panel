@@ -45,6 +45,8 @@ export function panelScript(values: PanelScriptValues): string {
       log: document.getElementById('log'),
       balanceValue: document.getElementById('balanceValue'),
       balanceBtn: document.getElementById('balanceBtn'),
+      dsChatState: document.getElementById('dsChatState'),
+      dsChatBtn: document.getElementById('dsChatBtn'),
       instanceFormName: document.getElementById('instanceFormName'),
       instanceFormHome: document.getElementById('instanceFormHome'),
       instanceFormAuto: document.getElementById('instanceFormAuto'),
@@ -79,6 +81,14 @@ export function panelScript(values: PanelScriptValues): string {
     }
     function incidentLabel(st) {
       return { investigating: 'Investigating', identified: 'Identified', monitoring: 'Monitoring', resolved: 'Resolved' }[st] || st || ''
+    }
+    // Chat service states are spelled out next to the dot; component pills rely on color only.
+    const COMPONENT_STATE_LABELS = {
+      operational: 'Operational',
+      degraded: 'Degraded',
+      partial_outage: 'Partial outage',
+      full_outage: 'Full outage',
+      maintenance: 'Maintenance',
     }
     function fmtSize(bytes) {
       if (!bytes || bytes <= 0) return ''
@@ -276,6 +286,14 @@ export function panelScript(values: PanelScriptValues): string {
       }
       renderGroup(document.getElementById('dsComponents'), comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
       renderGroup(document.getElementById('dsComponentsOther'), comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
+      const chat = ds.chat
+      if (!chat) {
+        el.dsChatState.textContent = 'Status unavailable'
+      } else {
+        const st = chat.status || 'operational'
+        el.dsChatState.innerHTML = '<span class="cdot ' + compStateClass(st) + '"></span><span>'
+          + esc(COMPONENT_STATE_LABELS[st] || st) + '</span>'
+      }
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')
@@ -350,6 +368,7 @@ export function panelScript(values: PanelScriptValues): string {
       vscode.postMessage({ command: 'updateDsh' })
     })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
+    el.dsChatBtn.addEventListener('click', () => vscode.postMessage({ command: 'openChat' }))
     const dsToggle = document.getElementById('dsToggle')
     const dsBody = document.getElementById('dsBody')
     const setDsOpen = (open) => {

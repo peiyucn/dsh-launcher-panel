@@ -25,6 +25,7 @@ import {
 } from './webview/panel-contract.ts'
 
 const STATUS_URL = 'https://status.deepseek.com/'
+const CHAT_URL = 'https://chat.deepseek.com/'
 const SETTINGS_QUERY = '@ext:peiyucn.dsh-launcher-panel'
 const NOT_READY = 'Launcher is not ready yet — try again in a moment'
 
@@ -97,6 +98,7 @@ export class PanelMessages {
         dbg(`ignored setBrowser with invalid value: ${JSON.stringify(message.value)}`)
         return
       case 'openStatus': return openUrl(STATUS_URL)
+      case 'openChat': return openUrl(CHAT_URL)
       case 'openSettings':
         await vscode.commands.executeCommand('workbench.action.openSettings', SETTINGS_QUERY)
         return
