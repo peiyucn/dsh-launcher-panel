@@ -370,11 +370,15 @@ export function panelScript(values: PanelScriptValues): string {
     el.dsChatBtn.addEventListener('click', () => vscode.postMessage({ command: 'openChat' }))
     const dsToggle = document.getElementById('dsToggle')
     const dsBody = document.getElementById('dsBody')
+    const dsChevron = document.getElementById('dsChevron')
     const setDsOpen = (open) => {
       dsToggle.setAttribute('aria-expanded', String(open))
       dsBody.hidden = !open
     }
     dsToggle.addEventListener('click', () => setDsOpen(dsBody.hidden))
+    // The chevron sits outside the toggle button (after the status link) but stays a
+    // pointer shortcut; keyboard users reach the same action through dsToggle.
+    dsChevron.addEventListener('click', () => setDsOpen(dsBody.hidden))
     setDsOpen(false)
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))

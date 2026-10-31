@@ -68,10 +68,11 @@ export const PANEL_CSS = `
   .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
   .section-head > .mode-toggle { margin-left: auto; }
   .section-toggle { display: flex; align-items: center; gap: 8px; width: 100%; height: auto; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-  .section-head > .section-toggle { flex: 1 1 auto; width: auto; min-width: 0; }
+  .section-head > .section-toggle { flex: 0 1 auto; width: auto; min-width: 0; }
   .section-toggle:hover .section-title { color: var(--lap-accent); }
-  .section-chevron { margin-left: auto; color: var(--lap-fg2); font-size: 10px; transition: transform .12s; }
-  .section-toggle[aria-expanded='true'] .section-chevron { transform: rotate(90deg); }
+  .section-chevron { margin-left: 0; color: var(--lap-fg2); font-size: 10px; flex: none; cursor: pointer; transition: transform .12s; }
+  .section-chevron:hover { color: var(--lap-accent); }
+  .section-toggle[aria-expanded='true'] ~ .section-chevron { transform: rotate(90deg); }
   .ds-body { display: flex; flex-direction: column; gap: 6px; }
   .ds-body[hidden] { display: none; }
   .status { display: flex; align-items: center; gap: 8px; }
@@ -141,7 +142,7 @@ export const PANEL_CSS = `
   .ds-open:hover { text-decoration: underline; }
   .ds-link-icon { width: 12px; height: 12px; flex: none; }
   .ds-head-link { margin-left: 0; }
-  .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; }
+  .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; margin-left: auto; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
   .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 6px; align-items: start; }

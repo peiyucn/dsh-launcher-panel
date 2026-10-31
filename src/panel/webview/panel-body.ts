@@ -103,11 +103,11 @@ export function panelBody(values: PanelBodyValues): string {
   <section class="section" id="dsCard">
     <div class="section-head">
       <button type="button" class="section-toggle" id="dsToggle" aria-expanded="false" aria-controls="dsBody" title="Expand or collapse DeepSeek status">
-        <span class="section-title">DeepSeek API</span>
-        <span class="ds-pricing" id="dsPricing" title=""></span>
-        <span class="section-chevron" aria-hidden="true">▸</span>
+        <span class="section-title">DeepSeek API Status</span>
       </button>
       <button class="ds-open ds-head-link" id="dsOpenBtn" title="status.deepseek.com (official DeepSeek status)" aria-label="Open the DeepSeek status page"><svg class="ds-link-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="ds-pricing" id="dsPricing" title=""></span>
+      <span class="section-chevron" id="dsChevron" aria-hidden="true" title="Expand or collapse DeepSeek status">▸</span>
     </div>
     <div class="ds-body" id="dsBody" hidden>
       <div class="ds-columns">
