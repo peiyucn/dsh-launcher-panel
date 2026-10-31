@@ -68,18 +68,21 @@ export function holdsHome(state: InstanceState, hasTrackedProcess: boolean, untr
   return state === 'error' && (hasTrackedProcess || untrackedPort)
 }
 
-type StopDecision =
+export type StopPlan =
   | 'cleanup'
-  | 'ask'
-  | 'kill'
+  | 'kill-tracked'
+  | 'kill-identified'
+  | 'unidentified'
 
-// A tracked child is ours to kill; an untracked port owner may be anyone, so it needs consent.
-export function stopDecision(input: {
+// A tracked child is always ours to kill. Without one, the only safe target is a process
+// positively identified as this instance's dsh server (the runtime matches its command line);
+// a port held by anything else is left alone so Stop can never kill a foreign process.
+export function stopPlan(input: {
   hasTrackedChild: boolean
   portOpen: boolean
-  killUntracked: boolean
-}): StopDecision {
-  if (input.hasTrackedChild) return 'kill'
+  identified: boolean
+}): StopPlan {
+  if (input.hasTrackedChild) return 'kill-tracked'
   if (!input.portOpen) return 'cleanup'
-  return input.killUntracked ? 'kill' : 'ask'
+  return input.identified ? 'kill-identified' : 'unidentified'
 }

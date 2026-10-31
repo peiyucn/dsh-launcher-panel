@@ -6,7 +6,7 @@ import { isProcessAlive, sleep } from '../../shared/proc.ts'
 import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
 import { instanceHome, instanceLogPath, type DshInstance } from '../model.ts'
-import { holdsHome, nextState, stopDecision, type InstanceEvent, type InstanceState } from '../state.ts'
+import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
 import { buildSpawnSpec } from '../../dsh/start-spec.ts'
@@ -15,8 +15,8 @@ import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
 import { adoptServer, isListening, loopbackUrl, waitForReady } from './health.ts'
 import { LogTailPump } from './log-pump.ts'
 import { ensureProfile } from './profile.ts'
-import { findPortOwner, killPid } from './process.ts'
-import { killTrackedProcess, spawnServer } from './spawn.ts'
+import { findDshServerPidsByPort, killPid } from './process.ts'
+import { spawnServer } from './spawn.ts'
 import type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts'
 
 export type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts'
@@ -170,7 +170,7 @@ export class InstanceRuntime {
       fail: (message) => this.fail(message),
       transition: (event) => this.transition(event),
       setUrl: (url) => { this.url = url },
-      killTracked: () => this.killTracked(),
+      killTracked: () => { void this.killTracked() },
     })
   }
 
@@ -180,7 +180,7 @@ export class InstanceRuntime {
     } catch (error) {
       this.installing = false
       if (this.state === 'starting') {
-        this.killTracked()
+        void this.killTracked()
         this.logPump.stop()
       }
       return this.fail(`start failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -240,7 +240,7 @@ export class InstanceRuntime {
       this.startWatchdog = undefined
       if (this.state !== 'starting') return
       this.installing = false
-      this.killTracked()
+      void this.killTracked()
       this.logPump.stop()
       this.fail(`start timed out after ${Math.round(START_WATCHDOG_MS / 60_000)} minutes — the launcher stopped waiting for DSH`)
     }, START_WATCHDOG_MS)
@@ -259,18 +259,19 @@ export class InstanceRuntime {
     }
   }
 
-  private killTracked(): void {
-    const child = this.child
-    const pid = this.pid
-    this.child = undefined
-    this.pid = undefined
-    killTrackedProcess(child, pid, this.host.dbg)
+  private trackedPids(): number[] {
+    const pids: number[] = []
+    for (const pid of [this.child?.pid, this.pid]) {
+      if (pid !== undefined && !pids.includes(pid)) pids.push(pid)
+    }
+    return pids
   }
 
-  /** Whether Stop would have to kill a process this window did not spawn. */
-  async needsStopConfirmation(): Promise<boolean> {
-    if (this.hasTrackedChild()) return false
-    return isListening(this.instance.port, STOP_POLL_PROBE_MS)
+  private async killTracked(): Promise<void> {
+    const pids = this.trackedPids()
+    this.child = undefined
+    this.pid = undefined
+    for (const pid of pids) await killPid(pid, this.host.dbg)
   }
 
   private finishStopped(): true {
@@ -282,34 +283,48 @@ export class InstanceRuntime {
     return true
   }
 
-  private async stopInternal(killUntracked: boolean): Promise<boolean> {
+  /**
+   * Settle a runtime whose port is already gone, or that never had a process to kill. Stop
+   * reports success: the instance is stopped after this call, including a no-op Stop on one
+   * that already was (clearing a stale error left by an earlier unexpected exit).
+   */
+  private finishCleanup(): true {
+    this.untrackedPort = false
+    this.url = ''
+    this.error = ''
+    this.logPump.stop()
+    // A stale `running` (the port vanished before refresh noticed) still has to settle to stopped.
+    if (this.state !== 'stopped') this.transition(this.state === 'running' ? 'lost' : 'cleanup')
+    this.activity('■ Stopped')
+    return true
+  }
+
+  private async stopInternal(): Promise<boolean> {
     this.clearStartWatchdog()
     this.installing = false
     const tracked = this.hasTrackedChild()
     const portOpen = tracked ? false : await isListening(this.instance.port, STOP_POLL_PROBE_MS)
-    const decision = stopDecision({ hasTrackedChild: tracked, portOpen, killUntracked })
-    if (decision === 'ask') {
+    let identified: number[] = []
+    if (!tracked && portOpen) {
+      // The process scan can take a second; say what is happening instead of looking idle.
+      this.activity('■ Stopping…')
+      identified = await findDshServerPidsByPort(this.instance.port)
+    }
+    const plan = stopPlan({ hasTrackedChild: tracked, portOpen, identified: identified.length > 0 })
+    if (plan === 'unidentified') {
+      // The server may have exited while we were scanning; do not report a false "still in use".
+      if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return this.finishCleanup()
       this.untrackedPort = true
-      this.error = `port ${this.instance.port} is held by a process the launcher did not start — confirm before stopping it`
-      this.activity(`⚠ ${this.error}`)
-      return false
+      return this.fail(`port ${this.instance.port} is in use, but no DSH server for this instance could be identified — not killed`)
     }
-    if (decision === 'cleanup') {
-      this.untrackedPort = false
-      if (this.state === 'stopped') return false
-      this.url = ''
-      this.error = ''
-      this.logPump.stop()
-      this.transition('cleanup')
-      this.activity('■ Stopped')
-      return true
-    }
+    if (plan === 'cleanup') return this.finishCleanup()
     this.transition('stop')
-    this.killTracked()
     this.logPump.stop()
-    if (killUntracked) {
-      const owner = await findPortOwner(this.instance.port)
-      if (owner !== undefined && owner !== process.pid) killPid(owner, this.host.dbg)
+    if (plan === 'kill-tracked') {
+      await this.killTracked()
+    } else {
+      const own = identified.filter((pid) => pid !== process.pid)
+      for (const pid of own) await killPid(pid, this.host.dbg)
     }
     for (let i = 0; i < STOP_POLL_ATTEMPTS; i++) {
       await sleep(STOP_POLL_INTERVAL_MS)
@@ -323,10 +338,9 @@ export class InstanceRuntime {
     return this.finishStopped()
   }
 
-  /** `killUntracked` is only passed by a caller that obtained the user's consent. */
-  stop(killUntracked = false): Promise<boolean> {
+  stop(): Promise<boolean> {
     if (this.stopPromise) return this.stopPromise
-    this.stopPromise = this.stopInternal(killUntracked).finally(() => {
+    this.stopPromise = this.stopInternal().finally(() => {
       this.stopPromise = undefined
     })
     return this.stopPromise

@@ -70,7 +70,9 @@ export async function actionStart(id?: string): Promise<void> {
 export async function actionStop(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
-    if (target) await stopInstance(manager, target)
+    // A failed stop is reported by the runtime itself (panel error line + activity feed);
+    // Stop never kills a port owner it cannot identify, so there is nothing to ask about.
+    if (target) await manager.stop(target)
   })
 }
 
@@ -81,35 +83,9 @@ export async function actionRestart(id?: string): Promise<void> {
     const status = manager.statusOf(target)
     const occupied = instanceBusy(status) || status?.adopted === true || status?.untrackedPort === true
     // A refused or failed stop leaves the port taken; starting would only hit "port already in use".
-    if (occupied && !(await stopInstance(manager, target))) return
+    if (occupied && !(await manager.stop(target))) return
     await actionStart(target)
   })
-}
-
-const STOP_PORT_OWNER = 'Stop and kill the port owner'
-
-/** Kill a port owner the launcher does not track only after explicit consent (spec §8/§12). */
-async function stopInstance(manager: InstanceManager, target: string): Promise<boolean> {
-  if (await manager.stopNeedsConfirmation(target)) {
-    const instance = manager.instance(target)
-    const name = instance?.name ?? target
-    const port = instance?.port ?? manager.statusOf(target)?.port ?? '?'
-    const confirmed = await vscode.window.showWarningMessage(
-      `Stop "${name}"? Port ${port} is held by a process the launcher did not start. `
-        + 'Continue only if that process is this instance\'s DSH server.',
-      { modal: true },
-      STOP_PORT_OWNER,
-    )
-    if (confirmed !== STOP_PORT_OWNER) return false
-    const stopped = await manager.stop(target, true)
-    if (!stopped) void vscode.window.showWarningMessage(`"${name}" was not stopped: port ${port} is still in use.`)
-    return stopped
-  }
-  const stopped = await manager.stop(target)
-  if (!stopped && instanceBusy(manager.statusOf(target))) {
-    void vscode.window.showWarningMessage(`"${manager.instance(target)?.name ?? target}" was not stopped — see the launcher activity log for the reason.`)
-  }
-  return stopped
 }
 
 export async function actionOpen(id?: string): Promise<void> {
@@ -267,7 +243,7 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
     if (!current) return
     if (instanceBusy(manager.statusOf(target))) {
       const stop = await vscode.window.showWarningMessage('Stop the instance before deleting it.', 'Stop')
-      if (stop === 'Stop') await stopInstance(manager, target)
+      if (stop === 'Stop') await manager.stop(target)
       return
     }
     const home = manager.homeOf(current)

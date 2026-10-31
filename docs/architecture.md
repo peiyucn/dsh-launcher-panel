@@ -35,7 +35,7 @@ src/
       health.ts         端口/URL 探测、接管（adopt）、就绪等待
       profile.ts        profile 初始化（--dump-config）
       log-pump.ts       实例日志实时 tail
-      process.ts        杀进程树、端口 owner 查找
+      process.ts        杀进程树、按命令行识别本实例的 DSH 服务器
       brand.ts          profile 内 launcher 自有品牌 bundle
       types.ts          RuntimeHost / InstanceRuntimeStatus / PreparedDsh
   dsh/                  dsh 工具链集成（安装、检测、版本、更新、配置、路径）

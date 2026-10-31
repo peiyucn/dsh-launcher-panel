@@ -61,7 +61,7 @@
 * 面板上的模式 pill 用简写：`pkg` 即 pnpm 模式，`src` 即 source 模式。模式是全局的：所有实例共用同一份 dsh 树，切换前须停止全部实例。
 * 实例只描述运行坐标：一个 `DSH_HOME`、其中的 profile、一个自动分配的端口。模型/provider/preset/凭据都在该 home 的 profile 里，launcher 不管理。两个实例可以指向同一个 home，但同一时间只能跑一个（DSH 的 sessions/workspaces/credentials 是共享的）；面板会显示警告。
 * Delete 只从 `dsh.instances` 移除实例，绝不删除 home、sessions 或 workspaces；要清理由你自己处理。
-* Start 先探测该实例端口，端口已开就接管（例如 VS Code 重载后），然后打开它的 Web UI。Stop 在端口被非本扩展启动的进程占用时会先弹确认，确认后才结束该进程；本扩展自己启动的服务直接停止。
+* Start 先探测该实例端口，端口已开就接管（例如 VS Code 重载后），然后打开它的 Web UI。Stop 会直接停止启动器启动的服务；接管的实例按命令行（`--port` 加 dsh 入口）确认是本实例的 DSH 服务器后同样直接停止，不再弹确认框。端口被无法识别为本实例 DSH 服务器的进程占用时，Stop 不杀，只在面板与活动流里说明。
 * **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API 区默认收起（只显示标题和 Peak/Off-peak），展开后模型 API 和其他 API 分两栏。底部 **Settings** 不设边框。
 * Update 检查和更新的是这一份共享 dsh，要求所有实例停止。
 * 关闭 VS Code 不会停止服务；请从面板或命令面板停止。

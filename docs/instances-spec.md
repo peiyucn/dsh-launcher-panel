@@ -245,8 +245,10 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 ### Stop
 
 - 优先杀 tracked child（Windows 用 `taskkill /T`，见 `killPid`）。
-- 没有 tracked child 时（例如扩展重启后接管的实例，或端口被陌生进程占用）：默认**不杀**（`manager.stop()` 默认 `killUntracked=false`）。`Stop` 先弹 VS Code 原生确认 modal（实例名 + 端口 + 「只在该进程是本实例的 DSH 服务器时才继续」），确认后才按端口 owner 杀。
-- 轮询端口关闭；超时进入 `error`，不要假装已停止；没停下时给出可见警告。
+- 没有 tracked child 时（例如扩展重启后接管的实例）：按**进程命令行**识别本实例的 DSH 服务器——命令行须含该实例端口的 `--port <端口>` 与 dsh 入口标记（pkg 模式 `@deepseek-ai/dsh/lib/bin.js`，source 模式 `apps/cli/src/bin.ts`；Windows 用 `Get-CimInstance Win32_Process` 查 node 进程，POSIX 用 `ps -eo pid=,args=`）。识别到就直接结束该进程树，不弹确认框。
+- 不用 socket 表找端口 owner：部分机器（例如带终端安全驱动的 Windows）TCP 表枚举不可靠——多数查询里该监听行直接缺失（旧实现得到 `undefined`），偶尔出现时 PID 可能为 0，同一端口不同次查询结果还会不一致；照它杀会杀不动。实测失败后改为命令行识别。
+- 端口在听但识别不出是本实例的 DSH 服务器：一律**不杀**，标记 `untrackedPort`，在面板错误行与活动流说明「无法确认归属，未结束」；不做「确认后强杀」。
+- 轮询端口关闭（先等 `taskkill` 返回再轮询）；超时进入 `error`，不要假装已停止；没停下时给出可见提示。
 - Stop 一个实例不影响其他实例。
 
 ### 意外退出
@@ -260,8 +262,8 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 - 重新激活时，对每个实例探测端口：
   - 端口开：标记 `running`（接管），尽量从该实例日志恢复 URL/token；
   - 端口关：`stopped`。
-- 接管实例的 Stop 走上面的「确认后杀端口 owner」路径。
-- 接管成功时状态标记为 `running (external)`；端口被非 DSH 进程占用时标记 `untrackedPort`（状态栏菜单显示 `port held by an untracked process`），Stop 需确认后才杀（见上）。
+- 接管实例的 Stop 与普通 Stop 走同一套规则：按命令行识别到本实例的 DSH 服务器后直接停止；识别不出则只报告、不杀。
+- 接管成功时状态标记为 `running (external)`；端口被非 DSH 进程占用时标记 `untrackedPort`（状态栏菜单显示 `port held by an untracked process`），Stop 只报告、不杀（见上）。
 
 ## 九、UI 与命令
 
@@ -411,7 +413,7 @@ node · launcher
 | 启动时端口被占 | `error`，不杀占用者 |
 | 启动超时/进程早退 | `error`，显示日志路径 |
 | 停止超时 | `error`，不要显示 stopped |
-| 接管时端口是陌生进程 | 标记 `untrackedPort`（菜单显示 `port held by an untracked process`）；Stop 需确认后才杀 |
+| 接管时端口是陌生进程 | 标记 `untrackedPort`（菜单显示 `port held by an untracked process`）；Stop 不杀，只在面板/活动流报告「无法确认归属，未结束」 |
 | 设置条目非法 | 面板显示错误行；不自动改写 settings |
 | 并发 Start/Stop | 每实例合并/幂等；不出现双进程或假 stopped |
 | 全局更新时仍有实例运行 | 阻止并提示先停止 |
@@ -437,7 +439,8 @@ node · launcher
 - 旧设置迁移：`dsh.port` → Default 实例；已有实例不覆盖；迁移标记。
 - 活动实例回退：无效 ID → 第一个；空列表 → 无。
 - 启动参数/环境构建：`DSH_HOME`、`--port`、profile、`--no-open` 版本门槛。
-- 状态机纯函数：start/fail/stop/exit 的合法迁移；不允许 `starting` 直接回 `stopped` 而不清理。
+- 状态机纯函数：start/fail/stop/exit 的合法迁移；不允许 `starting` 直接回 `stopped` 而不清理；Stop 决策 `stopPlan`（tracked / 已识别 / 无法识别 / 清理）。
+- Stop 的进程命令行识别：pkg/source 两种命令行、错误端口、无关 `--port` 进程、Windows CIM 与 POSIX `ps` 输出解析；`killPid` 拒绝 PID 0 与自身。
 - 日志路径：按 id 分目录；`clearServerLogOnStart` 只清当前实例。
 - 面板/契约回归：payload 键覆盖客户端消费字段、命令集合、转义。
 
@@ -452,7 +455,7 @@ node · launcher
 7. 共享 home：两个实例配置允许；同时启动第二个被拒绝。
 8. 编辑：运行中改 home 要求先停；改 home 不移动数据；profile/端口不可通过面板编辑。
 9. 删除：运行中先停；只移除列表；home 仍在。
-10. 扩展重启：实例仍在运行 → 激活后接管，状态 running；Stop 正常。
+10. 扩展重启：实例仍在运行 → 激活后接管，状态 running；Stop 直接停止（不弹确认）。
 11. 更新：有实例运行时阻止；停止全部后更新；不自动重启。
 12. VS Code 内置浏览器同时打开两个实例的 UI，token 各自正确。
 13. 面板切换实例：日志、活动、账户/余额跟随当前实例。
@@ -489,7 +492,7 @@ node · launcher
 - 面板以 tab 条呈现实例；`+` 可新建；切换 tab 同步活动实例、日志、状态栏；tab 溢出可横向滚动且 `+` 始终可见。
 - 每个 tab 可 Start/New Tab/Open、Delete（停止时）；端口与 profile 不可在界面编辑；运行中编辑/删除有明确提示。
 - 编辑运行中实例会要求先停止；改 home 不移动数据；删除只移除列表。
-- 扩展重启后能接管仍在运行的实例；Stop 行为安全（陌生端口需确认）。
+- 扩展重启后能接管仍在运行的实例；Stop 能停掉接管实例；端口被无法识别的进程占用时不杀、只提示。
 - 设置中无秘密；删除不删 home；非法设置不导致崩溃或静默改写。
 - `npm run verify` 全绿；README/CHANGELOG 双语更新。
 
@@ -501,7 +504,7 @@ node · launcher
 | 2 | 实例多了 tab 条怎么溢出 | 单行横向滚动 + `+` 固定；当前 tab 自动滚入；后续加溢出菜单，不做多行换行 |
 | 3 | 共享 home 是否在配置层直接禁止 | 不禁止，只禁止同时运行 + UI 警告；不替用户决定用途 |
 | 4 | profile 初始化命令能否跨支持版本非交互完成 | 实现时用当前支持版本验证；不能则失败并给手工提示 |
-| 5 | 接管的陌生端口 Stop 是否允许杀 | 默认不杀；用户明确确认后才杀 |
+| 5 | 接管的陌生端口 Stop 是否允许杀 | **已定**：不杀；按命令行识别出本实例的 DSH 服务器才杀，识别不出只提示（0.3.4 的确认弹窗已取消） |
 | 6 | 删除实例是否同时删 launcher 日志 | 不删；后续单独「清理日志」 |
 | 7 | 是否做「Create & Start」 | v1 不做；创建后手动 Start |
 | 8 | `dsh.start` / `dsh.stop` 在多实例下是否弹选择 | 作用域活动实例；快速选择提供其他实例 |

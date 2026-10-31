@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canTransition, holdsHome, nextState, stopDecision, type InstanceState } from '../src/instances/state.ts'
+import { canTransition, holdsHome, nextState, stopPlan, type InstanceState } from '../src/instances/state.ts'
 
 test('start moves a stopped or failed instance to starting', () => {
   assert.equal(nextState('stopped', 'start'), 'starting')
@@ -66,22 +66,31 @@ test('holdsHome keeps stopping and a still-alive error from sharing the home', (
   assert.equal(holdsHome('stopped', false, true), false)
 })
 
-test('Stop asks before killing a port owner this runtime does not track', () => {
-  assert.equal(stopDecision({ hasTrackedChild: true, portOpen: false, killUntracked: false }), 'kill')
-  assert.equal(stopDecision({ hasTrackedChild: false, portOpen: true, killUntracked: false }), 'ask')
-  assert.equal(stopDecision({ hasTrackedChild: false, portOpen: true, killUntracked: true }), 'kill')
-  assert.equal(stopDecision({ hasTrackedChild: false, portOpen: false, killUntracked: false }), 'cleanup')
+test('Stop kills a tracked child, a positively identified server, or nothing', () => {
+  assert.equal(stopPlan({ hasTrackedChild: true, portOpen: true, identified: false }), 'kill-tracked')
+  assert.equal(stopPlan({ hasTrackedChild: true, portOpen: false, identified: false }), 'kill-tracked')
+  assert.equal(stopPlan({ hasTrackedChild: false, portOpen: true, identified: true }), 'kill-identified')
+  assert.equal(stopPlan({ hasTrackedChild: false, portOpen: true, identified: false }), 'unidentified')
+  assert.equal(stopPlan({ hasTrackedChild: false, portOpen: false, identified: false }), 'cleanup')
 })
 
 function runtimeSource(): string {
   return readFileSync(new URL('../src/instances/runtime/runtime.ts', import.meta.url), 'utf8')
 }
 
-test('Stop no longer kills an untracked port owner by default', () => {
+test('Stop only kills a port owner identified as this instance dsh server', () => {
   const source = runtimeSource()
-  assert.match(source, /stop\(killUntracked = false\)/, 'InstanceRuntime.stop must default to not killing untracked owners')
-  assert.match(source, /stopDecision\(\{/, 'the untracked-port rule must be the tested pure decision')
-  assert.match(source, /needsStopConfirmation\(\)/, 'the UI needs a way to ask before the untracked kill')
+  assert.match(source, /stop\(\): Promise<boolean>/, 'InstanceRuntime.stop must not take a caller-supplied kill grant')
+  assert.match(source, /stopPlan\(\{/, 'the stop rule must be the tested pure decision')
+  assert.match(source, /findDshServerPidsByPort\(this\.instance\.port\)/, 'an untracked server is identified by command line')
+  assert.doesNotMatch(source, /findPortOwner|killUntracked|needsStopConfirmation/, 'the socket-table owner lookup and consent grant are gone')
+})
+
+test('Stop never asks for confirmation and never kills an unidentified port owner', () => {
+  const actions = readFileSync(new URL('../src/actions.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(actions, /Stop and kill the port owner/)
+  assert.doesNotMatch(actions, /manager\.stop\([^)]*,/)
+  assert.match(runtimeSource(), /no DSH server for this instance could be identified/, 'an unidentified port owner is reported, not killed')
 })
 
 test('runtime delegates spawn, health, profile and process handling to their own modules', () => {

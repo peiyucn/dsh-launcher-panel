@@ -278,15 +278,9 @@ export class InstanceManager {
     return runtime.start()
   }
 
-  /** `killUntracked` must be granted by the user (see `stopNeedsConfirmation`). */
-  async stop(id: string, killUntracked = false): Promise<boolean> {
+  async stop(id: string): Promise<boolean> {
     await this.ready()
-    return (await this.runtimes.get(id)?.stop(killUntracked)) ?? false
-  }
-
-  async stopNeedsConfirmation(id: string): Promise<boolean> {
-    await this.ready()
-    return (await this.runtimes.get(id)?.needsStopConfirmation()) ?? false
+    return (await this.runtimes.get(id)?.stop()) ?? false
   }
 
   anyActive(): boolean {

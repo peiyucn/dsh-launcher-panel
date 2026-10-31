@@ -31,7 +31,7 @@ export interface InstanceRuntimeStatus {
   stopping: boolean
   /** A server answers on the port but this window does not track its process. */
   adopted: boolean
-  /** The port listens while this runtime does not run it: Stop needs consent. */
+  /** The port listens while this runtime does not run it and cannot identify the server behind it. */
   untrackedPort: boolean
   error: string
   url: string

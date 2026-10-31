@@ -3,7 +3,6 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { SpawnSpec } from '../../dsh/start-spec.ts'
 import type { InstanceState } from '../state.ts'
-import { killPid } from './process.ts'
 
 export interface SpawnHooks {
   state(): InstanceState
@@ -58,9 +57,4 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
   }
   hooks.startLogPump()
   return true
-}
-
-export function killTrackedProcess(child: ChildProcess | undefined, pid: number | undefined, dbg: (line: string) => void): void {
-  if (child?.pid) killPid(child.pid, dbg)
-  if (pid !== undefined) killPid(pid, dbg)
 }
