@@ -4,6 +4,7 @@ import {
   actionDeleteInstance,
   actionEditInstance,
   actionOpen,
+  actionReinstallDsh,
   actionRestart,
   actionSelectInstance,
   actionStart,
@@ -181,5 +182,6 @@ export function registerCommands(context: vscode.ExtensionContext, manager: Inst
     command('dsh.instance.delete', (id) => actionDeleteInstance(id)),
     command('dsh.instance.select', () => actionSelectInstance()),
     command('dsh.instance.open', (id) => actionOpen(id)),
+    command('dsh.reinstall', () => actionReinstallDsh()),
   )
 }

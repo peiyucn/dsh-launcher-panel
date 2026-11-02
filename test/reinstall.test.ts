@@ -3,50 +3,44 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cleanReinstall, type CleanReinstallHost } from '../src/dsh/reinstall.ts'
+import { stagedReinstall, type ReinstallHost } from '../src/dsh/reinstall.ts'
 import { DSH_INSTALL_MANIFEST_NAME, writeInstallManifest } from '../src/dsh/paths.ts'
 
-function makeInstall(root: string, version: string): string {
-  const dir = join(root, 'pkg')
+function makeLiveInstall(root: string): string {
+  const dir = join(root, 'package')
   mkdirSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib'), { recursive: true })
-  writeFileSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'), version)
-  writeFileSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({ version }))
-  writeFileSync(join(dir, 'node_modules', 'stale-hardlink-marker.txt'), 'old')
-  writeFileSync(join(dir, 'pnpm-lock.yaml'), 'old lockfile')
-  writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'old workspace')
-  assert.equal(writeInstallManifest(version, dir, 'hardlink'), true)
+  writeFileSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({ version: '0.3.7' }))
+  writeFileSync(join(dir, 'node_modules', 'stale-marker.txt'), 'old')
+  assert.equal(writeInstallManifest('0.3.7', dir, 'hardlink'), true)
   return dir
 }
 
-function host(
-  dir: string,
-  installVersion: string | undefined,
-  activities: string[],
-): CleanReinstallHost {
+function hostFor(result: 'ok' | 'fail'): ReinstallHost {
   return {
-    addActivity: (line) => { activities.push(line); return 0 },
+    addActivity: () => 0,
     runInstalling: (task) => task(),
-    runInTerminal: async () => {
-      if (installVersion === undefined) return false
-      mkdirSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib'), { recursive: true })
-      writeFileSync(join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({ version: installVersion }))
-      writeFileSync(join(dir, 'node_modules', 'fresh-copy-marker.txt'), 'new')
+    runInTerminal: async (_title, _command, args) => {
+      const staging = args[args.indexOf('--dir') + 1]
+      assert.match(staging, /\.next$/)
+      if (result === 'fail') return false
+      mkdirSync(join(staging, 'node_modules', '@deepseek-ai', 'dsh', 'lib'), { recursive: true })
+      writeFileSync(join(staging, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({ version: '0.3.7' }))
+      writeFileSync(join(staging, 'node_modules', 'fresh-marker.txt'), 'new')
       return true
     },
   }
 }
 
-test('cleanReinstall moves stale install state aside and drops it after a successful install', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-clean-reinstall-'))
+test('stagedReinstall builds in a staging folder and swaps it in on success', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-staged-'))
   try {
-    const dir = makeInstall(root, '0.3.7')
-    const activities: string[] = []
-    const ok = await cleanReinstall('0.3.8', dir, 'pnpm', false, 'copy', host(dir, '0.3.8', activities))
+    const dir = makeLiveInstall(root)
+    const ok = await stagedReinstall('0.3.7', dir, 'pnpm', false, 'copy', hostFor('ok'))
     assert.equal(ok, true)
-    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-copy-marker.txt')), true)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-hardlink-marker.txt')), false, 'old node_modules is gone')
-    assert.equal(existsSync(join(dir, 'node_modules.launcher-backup')), false, 'backup is cleaned up')
-    assert.equal(existsSync(join(dir, 'pnpm-lock.yaml.launcher-backup')), false)
+    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-marker.txt')), true)
+    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), false)
+    assert.equal(existsSync(`${dir}.next`), false, 'staging folder is cleaned up')
+    assert.equal(existsSync(`${dir}.prev`), false, 'previous install is cleaned up')
     const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
       name: string
       dshLauncher?: { packageImportMethod?: string }
@@ -58,18 +52,18 @@ test('cleanReinstall moves stale install state aside and drops it after a succes
   }
 })
 
-test('cleanReinstall restores the previous install when the reinstall fails', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-clean-reinstall-fail-'))
+test('stagedReinstall leaves the live install untouched when the build fails', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-staged-fail-'))
   try {
-    const dir = makeInstall(root, '0.3.7')
-    const activities: string[] = []
-    const ok = await cleanReinstall('0.3.8', dir, 'pnpm', false, 'copy', host(dir, undefined, activities))
+    const dir = makeLiveInstall(root)
+    const before = readFileSync(join(dir, 'package.json'), 'utf8')
+    const ok = await stagedReinstall('0.3.7', dir, 'pnpm', false, 'copy', hostFor('fail'))
     assert.equal(ok, false)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-hardlink-marker.txt')), true, 'previous install is restored')
-    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-copy-marker.txt')), false)
-    assert.equal(existsSync(join(dir, 'node_modules.launcher-backup')), false)
-    assert.equal(existsSync(join(dir, 'pnpm-lock.yaml')), true)
-    assert.match(activities.join('\n'), /previous install was restored/)
+    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true, 'live install untouched')
+    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-marker.txt')), false)
+    assert.equal(existsSync(`${dir}.next`), false)
+    assert.equal(existsSync(`${dir}.prev`), false)
+    assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before, 'live manifest untouched')
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -310,6 +310,14 @@ export class InstanceManager {
     await this.checkUpdate(true)
   }
 
+  /** Rebuild the install with the configured import method; requires all instances stopped. */
+  async reinstallDsh(): Promise<boolean> {
+    if (this.anyActive()) throw new Error('Stop all instances before reinstalling dsh')
+    const ok = await this.shared.reinstallPkg()
+    await this.refresh()
+    return ok
+  }
+
   /** Stop log pumps; running DSH processes are intentionally left alone. */
   dispose(): void {
     for (const runtime of this.runtimes.values()) runtime.dispose()

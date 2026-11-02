@@ -178,7 +178,7 @@ interface DshInstance {
 - 初始化失败时保留实例和 settings，显示错误与日志路径；不要删除用户数据，也不要悄悄回退到别的 home。
 - 如果用户删光所有实例，面板显示空状态 + `+`；不要用迁移逻辑自动重新创建 Default。
 - 现有用户升级：`dsh.port` 迁移成 Default；已有 `~/.dsh` / dsh 安装继续可用。
-- pkg 安装方式由 `dsh.packageImportMethod` 决定（默认 `copy`）：`copy` 复制文件（干净安装只多几 MB，但避免硬链接在有文件过滤驱动的机器上拖慢启动），`hardlink`/`auto` 则相反。改设置后在下一次 Start 时干净重装同版本：旧 `node_modules`/lockfile/workspace 移开后再装，失败回滚并继续用旧安装；手动转换过的安装按实际文件硬链接状态识别，不会重复重装。
+- pkg 安装方式由 `dsh.packageImportMethod` 决定（默认 `copy`）：`copy` 复制文件（干净安装只多几 MB，但避免硬链接在有文件过滤驱动的机器上拖慢启动），`hardlink`/`auto` 则相反。改设置不自动改动现有安装；命令面板的 `dsh.reinstall` 会在暂存目录 `package.next` 里重建同版本，校验成功后才用 rename 切换（旧安装改名为 `package.prev` 后删除），构建失败只删暂存目录、现有安装不受影响；切换失败会恢复旧安装。执行前必须停止全部实例；版本更新时按该方式安装。
 
 ### 创建失败
 

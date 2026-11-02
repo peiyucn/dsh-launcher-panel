@@ -265,6 +265,25 @@ export async function actionUpdateDsh(): Promise<void> {
   await withManager((manager) => manager.updateDsh())
 }
 
+/** Explicitly rebuild dsh with the configured import method (staged, never in place). */
+export async function actionReinstallDsh(): Promise<void> {
+  await withManager(async (manager) => {
+    if (manager.anyActive()) {
+      void vscode.window.showWarningMessage('Stop all DSH instances before reinstalling dsh.')
+      return
+    }
+    const method = vscode.workspace.getConfiguration('dsh').get<string>('packageImportMethod') ?? 'copy'
+    const picked = await vscode.window.showWarningMessage(
+      `Reinstall dsh with the "${method}" package import method? It is built in a staging folder and switched in only when complete; all instances must stay stopped.`,
+      { modal: true },
+      'Reinstall',
+    )
+    if (picked !== 'Reinstall') return
+    const ok = await manager.reinstallDsh()
+    if (!ok) void vscode.window.showErrorMessage('dsh reinstall failed — see the activity log and terminal output.')
+  })
+}
+
 export function defaultInstanceHomePrefix(): string {
   return path.join(os.homedir(), '.dsh-')
 }

@@ -6,6 +6,7 @@ import { detectDsh, detectDshVersion, type DetectHost } from '../dsh/detect.ts'
 import { probeNodeVersion } from '../dsh/node-check.ts'
 import { runInTerminal as runInTerminalInner, type TerminalHost } from '../dsh/terminal.ts'
 import {
+  ensurePnpmAvailable,
   ensureSourceCheckout,
   findSourceCheckout,
   pkgInstallDir,
@@ -13,7 +14,8 @@ import {
   unreachablePkgPath as unreachablePkgPathSetting,
   type InstallHost,
 } from '../dsh/install.ts'
-import { maskPath } from '../dsh/paths.ts'
+import { installedDshVersion, maskPath } from '../dsh/paths.ts'
+import { stagedReinstall } from '../dsh/reinstall.ts'
 import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from '../shared/timing.ts'
 import { versionFromDescribe } from '../dsh/versions.ts'
 import { checkDshUpdateStatus, runDshUpdate, type DshUpdate, type UpdateHost } from '../dsh/update.ts'
@@ -170,6 +172,35 @@ export class SharedDsh {
   async runUpdate(): Promise<void> {
     await runDshUpdate(this.updateHost())
     this.updateCache = undefined
+  }
+
+  /**
+   * Rebuild the same dsh version with the configured package import method.
+   * The rebuild happens in a staging folder and is switched in only on success.
+   * Caller must ensure every instance is stopped.
+   */
+  async reinstallPkg(): Promise<boolean> {
+    const cfg = readConfig()
+    if (cfg.runMode !== 'pnpm') {
+      addActivity('⚠ Reinstall applies to pkg mode only')
+      return false
+    }
+    const dir = pkgInstallDir(cfg)
+    const version = installedDshVersion(dir)
+    if (version === undefined) {
+      addActivity('⚠ dsh is not installed yet — Start installs it first')
+      return false
+    }
+    const pnpm = await ensurePnpmAvailable(this.installHost())
+    if (!pnpm) return false
+    const ok = await stagedReinstall(version, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, this.installHost())
+    if (ok) {
+      this.dshVersionValue = version
+      this.dshPathValue = dir
+      this.dshStateValue = 'ok'
+      this.invalidateDetection()
+    }
+    return ok
   }
 
   private detectHost(): DetectHost {

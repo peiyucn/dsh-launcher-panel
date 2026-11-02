@@ -1,12 +1,11 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { dshBaseDir, driveRootExists, importMethodNeedsConversion, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
+import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
 import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '../shared/env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
-import { cleanReinstall } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {
@@ -129,22 +128,6 @@ export async function ensureDshInstalled(
   return false
 }
 
-/** One-time conversion of an existing install to the configured import method. */
-async function applyConfiguredImportMethod(
-  version: string, dir: string, importMethod: PackageImportMethod, host: InstallHost,
-): Promise<void> {
-  if (!importMethodNeedsConversion(dir, importMethod)) return
-  const pnpm = await ensurePnpmAvailable(host)
-  if (!pnpm) {
-    host.addActivity('⚠ dsh import method not applied — pnpm is not available')
-    return
-  }
-  host.addActivity(`ℹ Converting the dsh install to "${importMethod}" import (clean reinstall, one-time)…`)
-  const ok = await cleanReinstall(version, dir, pnpm.command, pnpm.allowBuild, importMethod, host)
-  // A failed conversion must not block starting the existing install.
-  if (!ok) host.addActivity('⚠ dsh import method was not applied — continuing with the existing install')
-}
-
 export async function preparePkgStart(
   cfg: { pkgPath: string; npmChannel: NpmChannel; packageImportMethod: PackageImportMethod }, host: InstallHost,
 ): Promise<string | undefined> {
@@ -152,7 +135,6 @@ export async function preparePkgStart(
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
     // The installed version is what runs; the channel only governs future installs.
-    await applyConfiguredImportMethod(installed, dir, cfg.packageImportMethod, host)
     if (!writeInstallManifest(installed, dir)) {
       host.dbg('install manifest not rewritten (absent ownership or write failure); continuing with the installed dsh')
     }

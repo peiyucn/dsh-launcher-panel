@@ -151,6 +151,11 @@
         "command": "dsh.instance.open",
         "title": "Open Instance",
         "category": "DSH Launcher Panel"
+      },
+      {
+        "command": "dsh.reinstall",
+        "title": "Reinstall dsh (apply install method)",
+        "category": "DSH Launcher Panel"
       }
     ],
     "configuration": {
@@ -329,7 +334,7 @@
             "auto"
           ],
           "default": "copy",
-          "description": "How pnpm places dsh's files in the launcher-managed install: 'copy' duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), 'hardlink' links them to the pnpm store (less disk, faster install), 'auto' lets pnpm choose. Changing it applies on the next Start, which cleanly reinstalls the same version (one-time; the old install is moved aside and removed, so stale state cannot bloat it). Machine-local, not synced."
+          "description": "How pnpm places dsh's files in the launcher-managed install: 'copy' duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), 'hardlink' links them to the pnpm store (less disk, faster install), 'auto' lets pnpm choose. Changing it does not touch the current install: run 'Reinstall dsh (apply install method)' from the command palette to rebuild the same version in a staging folder that is swapped in only when complete (all instances must be stopped), or it applies automatically on the next version update. Machine-local, not synced."
         }
       }
     }
