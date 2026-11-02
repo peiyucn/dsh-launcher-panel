@@ -334,7 +334,7 @@
             "auto"
           ],
           "default": "copy",
-          "description": "How pnpm places dsh's files in the launcher-managed install: 'copy' duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), 'hardlink' links them to the pnpm store (less disk, faster install), 'auto' lets pnpm choose. Changing it applies automatically on the next Start: the same version is rebuilt in a staging folder and swapped in only when complete, and a failed build leaves the current install untouched (skipped while another instance is running). The 'Reinstall dsh (apply install method)' command forces it immediately. Machine-local, not synced."
+          "description": "How pnpm places dsh's files in the launcher-managed install: 'copy' duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), 'hardlink' links them to the pnpm store (less disk, faster install), 'auto' lets pnpm choose. Changing it applies automatically on the next Start: the same version is preflighted in a staging folder and then rebuilt at its final path (pnpm's junctions must point there), with the previous install restored if the rebuild fails; it is skipped while another instance is running, and the 'Reinstall dsh (apply install method)' command forces it immediately. Machine-local, not synced."
         }
       }
     }

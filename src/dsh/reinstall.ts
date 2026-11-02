@@ -16,13 +16,24 @@ function removeQuietly(target: string): void {
   }
 }
 
+function installArgs(dir: string, importMethod: PackageImportMethod, allowBuild: boolean, title: string, pnpmCmd: string, host: ReinstallHost): Promise<boolean> {
+  const args = ['install', '--dir', dir, '--package-import-method', importMethod]
+  if (allowBuild) args.push('--dangerously-allow-all-builds')
+  return host.runInstalling(() => host.runInTerminal(title, pnpmCmd, args))
+}
+
 /**
- * Rebuild the launcher-managed install in a staging folder, then swap it in.
+ * Change the install's `package-import-method` without ever leaving a half-replaced tree.
  *
- * The live install is never mutated while pnpm runs: a failed build only removes the
- * staging folder, and the swap is a directory rename. This is the only safe way to
- * change `package-import-method`, because an in-place rebuild leaves the live install
- * half-replaced when pnpm fails and can break the profile bundles that point into it.
+ * pnpm creates absolute junction targets on Windows, so a tree built in `package.next`
+ * and renamed to `package` keeps pointing at the (now gone) staging path and cannot be
+ * loaded. The build therefore has to happen at the final path:
+ *
+ * 1. build once in a throwaway staging folder to prove pnpm/network/arguments work;
+ * 2. move the live install to `package.prev`;
+ * 3. install at the final `package` path (junctions now point at the canonical path);
+ * 4. verify, then delete `package.prev`; on failure restore it (its junctions point at
+ *    the canonical `package` path again, so the restored install keeps working).
  */
 export async function stagedReinstall(
   version: string,
@@ -39,7 +50,8 @@ export async function stagedReinstall(
   const nextDir = `${dir}.next`
   const prevDir = `${dir}.prev`
   removeQuietly(nextDir)
-  removeQuietly(prevDir)
+
+  // 1. Preflight build: catches pnpm/network/flag problems without touching the live install.
   try {
     fs.mkdirSync(nextDir, { recursive: true })
     if (!writeInstallManifest(version, nextDir, importMethod)) {
@@ -47,40 +59,60 @@ export async function stagedReinstall(
       host.addActivity('✗ could not write the dsh install manifest — check write permissions')
       return false
     }
-    host.addActivity(`▶ Building dsh v${version} in a staging folder (${importMethod} import)…`)
-    const args = ['install', '--dir', nextDir, '--package-import-method', importMethod]
-    if (allowBuild) args.push('--dangerously-allow-all-builds')
-    const ok = await host.runInstalling(() => host.runInTerminal(`Rebuild dsh v${version}`, pnpmCmd, args))
-    if (!ok || installedDshVersion(nextDir) !== version) {
+    host.addActivity(`▶ Verifying the dsh rebuild in a staging folder (${importMethod} import)…`)
+    const stagedOk = await installArgs(nextDir, importMethod, allowBuild, `Verify dsh v${version} rebuild`, pnpmCmd, host)
+    if (!stagedOk || installedDshVersion(nextDir) !== version) {
       removeQuietly(nextDir)
-      host.addActivity('✗ dsh rebuild failed — the current install was left untouched; see the terminal output above')
+      host.addActivity('✗ dsh rebuild preflight failed — the current install was left untouched; see the terminal output above')
       return false
     }
-    let previousMoved = false
-    try {
-      if (fs.existsSync(dir)) {
-        fs.renameSync(dir, prevDir)
-        previousMoved = true
-      }
-      fs.renameSync(nextDir, dir)
-    } catch (error) {
-      if (previousMoved && !fs.existsSync(dir)) {
-        try {
-          fs.renameSync(prevDir, dir)
-        } catch {
-          host.addActivity(`✗ the rebuilt install could not be switched in and the previous one could not be restored automatically — it is at ${prevDir}`)
-          return false
-        }
-      }
-      removeQuietly(nextDir)
-      host.addActivity(`✗ could not switch to the rebuilt install: ${error instanceof Error ? error.message : String(error)}`)
-      return false
-    }
-    removeQuietly(prevDir)
-    return true
-  } catch (error) {
+  } finally {
     removeQuietly(nextDir)
-    host.addActivity(`✗ dsh rebuild failed — the current install was left untouched: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 2. Move the live install aside; its junctions point at the canonical path.
+  removeQuietly(prevDir)
+  let previousMoved = false
+  try {
+    if (fs.existsSync(dir)) {
+      fs.renameSync(dir, prevDir)
+      previousMoved = true
+    }
+  } catch (error) {
+    host.addActivity(`✗ could not move the current dsh install aside: ${error instanceof Error ? error.message : String(error)}`)
     return false
   }
+
+  const restore = (): false => {
+    removeQuietly(dir)
+    if (previousMoved) {
+      try {
+        fs.renameSync(prevDir, dir)
+      } catch {
+        host.addActivity(`✗ the previous dsh install could not be restored automatically — it is at ${prevDir}`)
+      }
+    }
+    return false
+  }
+
+  // 3. Install at the final path so pnpm's junctions target the canonical location.
+  try {
+    if (!writeInstallManifest(version, dir, importMethod)) {
+      host.addActivity('✗ could not write the dsh install manifest — check write permissions')
+      return restore()
+    }
+    host.addActivity(`▶ Reinstalling dsh v${version} (${importMethod} import)…`)
+    const ok = await installArgs(dir, importMethod, allowBuild, `Reinstall dsh v${version}`, pnpmCmd, host)
+    if (!ok || installedDshVersion(dir) !== version) {
+      host.addActivity('✗ dsh reinstall failed — the previous install was restored; see the terminal output above')
+      return restore()
+    }
+  } catch (error) {
+    host.addActivity(`✗ dsh reinstall failed — restoring the previous install: ${error instanceof Error ? error.message : String(error)}`)
+    return restore()
+  }
+
+  // 4. Success: the old tree is no longer needed.
+  removeQuietly(prevDir)
+  return true
 }

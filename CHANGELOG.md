@@ -7,7 +7,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 ## [0.3.8] - 2026-11-03
 
 - dsh is now detached from the VS Code extension host: reloading or closing the window no longer stops a running server. Use Stop in the panel or the command palette to end it.
-- New `dsh.packageImportMethod` setting (default `copy`): pnpm installs dsh's files as independent copies instead of hardlinks. On machines where security software filters file access, hardlinked files are much slower to open, which delays every Stop→Start (about 7s instead of 11–16s measured); a clean install costs only a few MB of extra disk. Changing the setting takes effect on the next Start: the same version is rebuilt in a staging folder and swapped in only when complete, so a failed build leaves the current install untouched (skipped while another instance is running). The **Reinstall dsh (apply install method)** command forces it immediately.
+- New `dsh.packageImportMethod` setting (default `copy`): pnpm installs dsh's files as independent copies instead of hardlinks. On machines where security software filters file access, hardlinked files are much slower to open, which delays every Stop→Start (about 7s instead of 11–16s measured); a clean install costs only a few MB of extra disk. Changing the setting takes effect on the next Start: the same version is preflighted in a staging folder and then rebuilt at its final path, restoring the previous install if the rebuild fails (skipped while another instance is running). The **Reinstall dsh (apply install method)** command forces it immediately.
 
 ## [0.3.7] - 2026-11-03
 
