@@ -6,7 +6,7 @@ import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '..
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
-import { stagedReinstall } from './reinstall.ts'
+import { installLooksHealthy, recoverInterruptedReinstall, stagedReinstall } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {
@@ -109,6 +109,8 @@ export async function ensureDshInstalled(
     )
     return false
   }
+  // Finish or roll back a conversion that a crash interrupted before installing anything.
+  recoverInterruptedReinstall(dir)
   // A usable folder can still hold the user's own package.json; never replace it.
   if (!installManifestRepairable(dir)) {
     host.addActivity(`ℹ ${maskPath(dir)} already contains a dsh install with its own package.json — leaving that file untouched`)
@@ -120,7 +122,7 @@ export async function ensureDshInstalled(
   const args = ['install', '--dir', dir, '--package-import-method', importMethod]
   if (allowBuild) args.push('--dangerously-allow-all-builds')
   const ok = await host.runInstalling(() => host.runInTerminal(`Install dsh v${version}`, pnpmCmd, args))
-  if (ok && installedDshVersion(dir) === version) return true
+  if (ok && installLooksHealthy(dir) && installedDshVersion(dir) === version) return true
   reportStepFailure(
     host,
     '✗ dsh install failed — see the terminal output above',
@@ -134,17 +136,24 @@ export async function preparePkgStart(
   convertAllowed = false,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
+  // Converge interrupted-conversion leftovers only when no other instance is live:
+  // touching the install while another instance runs would swap files under it.
+  if (convertAllowed) recoverInterruptedReinstall(dir)
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
-    // Rebuild into a staging folder, then swap; only when no other instance is live.
-    if (convertAllowed && importMethodNeedsConversion(dir, cfg.packageImportMethod)) {
-      const pnpm = await ensurePnpmAvailable(host)
-      if (!pnpm) {
-        host.addActivity('⚠ dsh import method not applied — pnpm is not available')
+    // Rebuild at the final path; only when no other instance is live.
+    if (importMethodNeedsConversion(dir, cfg.packageImportMethod)) {
+      if (!convertAllowed) {
+        host.dbg('import method switch deferred: another instance is running')
       } else {
-        host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (staged rebuild)…`)
-        const converted = await stagedReinstall(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
-        if (!converted) host.addActivity('⚠ import method not applied — continuing with the existing install')
+        const pnpm = await ensurePnpmAvailable(host)
+        if (!pnpm) {
+          host.addActivity('⚠ dsh import method not applied — pnpm is not available')
+        } else {
+          host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (rebuild)…`)
+          const converted = await stagedReinstall(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
+          if (!converted) host.addActivity('⚠ import method not applied — continuing with the existing install')
+        }
       }
     }
     // The installed version is what runs; the channel only governs future installs.
