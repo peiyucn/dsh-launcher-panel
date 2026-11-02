@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import {
   buildProfileInitSpec,
   buildSpawnSpec,
@@ -13,9 +14,6 @@ function pkgInput(overrides: Partial<SpawnSpecInput> = {}): SpawnSpecInput {
   return {
     mode: 'pnpm',
     version: '0.3.3',
-    // process.execPath resolves to itself on every platform (only .cmd/.bat
-    // shims are expanded by resolveCommandEntry), so this stays portable.
-    pnpmCmd: process.execPath,
     installDir: '/managed/pkg',
     profile: 'web',
     port: 31001,
@@ -45,7 +43,6 @@ function sourceInput(overrides: Partial<SpawnSpecInput> = {}): SpawnSpecInput {
 function initInput(overrides: Partial<ProfileInitSpecInput> = {}): ProfileInitSpecInput {
   return {
     mode: 'pnpm',
-    pnpmCmd: process.execPath,
     installDir: '/managed/pkg',
     profile: 'web',
     home: '/instances/work',
@@ -55,15 +52,13 @@ function initInput(overrides: Partial<ProfileInitSpecInput> = {}): ProfileInitSp
   }
 }
 
-test('pkg mode spawns pnpm exec dsh with port, profile, DSH_HOME and --no-open', () => {
+test('pkg mode spawns the installed CLI directly with port, profile, DSH_HOME and --no-open', () => {
   const built = buildSpawnSpec(pkgInput())
   assert.equal(built.ok, true)
   if (!built.ok) return
-  assert.equal(built.spec.file, process.execPath)
+  assert.equal(built.spec.file, 'node')
   assert.deepEqual(built.spec.args, [
-    '--config.verify-deps-before-run=false',
-    'exec',
-    'dsh',
+    join('/managed/pkg', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     'web',
     '--port',
     '31001',
@@ -122,9 +117,15 @@ test('NODE_DEBUG is only set for sourceDebug in source mode', () => {
   if (pkg.ok) assert.equal(pkg.spec.env.NODE_DEBUG, undefined)
 })
 
+test('pkg mode honors the configured Node executable', () => {
+  const built = buildSpawnSpec(pkgInput({ nodePath: '/opt/node/bin/node' }))
+  assert.equal(built.ok, true)
+  if (built.ok) assert.equal(built.spec.file, '/opt/node/bin/node')
+})
+
 test('missing shared-install parts are reported instead of spawning', () => {
-  const noPnpm = buildSpawnSpec(pkgInput({ pnpmCmd: undefined }))
-  assert.deepEqual(noPnpm, { ok: false, reason: 'pkg start has no pnpm install' })
+  const noPnpm = buildSpawnSpec(pkgInput({ installDir: undefined }))
+  assert.deepEqual(noPnpm, { ok: false, reason: 'pkg start has no dsh install' })
 
   const noCheckout = buildSpawnSpec(sourceInput({ checkout: undefined }))
   assert.deepEqual(noCheckout, { ok: false, reason: 'source start has no checkout' })
@@ -142,21 +143,13 @@ test('missing shared-install parts are reported instead of spawning', () => {
   assert.deepEqual(noInitCheckout, { ok: false, reason: 'profile initialization needs a source checkout' })
 })
 
-test('an unreadable Windows pnpm shim is reported with its reason', { skip: process.platform !== 'win32' }, () => {
-  const built = buildSpawnSpec(pkgInput({ pnpmCmd: 'C:\\missing\\pnpm.cmd' }))
-  assert.equal(built.ok, false)
-  if (!built.ok) assert.match(built.reason, /^pnpm cannot be launched \(/)
-})
-
 test('profile initialization composes the web profile via --dump-config', () => {
   const built = buildProfileInitSpec(initInput())
   assert.equal(built.ok, true)
   if (!built.ok) return
-  assert.equal(built.spec.file, process.execPath)
+  assert.equal(built.spec.file, 'node')
   assert.deepEqual(built.spec.args, [
-    '--config.verify-deps-before-run=false',
-    'exec',
-    'dsh',
+    join('/managed/pkg', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     'web',
     '--dump-config',
   ])

@@ -3,8 +3,6 @@ import type { InstanceState } from '../state.ts'
 export interface PreparedDsh {
   mode: 'pnpm' | 'source'
   version: string
-  /** pnpm may be a `.cmd` shim; resolve it before spawning. */
-  pnpmCmd?: string
   installDir?: string
   checkout?: string
 }

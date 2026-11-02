@@ -35,7 +35,7 @@
 
 而且 DSH 的客户端扩展点是 **Web 专属的**（`window.__DSH_BOOT__`、`/plugins`、浏览器 lazy CJS 模块表，见 `docs/subsystems/client-modules.zh.md`），VS Code 扩展用不了——要当客户端，只能照 `packages/api` 的 Remote 层与 `packages/typert` 协议另写一套。
 
-本扩展的成本结构与上面相反：只走公开入口（`pnpm exec dsh web` / tsx 跑源码检出）、只读 `~/.dsh`、不碰内部实现。**这是它熬过 0.1.5 → 0.1.7、而协议一路在动的根本原因。**
+本扩展的成本结构与上面相反：只走公开入口（已安装包的 Node CLI / tsx 跑源码检出）、只读 `~/.dsh`、不碰内部实现。**这是它熬过 0.1.5 → 0.1.7、而协议一路在动的根本原因。**
 
 ### 编辑器战场是对的，但武器不是「启动」
 

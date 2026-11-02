@@ -128,7 +128,7 @@ export async function ensureDshInstalled(
 }
 
 export async function preparePkgStart(
-  cfg: { pkgPath: string; npmChannel: NpmChannel }, pnpmCmd: string, allowBuild: boolean, host: InstallHost,
+  cfg: { pkgPath: string; npmChannel: NpmChannel }, host: InstallHost,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
   const installed = installedDshVersion(dir)
@@ -140,6 +140,11 @@ export async function preparePkgStart(
     host.setDshVersion(installed)
     return installed
   }
+  // No package-manager process belongs on an already-installed start. Both pnpm
+  // discovery and its version probe are deferred until an install is really needed.
+  const pnpm = await ensurePnpmAvailable(host)
+  if (!pnpm) return undefined
+  const { command: pnpmCmd, allowBuild } = pnpm
   const resolved = await host.withBusy('ℹ Resolving the dsh channel version…', () => latestDshVersion(cfg.npmChannel, host.dbg, pnpmCmd))
   if ('error' in resolved) {
     host.setDshState('missing')

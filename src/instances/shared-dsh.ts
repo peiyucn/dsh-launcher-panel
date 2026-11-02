@@ -6,7 +6,6 @@ import { detectDsh, detectDshVersion, type DetectHost } from '../dsh/detect.ts'
 import { probeNodeVersion } from '../dsh/node-check.ts'
 import { runInTerminal as runInTerminalInner, type TerminalHost } from '../dsh/terminal.ts'
 import {
-  ensurePnpmAvailable,
   ensureSourceCheckout,
   findSourceCheckout,
   pkgInstallDir,
@@ -135,16 +134,10 @@ export class SharedDsh {
 
   private async prepareInternal(): Promise<PreparedDsh | undefined> {
     const cfg = readConfig()
-    // A pkgPath synced from another machine may not exist here; say so instead of
-    // silently installing into the managed location.
-    const unreachable = cfg.runMode === 'pnpm' ? unreachablePkgPathSetting(cfg) : undefined
-    if (unreachable !== undefined) {
-      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
-    }
-    const installHost = this.installHost()
-    await detectDshVersion(cfg, this.detectHost())
+    // Read the source version after readiness: setup may build or change the checkout,
+    // and a warm start needs no throwaway `git describe` before that guard.
     if (cfg.runMode === 'source') {
-      const checkout = await ensureSourceCheckout(cfg, installHost)
+      const checkout = await ensureSourceCheckout(cfg, this.installHost())
       if (!checkout) return undefined
       if (!(await ensureCheckoutReady(checkout.path, this.checkoutHost(), checkout.cloned))) {
         this.dshStateValue = 'missing'
@@ -157,15 +150,20 @@ export class SharedDsh {
       this.dshStateValue = 'ok'
       return { mode: 'source', version, checkout: checkout.path }
     }
-
-    const pnpm = await ensurePnpmAvailable(installHost)
-    if (!pnpm) return undefined
-    const version = await preparePkgStart(cfg, pnpm.command, pnpm.allowBuild, installHost)
+    // A pkgPath synced from another machine may not exist here; say so instead of
+    // silently installing into the managed location.
+    const installHost = this.installHost()
+    await detectDshVersion(cfg, this.detectHost())
+    const unreachable = unreachablePkgPathSetting(cfg)
+    if (unreachable !== undefined) {
+      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
+    }
+    const version = await preparePkgStart(cfg, installHost)
     if (!version) return undefined
     this.dshVersionValue = version
     this.dshPathValue = pkgInstallDir(cfg)
     this.dshStateValue = 'ok'
-    return { mode: 'pnpm', version, pnpmCmd: pnpm.command, installDir: this.dshPathValue }
+    return { mode: 'pnpm', version, installDir: this.dshPathValue }
   }
 
   /** Requires every instance stopped; the caller checks that before calling. */

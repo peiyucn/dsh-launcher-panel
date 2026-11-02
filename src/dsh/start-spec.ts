@@ -1,9 +1,8 @@
+import * as path from 'node:path'
 import { DSH_NO_OPEN_MIN_VERSION, dshVersionAtLeast } from './versions.ts'
-import { resolveCommandEntry, type ResolvedCommand } from '../shared/proc.ts'
 
 interface CommandTarget {
   mode: 'pnpm' | 'source'
-  pnpmCmd?: string
   installDir?: string
   checkout?: string
 }
@@ -61,25 +60,18 @@ interface CommandBuild extends CommandTarget {
   missingSource: string
 }
 
-function resolvePnpm(pnpmCmd: string | undefined, installDir: string | undefined, missingReason: string): { ok: true; command: ResolvedCommand; installDir: string } | { ok: false; reason: string } {
-  if (!pnpmCmd || !installDir) return { ok: false, reason: missingReason }
-  const resolution = resolveCommandEntry(pnpmCmd)
-  if (!resolution.ok) return { ok: false, reason: `pnpm cannot be launched (${resolution.reason})` }
-  return { ok: true, command: resolution.command, installDir }
-}
-
 function buildCommand(input: CommandBuild): SpawnSpecResult {
   const { env, args } = input
   if (input.mode === 'pnpm') {
-    const pnpm = resolvePnpm(input.pnpmCmd, input.installDir, input.missingPnpm)
-    if (!pnpm.ok) return pnpm
+    if (!input.installDir) return { ok: false, reason: input.missingPnpm }
     return {
       ok: true,
       spec: {
-        file: pnpm.command.file,
-        // The launcher owns installs; pnpm exec must not re-install on its own.
-        args: [...pnpm.command.args, '--config.verify-deps-before-run=false', 'exec', 'dsh', ...args],
-        cwd: pnpm.installDir,
+        file: input.nodePath || 'node',
+        // pnpm owns installation, not the hot start path: invoking its CLI adds another
+        // package-manager startup and dependency check before the actual dsh process.
+        args: [path.join(input.installDir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'), ...args],
+        cwd: input.installDir,
         env,
       },
     }
@@ -103,7 +95,7 @@ export function buildSpawnSpec(input: SpawnSpecInput): SpawnSpecResult {
     ...input,
     env,
     args: instanceArgs(input.profile, input.port, input.version),
-    missingPnpm: 'pkg start has no pnpm install',
+    missingPnpm: 'pkg start has no dsh install',
     missingSource: 'source start has no checkout',
   })
 }
