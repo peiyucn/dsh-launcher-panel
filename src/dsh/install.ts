@@ -6,7 +6,7 @@ import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '..
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
-import { installLooksHealthy, recoverInterruptedReinstall, stagedReinstall } from './reinstall.ts'
+import { installLooksHealthy, recoverInterruptedReinstall, reinstallInPlace } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {
@@ -141,7 +141,7 @@ export async function preparePkgStart(
   if (convertAllowed) recoverInterruptedReinstall(dir)
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
-    // Rebuild at the final path; only when no other instance is live.
+    // Reinstall in place; only when no other instance is live.
     if (importMethodNeedsConversion(dir, cfg.packageImportMethod)) {
       if (!convertAllowed) {
         host.dbg('import method switch deferred: another instance is running')
@@ -150,8 +150,13 @@ export async function preparePkgStart(
         if (!pnpm) {
           host.addActivity('⚠ dsh import method not applied — pnpm is not available')
         } else {
-          host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (rebuild)…`)
-          const converted = await stagedReinstall(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
+          host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (reinstall in place)…`)
+          const converted = await reinstallInPlace(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
+          if (!converted && !installLooksHealthy(dir)) {
+            // The install no longer works; starting it would only fail later with a
+            // less actionable error, so stop here with the recovery instruction.
+            return undefined
+          }
           if (!converted) host.addActivity('⚠ import method not applied — continuing with the existing install')
         }
       }

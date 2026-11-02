@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { recoverInterruptedReinstall, stagedReinstall, type ReinstallHost } from '../src/dsh/reinstall.ts'
+import { recoverInterruptedReinstall, reinstallInPlace, type ReinstallHost } from '../src/dsh/reinstall.ts'
 import { DSH_INSTALL_MANIFEST_NAME, writeInstallManifest } from '../src/dsh/paths.ts'
 
 const VERSION = '0.3.8'
@@ -22,26 +22,22 @@ function makeLiveInstall(root: string): string {
   return dir
 }
 
-function fakeInstall(dir: string, marker: string): void {
-  writeTree(dir, VERSION, marker)
-}
-
-function host(dir: string, behaviour: { preflight?: boolean; final?: boolean; onFinal?: () => void } = {}): ReinstallHost {
+function host(dir: string, behaviour: { fail?: boolean; breakLive?: boolean } = {}): { host: ReinstallHost; activities: string[] } {
+  const activities: string[] = []
   return {
-    addActivity: () => 0,
-    runInstalling: (task) => task(),
-    runInTerminal: async (_title, _command, args) => {
-      const target = args[args.indexOf('--dir') + 1]
-      if (target.endsWith('.next')) {
-        if (behaviour.preflight === false) return false
-        fakeInstall(target, 'staged-marker.txt')
+    activities,
+    host: {
+      addActivity: (line) => { activities.push(line); return 0 },
+      runInstalling: (task) => task(),
+      runInTerminal: async () => {
+        if (behaviour.fail) {
+          if (behaviour.breakLive) rmSync(join(dir, 'node_modules'), { recursive: true, force: true })
+          return false
+        }
+        rmSync(join(dir, 'node_modules'), { recursive: true, force: true })
+        writeTree(dir, VERSION, 'fresh-marker.txt')
         return true
-      }
-      assert.equal(target, dir)
-      behaviour.onFinal?.()
-      if (behaviour.final === false) return false
-      fakeInstall(target, 'fresh-marker.txt')
-      return true
+      },
     },
   }
 }
@@ -52,12 +48,12 @@ function assertClean(dir: string): void {
   assert.equal(existsSync(`${dir}.launcher-lock`), false, 'no lock leftover')
 }
 
-test('stagedReinstall verifies in staging, rebuilds at the final path and swaps successfully', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-reinstall-'))
+test('reinstallInPlace rebuilds the same folder in place and keeps the manifest', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-'))
   try {
     const dir = makeLiveInstall(root)
-    const ok = await stagedReinstall(VERSION, dir, 'pnpm', false, 'copy', host(dir))
-    assert.equal(ok, true)
+    const { host: h, activities } = host(dir)
+    assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, 'copy', h), true)
     assert.equal(existsSync(join(dir, 'node_modules', 'fresh-marker.txt')), true)
     assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), false)
     assertClean(dir)
@@ -67,35 +63,19 @@ test('stagedReinstall verifies in staging, rebuilds at the final path and swaps 
     }
     assert.equal(manifest.name, DSH_INSTALL_MANIFEST_NAME)
     assert.equal(manifest.dshLauncher?.packageImportMethod, 'copy')
+    assert.doesNotMatch(activities.join('\n'), /delete .*package/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('a failed preflight build leaves the live install untouched', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-reinstall-preflight-'))
+test('a failed reinstall reports the delete-folder recovery instruction', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-fail-'))
   try {
     const dir = makeLiveInstall(root)
-    const before = readFileSync(join(dir, 'package.json'), 'utf8')
-    const ok = await stagedReinstall(VERSION, dir, 'pnpm', false, 'copy', host(dir, { preflight: false }))
-    assert.equal(ok, false)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true)
-    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-marker.txt')), false)
-    assertClean(dir)
-    assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('a failed final install restores the previous install', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-reinstall-final-'))
-  try {
-    const dir = makeLiveInstall(root)
-    const ok = await stagedReinstall(VERSION, dir, 'pnpm', false, 'copy', host(dir, { final: false }))
-    assert.equal(ok, false)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true, 'previous install restored')
-    assert.equal(existsSync(join(dir, 'node_modules', 'fresh-marker.txt')), false)
+    const { host: h, activities } = host(dir, { fail: true, breakLive: true })
+    assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, 'copy', h), false)
+    assert.match(activities.join('\n'), /delete .*package.*Start again/)
     assertClean(dir)
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -103,12 +83,12 @@ test('a failed final install restores the previous install', async () => {
 })
 
 test('switching the import method back and forth repeatedly stays clean', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-reinstall-toggle-'))
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-toggle-'))
   try {
     const dir = makeLiveInstall(root)
     for (const method of ['copy', 'hardlink', 'copy', 'hardlink', 'copy', 'hardlink'] as const) {
-      const ok = await stagedReinstall(VERSION, dir, 'pnpm', false, method, host(dir))
-      assert.equal(ok, true, `switch to ${method} must succeed`)
+      const { host: h } = host(dir)
+      assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, method, h), true, `switch to ${method}`)
       assertClean(dir)
       const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
         dshLauncher?: { packageImportMethod?: string }
@@ -120,48 +100,51 @@ test('switching the import method back and forth repeatedly stays clean', async 
   }
 })
 
-test('recoverInterruptedReinstall restores the previous install when the live tree is broken', () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-recover-broken-'))
+test('a stale pnpm-workspace.yaml is set aside during the reinstall and dropped on success', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-workspace-'))
   try {
-    const dir = join(root, 'package')
-    mkdirSync(dir, { recursive: true })
-    writeInstallManifest(VERSION, dir, 'copy') // partial live tree: manifest but no node_modules
-    writeTree(`${dir}.prev`, '0.3.7', 'stale-marker.txt')
-    recoverInterruptedReinstall(dir)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true)
-    assertClean(dir)
+    const dir = makeLiveInstall(root)
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'packages: []\n')
+    const { host: h } = host(dir)
+    assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, 'copy', h), true)
+    assert.equal(existsSync(join(dir, 'pnpm-workspace.yaml')), false)
+    assert.equal(existsSync(join(dir, 'pnpm-workspace.yaml.prev')), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('recoverInterruptedReinstall keeps a healthy live install and removes stale leftovers', () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-recover-healthy-'))
+test('recoverInterruptedReinstall converges leftovers from older rename-based versions', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-recover-'))
   try {
     const dir = makeLiveInstall(root)
     writeTree(`${dir}.prev`, '0.3.6', 'older-marker.txt')
     mkdirSync(`${dir}.next`, { recursive: true })
+    writeFileSync(`${dir}.launcher-lock`, 'stale')
     recoverInterruptedReinstall(dir)
     assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true)
     assert.equal(existsSync(`${dir}.prev`), false)
     assert.equal(existsSync(`${dir}.next`), false)
+    assert.equal(existsSync(`${dir}.launcher-lock`), true, 'the lock is left for acquireLock to judge')
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('a concurrent conversion is skipped while the lock is fresh, and stale locks expire', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-reinstall-lock-'))
+test('a concurrent reinstall is skipped while the lock is fresh, and stale locks expire', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-inplace-lock-'))
   try {
     const dir = makeLiveInstall(root)
     const lock = `${dir}.launcher-lock`
     writeFileSync(lock, 'other-window')
-    assert.equal(await stagedReinstall(VERSION, dir, 'pnpm', false, 'copy', host(dir)), false)
-    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true, 'live install untouched while locked')
+    const { host: blocked } = host(dir)
+    assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, 'copy', blocked), false)
+    assert.equal(existsSync(join(dir, 'node_modules', 'stale-marker.txt')), true)
 
     const old = new Date(Date.now() - 60 * 60_000)
     utimesSync(lock, old, old)
-    assert.equal(await stagedReinstall(VERSION, dir, 'pnpm', false, 'copy', host(dir)), true)
+    const { host: allowed } = host(dir)
+    assert.equal(await reinstallInPlace(VERSION, dir, 'pnpm', false, 'copy', allowed), true)
     assertClean(dir)
   } finally {
     rmSync(root, { recursive: true, force: true })

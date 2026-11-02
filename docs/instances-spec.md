@@ -178,7 +178,7 @@ interface DshInstance {
 - 初始化失败时保留实例和 settings，显示错误与日志路径；不要删除用户数据，也不要悄悄回退到别的 home。
 - 如果用户删光所有实例，面板显示空状态 + `+`；不要用迁移逻辑自动重新创建 Default。
 - 现有用户升级：`dsh.port` 迁移成 Default；已有 `~/.dsh` / dsh 安装继续可用。
-- pkg 安装方式由 `dsh.packageImportMethod` 决定（默认 `copy`）：`copy` 复制文件（干净安装只多几 MB，但避免硬链接在有文件过滤驱动的机器上拖慢启动），`hardlink`/`auto` 则相反。改设置后在下一次 Start 时生效：先在 `package.next` 里预验证（不切换），再删除暂存目录、把当前安装改名为 `package.prev`，**在最终路径重建**（pnpm 的 junction 指向最终路径，避免悬空），校验成功才删除 `.prev`；重建失败删除半成品并把 `.prev` 改回（其链接指向规范路径，回滚后仍可用）。有其他实例运行时跳过；命令面板的 `dsh.reinstall` 可立即强制。版本更新时按该方式安装。
+- pkg 安装方式由 `dsh.packageImportMethod` 决定（默认 `copy`）：`copy` 复制文件（干净安装只多几 MB，但避免硬链接在有文件过滤驱动的机器上拖慢启动），`hardlink`/`auto` 则相反。改设置后在下一次 Start 时，在原目录执行 `pnpm install --force --package-import-method <method>` 重装同版本：不移动、不改名任何目录（pnpm 的 junction 在 Windows 上按绝对路径创建，移动目录会让入口悬空）；终端跑完前不要关闭。重装失败时提示用户：停止所有实例 → 删除安装目录 → 重新 Start 全新安装。重装前若存在陈旧的 `pnpm-workspace.yaml` 会先移开、成功后丢弃，避免旧配置把跨平台包拉进来；过程中用锁文件避免两个窗口同时重装。有其他实例运行时跳过；命令面板的 `dsh.reinstall` 可立即强制。版本更新时按该方式安装。
 
 ### 创建失败
 

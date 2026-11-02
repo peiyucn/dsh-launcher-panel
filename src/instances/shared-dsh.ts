@@ -15,7 +15,7 @@ import {
   type InstallHost,
 } from '../dsh/install.ts'
 import { installedDshVersion, maskPath } from '../dsh/paths.ts'
-import { stagedReinstall } from '../dsh/reinstall.ts'
+import { reinstallInPlace } from '../dsh/reinstall.ts'
 import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from '../shared/timing.ts'
 import { versionFromDescribe } from '../dsh/versions.ts'
 import { checkDshUpdateStatus, runDshUpdate, type DshUpdate, type UpdateHost } from '../dsh/update.ts'
@@ -193,7 +193,7 @@ export class SharedDsh {
     }
     const pnpm = await ensurePnpmAvailable(this.installHost())
     if (!pnpm) return false
-    const ok = await stagedReinstall(version, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, this.installHost())
+    const ok = await reinstallInPlace(version, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, this.installHost())
     if (ok) {
       this.dshVersionValue = version
       this.dshPathValue = dir

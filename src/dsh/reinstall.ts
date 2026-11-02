@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { installManifestRepairable, installedDshVersion, writeInstallManifest } from './paths.ts'
+import { installManifestRepairable, installedDshVersion, maskPath, writeInstallManifest } from './paths.ts'
 import type { PackageImportMethod } from '../shared/env.ts'
 
 export interface ReinstallHost {
@@ -13,7 +13,7 @@ const PREV_SUFFIX = '.prev'
 const NEXT_SUFFIX = '.next'
 const LOCK_SUFFIX = '.launcher-lock'
 
-/** The stale lock only guards against a crashed conversion; any real one ends far sooner. */
+/** The stale lock only guards against a crashed reinstall; any real one ends far sooner. */
 const LOCK_STALE_MS = 30 * 60_000
 
 function removeQuietly(target: string): void {
@@ -31,8 +31,9 @@ export function installLooksHealthy(dir: string): boolean {
 }
 
 /**
- * Converge leftovers from an interrupted conversion before anything reads the install.
- * A healthy live install wins; otherwise the previous one is restored in place.
+ * Clean state left by older launcher versions that renamed install folders around.
+ * The current scheme never renames anything, but a crash from an old version may have
+ * left `.prev`/`.next` behind; converge them instead of asking the user to clean up.
  */
 export function recoverInterruptedReinstall(dir: string): void {
   removeQuietly(`${dir}${NEXT_SUFFIX}`)
@@ -46,7 +47,7 @@ export function recoverInterruptedReinstall(dir: string): void {
   try {
     fs.renameSync(prev, dir)
   } catch {
-    // Leave .prev in place; the next Start retries the recovery.
+    // Leave .prev in place; deleting the folder and starting again also recovers.
   }
 }
 
@@ -65,47 +66,23 @@ function acquireLock(dir: string): string | undefined {
         return acquireLock(dir)
       }
     } catch {
-      // The lock disappeared between checks; retry once.
       return acquireLock(dir)
     }
     return undefined
   }
 }
 
-function releaseLock(lock: string | undefined): void {
-  if (lock !== undefined) removeQuietly(lock)
-}
-
-function installArgs(
-  dir: string,
-  importMethod: PackageImportMethod,
-  allowBuild: boolean,
-  title: string,
-  pnpmCmd: string,
-  host: ReinstallHost,
-): Promise<boolean> {
-  const args = ['install', '--dir', dir, '--package-import-method', importMethod]
-  if (allowBuild) args.push('--dangerously-allow-all-builds')
-  return host.runInstalling(() => host.runInTerminal(title, pnpmCmd, args))
-}
-
 /**
- * Change the install's `package-import-method` without ever leaving a half-replaced tree.
+ * Reinstall the same dsh version in place with the configured import method.
  *
- * pnpm creates absolute junction targets on Windows, so a tree built in `package.next`
- * and renamed to `package` keeps pointing at the (now gone) staging path and cannot be
- * loaded. The build therefore has to happen at the final path:
- *
- * 1. build once in a throwaway staging folder to prove pnpm/network/arguments work;
- * 2. move the live install to `package.prev`;
- * 3. install at the final `package` path (junctions now point at the canonical path);
- * 4. verify, then delete `package.prev`; on failure restore it (its junctions point at
- *    the canonical `package` path again, so the restored install keeps working).
- *
- * A lock file stops two windows from converting the same install concurrently, and
- * leftovers from an interrupted run are converged by `recoverInterruptedReinstall`.
+ * Deliberately simple: `pnpm install --force` re-imports the files in the existing
+ * folder. Copying the tree into a staging folder or renaming install directories was
+ * fragile on Windows (absolute pnpm junctions break as soon as a tree is moved) and
+ * turned a failed install into an unbootable one. The trade-off is that the install is
+ * unusable while the terminal runs, so the caller must not close it; if the install
+ * fails, the documented recovery is to delete the install folder and Start again.
  */
-export async function stagedReinstall(
+export async function reinstallInPlace(
   version: string,
   dir: string,
   pnpmCmd: string,
@@ -120,88 +97,48 @@ export async function stagedReinstall(
   recoverInterruptedReinstall(dir)
   const lock = acquireLock(dir)
   if (lock === undefined) {
-    host.addActivity('⚠ another window is already rebuilding dsh — try again in a minute')
+    host.addActivity('⚠ another window is already reinstalling dsh — try again in a minute')
     return false
   }
-  try {
-    return await convertUnderLock(version, dir, pnpmCmd, allowBuild, importMethod, host)
-  } finally {
-    releaseLock(lock)
-  }
-}
-
-async function convertUnderLock(
-  version: string,
-  dir: string,
-  pnpmCmd: string,
-  allowBuild: boolean,
-  importMethod: PackageImportMethod,
-  host: ReinstallHost,
-): Promise<boolean> {
-  const nextDir = `${dir}${NEXT_SUFFIX}`
-  const prevDir = `${dir}${PREV_SUFFIX}`
-  removeQuietly(nextDir)
-
-  // 1. Preflight build: catches pnpm/network/flag problems without touching the live install.
-  try {
-    fs.mkdirSync(nextDir, { recursive: true })
-    if (!writeInstallManifest(version, nextDir, importMethod)) {
-      host.addActivity('✗ could not write the dsh install manifest — check write permissions')
-      return false
-    }
-    host.addActivity(`▶ Verifying the dsh rebuild in a staging folder (${importMethod} import)…`)
-    const stagedOk = await installArgs(nextDir, importMethod, allowBuild, `Verify dsh v${version} rebuild`, pnpmCmd, host)
-    if (!stagedOk || !installLooksHealthy(nextDir)) {
-      host.addActivity('✗ dsh rebuild preflight failed — the current install was left untouched; see the terminal output above')
-      return false
-    }
-  } finally {
-    removeQuietly(nextDir)
-  }
-
-  // 2. Move the live install aside; its junctions point at the canonical path.
-  removeQuietly(prevDir)
-  let previousMoved = false
-  try {
-    if (fs.existsSync(dir)) {
-      fs.renameSync(dir, prevDir)
-      previousMoved = true
-    }
-  } catch (error) {
-    host.addActivity(`✗ could not move the current dsh install aside: ${error instanceof Error ? error.message : String(error)}`)
-    return false
-  }
-
-  const restore = (): false => {
-    removeQuietly(dir)
-    if (previousMoved) {
-      try {
-        fs.renameSync(prevDir, dir)
-      } catch {
-        host.addActivity(`✗ the previous dsh install could not be restored automatically — it is at ${prevDir}`)
-      }
-    }
-    return false
-  }
-
-  // 3. Install at the final path so pnpm's junctions target the canonical location.
   try {
     if (!writeInstallManifest(version, dir, importMethod)) {
       host.addActivity('✗ could not write the dsh install manifest — check write permissions')
-      return restore()
+      return false
     }
-    host.addActivity(`▶ Reinstalling dsh v${version} (${importMethod} import)…`)
-    const ok = await installArgs(dir, importMethod, allowBuild, `Reinstall dsh v${version}`, pnpmCmd, host)
-    if (!ok || !installLooksHealthy(dir)) {
-      host.addActivity('✗ dsh reinstall failed — the previous install was restored; see the terminal output above')
-      return restore()
+    // A stale workspace file can change pnpm's resolution (and pulled unrelated
+    // cross-platform packages into the install before). Keep it aside, drop on success.
+    const workspaceFile = path.join(dir, 'pnpm-workspace.yaml')
+    const workspaceBackup = `${workspaceFile}${PREV_SUFFIX}`
+    let workspaceMoved = false
+    if (fs.existsSync(workspaceFile)) {
+      try {
+        removeQuietly(workspaceBackup)
+        fs.renameSync(workspaceFile, workspaceBackup)
+        workspaceMoved = true
+      } catch {
+        host.addActivity('⚠ could not move a stale pnpm-workspace.yaml aside — the reinstall may keep old resolution')
+      }
     }
-  } catch (error) {
-    host.addActivity(`✗ dsh reinstall failed — restoring the previous install: ${error instanceof Error ? error.message : String(error)}`)
-    return restore()
+    host.addActivity(`▶ Reinstalling dsh v${version} (${importMethod} import) — keep this terminal open until it finishes…`)
+    const args = ['install', '--dir', dir, '--package-import-method', importMethod, '--force']
+    if (allowBuild) args.push('--dangerously-allow-all-builds')
+    const ok = await host.runInstalling(() => host.runInTerminal(`Reinstall dsh v${version} (do not close this terminal)`, pnpmCmd, args))
+    if (ok && installLooksHealthy(dir) && installedDshVersion(dir) === version) {
+      if (workspaceMoved) removeQuietly(workspaceBackup)
+      return true
+    }
+    if (workspaceMoved) {
+      try {
+        fs.renameSync(workspaceBackup, workspaceFile)
+      } catch {
+        // The recovery instruction below covers a broken install anyway.
+      }
+    }
+    host.addActivity(
+      `✗ dsh reinstall failed — if dsh does not start afterwards: Stop all instances, delete ${maskPath(dir)}, then Start again for a clean install. See the terminal output above.`,
+    )
+    return false
+  } finally {
+    removeQuietly(lock)
   }
-
-  // 4. Success: the old tree is no longer needed.
-  removeQuietly(prevDir)
-  return true
 }
