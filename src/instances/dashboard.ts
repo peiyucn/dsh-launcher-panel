@@ -3,7 +3,6 @@ import { readConfig } from '../dsh/config.ts'
 import { maskPath } from '../dsh/paths.ts'
 import { isUpdating, type DshUpdate } from '../dsh/update.ts'
 import type { InstanceIssue } from './model.ts'
-import type { InstanceLifecycle } from './model.ts'
 import type { InstanceRuntimeStatus } from './runtime/types.ts'
 
 export interface InstanceDashboard {
@@ -14,9 +13,6 @@ export interface InstanceDashboard {
     stopping: boolean
     checking: boolean
     updating: boolean
-    external: boolean
-    uiAvailable: boolean
-    lifecycle: InstanceLifecycle
     url: string
     dsh: 'unknown' | 'ok' | 'missing'
     dshVersion: string
@@ -78,9 +74,6 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
       stopping: active?.stopping ?? false,
       checking: facts.checking,
       updating: isUpdating(),
-      external: active?.external ?? false,
-      uiAvailable: active?.uiAvailable ?? false,
-      lifecycle: active?.lifecycle ?? 'launcher',
       url: active?.url ?? '',
       dsh: facts.dsh,
       dshVersion: facts.dshVersion,

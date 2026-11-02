@@ -12,8 +12,6 @@ interface MenuStatus {
   installing: boolean
   stopping: boolean
   updating: boolean
-  external: boolean
-  uiAvailable: boolean
   dshVersion: string
   mode: 'pnpm' | 'source'
   url: string
@@ -24,16 +22,6 @@ type PhaseAction = Exclude<StatusMenuAction, 'settings'>
 
 const PHASE_ACTIONS: Record<Phase, readonly PhaseAction[]> = {
   running: ['open', 'dashboard', 'stop'], starting: ['dashboard', 'stop'], busy: ['dashboard'], stopped: ['start', 'dashboard'],
-}
-
-function phaseActions(
-  status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating' | 'external' | 'uiAvailable'>,
-): readonly PhaseAction[] {
-  const phase = phaseOf(status)
-  if (!status.external) return PHASE_ACTIONS[phase]
-  // The launcher only observes external instances: no start, no stop, no restart.
-  if (phase === 'running') return status.uiAvailable ? ['open', 'dashboard'] : ['dashboard']
-  return ['dashboard']
 }
 
 const ACTION_ICONS: Record<StatusMenuAction, string> = { start: 'play', stop: 'debug-stop', open: 'globe', dashboard: 'browser', settings: 'settings-gear' }
@@ -64,11 +52,11 @@ function menuItem(action: PhaseAction, name: string): StatusMenuItem {
 }
 
 export function buildStatusMenuItems(
-  status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating' | 'external' | 'uiAvailable'>,
+  status: Pick<MenuStatus, 'running' | 'starting' | 'installing' | 'stopping' | 'updating'>,
   instanceName?: string,
 ): StatusMenuItem[] {
   const name = instanceLabel(instanceName)
-  const items = phaseActions(status).map((action) => menuItem(action, name))
+  const items = PHASE_ACTIONS[phaseOf(status)].map((action) => menuItem(action, name))
   items.push({ label: 'Open Global Settings', icon: ACTION_ICONS.settings, action: 'settings' })
   return items
 }
@@ -82,7 +70,6 @@ export function buildStatusMenuSummary(status: MenuStatus, instanceName?: string
   const name = instanceLabel(instanceName)
   const parts = name ? [name] : []
   parts.push(stateWord(status), status.mode === 'source' ? 'src mode' : 'pkg mode')
-  if (status.external) parts.push('external')
   parts.push(status.dshVersion ? `dsh v${status.dshVersion}` : 'dsh version unknown')
   if (status.running) parts.push(status.url.replace(/^https?:\/\//, ''))
   return parts.join(' · ')

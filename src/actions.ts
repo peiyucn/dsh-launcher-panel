@@ -3,7 +3,6 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
 import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
-import { isExternalInstance } from './instances/model.ts'
 import type { InstanceIssue } from './instances/model.ts'
 import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
 
@@ -54,15 +53,7 @@ export async function actionStart(id?: string): Promise<void> {
       }
       const before = manager.statusOf(target)
       const instance = manager.instance(target)
-      if (!instance) return
-      if (isExternalInstance(instance)) {
-        // External lifecycle: never start the process, only attach to it.
-        const status = manager.statusOf(target)
-        if (status?.running && status.uiAvailable) await actionOpen(target)
-        else void vscode.window.showInformationMessage(`"${instance.name}" is managed outside the launcher — start it with its own manager (systemd/docker).`)
-        return
-      }
-      if (!(await manager.start(target))) return
+      if (!(await manager.start(target)) || !instance) return
       const autoOpen = instance.autoOpenBrowser ?? (vscode.workspace.getConfiguration('dsh').get<boolean>('autoOpenBrowser') ?? true)
       if (!shouldOpenBrowser(autoOpen, before?.running ?? false)) return
       const now = Date.now()
@@ -79,15 +70,9 @@ export async function actionStart(id?: string): Promise<void> {
 export async function actionStop(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
-    if (!target) return
-    const instance = manager.instance(target)
-    if (instance && isExternalInstance(instance)) {
-      void vscode.window.showInformationMessage(`"${instance.name}" is managed outside the launcher — stop it with its own manager.`)
-      return
-    }
     // A failed stop is reported by the runtime itself (panel error line + activity feed);
     // Stop never kills a port owner it cannot identify, so there is nothing to ask about.
-    await manager.stop(target)
+    if (target) await manager.stop(target)
   })
 }
 
@@ -95,11 +80,6 @@ export async function actionRestart(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
-    const instance = manager.instance(target)
-    if (instance && isExternalInstance(instance)) {
-      void vscode.window.showInformationMessage(`"${instance.name}" is managed outside the launcher — restart it with its own manager.`)
-      return
-    }
     const status = manager.statusOf(target)
     const occupied = instanceBusy(status) || status?.adopted === true || status?.untrackedPort === true
     // A refused or failed stop leaves the port taken; starting would only hit "port already in use".
@@ -112,11 +92,6 @@ export async function actionOpen(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
-    const status = manager.statusOf(target)
-    if (status?.external && !status.uiAvailable) {
-      void vscode.window.showInformationMessage('This external instance is running, but its launch token could not be resolved — set tokenSource for it to open the Web UI.')
-      return
-    }
     const url = manager.uiUrl(target)
     if (url) await openUrl(url, manager.instance(target)?.browser)
   })
@@ -228,10 +203,6 @@ export async function actionEditInstance(id?: string): Promise<void> {
     if (!target) return
     const current = manager.instance(target)
     if (!current) return
-    if (isExternalInstance(current)) {
-      void vscode.window.showInformationMessage('External instances are configured in the dsh.instances setting; they cannot be edited here.')
-      return
-    }
     if (instanceBusy(manager.statusOf(target))) {
       void vscode.window.showWarningMessage('Stop the instance before editing it.')
       return
@@ -276,9 +247,8 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
       return
     }
     const home = manager.homeOf(current)
-    const detail = home === '' ? 'its external process is not affected' : `DSH data in ${home} is not deleted`
     const picked = await vscode.window.showWarningMessage(
-      `Remove "${current.name}" from the dashboard? ${detail}.`,
+      `Remove "${current.name}" from the launcher? DSH data in ${home} is not deleted.`,
       { modal: true },
       'Remove',
     )
@@ -298,8 +268,8 @@ export async function actionUpdateDsh(): Promise<void> {
 /** Explicitly rebuild dsh with the configured import method (staged, never in place). */
 export async function actionReinstallDsh(): Promise<void> {
   await withManager(async (manager) => {
-    if (manager.anyLauncherActive()) {
-      void vscode.window.showWarningMessage('Stop all launcher-managed DSH instances before reinstalling dsh.')
+    if (manager.anyActive()) {
+      void vscode.window.showWarningMessage('Stop all DSH instances before reinstalling dsh.')
       return
     }
     const method = vscode.workspace.getConfiguration('dsh').get<string>('packageImportMethod') ?? 'copy'

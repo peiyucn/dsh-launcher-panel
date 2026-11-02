@@ -98,23 +98,3 @@ test('stopping and updating still offer only the dashboard', () => {
   // Documented precedence when both are true: updating wins over stopping.
   assert.equal(buildStatusMenuSummary({ ...summaryBase, stopping: true, updating: true }), 'Updating · pkg mode · dsh v0.1.2-alpha.1')
 })
-
-test('external instances never offer start or stop', () => {
-  const external = { ...base, external: true, uiAvailable: false }
-  assert.deepEqual(actions(external), ['dashboard', 'settings'])
-  assert.deepEqual(actions({ ...external, running: true }), ['dashboard', 'settings'], 'running without a token cannot be opened')
-  assert.deepEqual(actions({ ...external, running: true, uiAvailable: true }), ['open', 'dashboard', 'settings'])
-  assert.deepEqual(actions({ ...external, starting: true }), ['dashboard', 'settings'])
-  assert.deepEqual(actions({ ...external, updating: true }), ['dashboard', 'settings'])
-})
-
-test('external summary names the lifecycle', () => {
-  assert.equal(
-    buildStatusMenuSummary({ ...summaryBase, running: true, external: true, uiAvailable: true }),
-    'Running · pkg mode · external · dsh v0.1.2-alpha.1 · 127.0.0.1:3080',
-  )
-  assert.equal(
-    buildStatusMenuSummary({ ...summaryBase, external: true, uiAvailable: false }),
-    'Stopped · pkg mode · external · dsh v0.1.2-alpha.1',
-  )
-})

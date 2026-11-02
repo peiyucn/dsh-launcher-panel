@@ -2,7 +2,7 @@
   "name": "dsh-launcher-panel",
   "displayName": "DSH Launcher Panel",
   "description": "Start DeepSeek Harness (dsh) and open its web UI in VS Code's built-in browser.",
-  "version": "0.4.0",
+  "version": "0.3.8",
   "icon": "resources/icon.png",
   "publisher": "peiyucn",
   "license": "MIT",
@@ -260,12 +260,14 @@
           "type": "array",
           "scope": "machine",
           "default": [],
-          "description": "DSH instances shown on the dashboard. Each entry is a runtime coordinate: a DSH_HOME (home), a profile inside it, and a Web UI port. Empty home means the default home. Set lifecycle to 'external' for a dsh owned by systemd/docker/manual tooling: the launcher only detects it and opens its Web UI, never starts, stops, installs or updates it; tokenSource says where to read its launch token. Instances are machine-local.",
+          "description": "DSH instances managed by the launcher. Each entry is a runtime coordinate: a DSH_HOME (home), a profile inside it, and a Web UI port. Empty home means the default home. Instances are machine-local.",
           "items": {
             "type": "object",
             "required": [
               "id",
               "name",
+              "home",
+              "profile",
               "port"
             ],
             "additionalProperties": false,
@@ -280,7 +282,7 @@
               },
               "home": {
                 "type": "string",
-                "description": "DSH_HOME for this instance; empty uses the default home (launcher) or means no home (external)."
+                "description": "DSH_HOME for this instance; empty uses the default home."
               },
               "profile": {
                 "type": "string",
@@ -292,45 +294,6 @@
                 "minimum": 1,
                 "maximum": 65535,
                 "description": "Web UI port; unique across configured instances."
-              },
-              "lifecycle": {
-                "type": "string",
-                "enum": [
-                  "launcher",
-                  "external"
-                ],
-                "default": "launcher",
-                "description": "Who owns the process: the launcher (default) or an external supervisor (systemd/docker/manual). External instances are observed only."
-              },
-              "tokenSource": {
-                "type": "object",
-                "description": "External instances only: where to read the dsh launch token. Without it the port is detected but the Web UI cannot be opened.",
-                "required": [
-                  "kind"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "journal",
-                      "file",
-                      "docker"
-                    ]
-                  },
-                  "unit": {
-                    "type": "string",
-                    "description": "systemd unit name for kind 'journal'."
-                  },
-                  "container": {
-                    "type": "string",
-                    "description": "Container name for kind 'docker'."
-                  },
-                  "path": {
-                    "type": "string",
-                    "description": "Absolute token file path for kind 'file' (~/ is expanded)."
-                  }
-                }
               },
               "autoOpenBrowser": {
                 "type": "boolean",

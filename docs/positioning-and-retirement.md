@@ -22,17 +22,6 @@
 * 端口与启动参数硬编码（`apps/desktop-host/src/index.ts:30` → `--no-open --host 127.0.0.1 --port 0`；端口 0 由系统分配）
 * 走 `electron-updater` 自动更新，并带强制更新策略（`dshMandatoryUpdatePolicy`）
 
-### 生命周期归属：控制台可以只观察
-
-「启动器」这个名字只描述了默认用法。控制台的价值不依赖拥有进程：当 dsh 由 systemd / docker / 手动托管时，用户仍然需要状态、日志、打开 UI 与版本信息。
-
-* `lifecycle: 'launcher'`（默认）：launcher 拥有进程——安装、启动、停止、更新；
-* `lifecycle: 'external'`：外部管理器拥有进程，launcher 只探测端口、读启动 token、在新标签页打开 UI；不提供 Start/Stop/Restart，也不安装/更新。
-
-这不是「远程实例」：位置维度（本机 vs 跨主机）与生命周期归属正交。ECS 场景里扩展通过 Remote-SSH 运行在远端，看到的是远端的 `127.0.0.1`——位置=本机、归属=external。`remote` 一词保留给未来「Launcher 在本机、通过 SSH 隧道管理另一台机器」的能力，本轮不做。
-
-展示名（`displayName`）本轮不改：定位调整先用功能与文档表达；Marketplace 的扩展 ID 不可修改，完整更名等于新扩展 + 弃用旧版，代价远高于收益。等 external 生命周期稳定后再评估是否值得。
-
 ## 二、为什么不做深度 IDE 集成
 
 深度集成的成本 = **跟踪一个不属于自己的 alpha 客户端协议**。协议所有者是官方，只有它能把这份成本内部化——这正是市面上同类扩展清一色官方自研的原因。

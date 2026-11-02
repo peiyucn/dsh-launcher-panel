@@ -1,7 +1,6 @@
 import * as vscode from 'vscode'
 import {
   actionDeleteInstance,
-  actionOpen,
   actionSetBrowser,
   actionStart,
   actionStop,
@@ -11,7 +10,6 @@ import {
   openUrl,
 } from '../actions.ts'
 import { getInstanceManager, type InstanceManager } from '../instances/manager.ts'
-import { isExternalInstance } from '../instances/model.ts'
 import { describeDshUpdate } from '../dsh/versions.ts'
 import { addActivity, dbg, withBusy } from '../shared/activity.ts'
 import { writeRunMode } from '../dsh/config.ts'
@@ -80,7 +78,6 @@ export class PanelMessages {
     const manager = getInstanceManager()
     switch (message.command) {
       case 'start': return actionStart(message.value)
-      case 'open': return actionOpen(message.value)
       case 'stop': return actionStop(message.value)
       case 'instanceForm': return this.openInstanceForm(message.value ?? 'new')
       case 'saveInstanceForm': return this.saveInstanceForm(message.value)
@@ -133,8 +130,8 @@ export class PanelMessages {
       dbg(`ignored setMode with invalid value: ${JSON.stringify(value)}`)
       return
     }
-    if (manager?.anyLauncherActive()) {
-      void vscode.window.showWarningMessage('Stop all launcher-managed DSH instances before switching run mode.')
+    if (manager?.anyActive()) {
+      void vscode.window.showWarningMessage('Stop all DSH instances before switching run mode.')
       return
     }
     await writeRunMode(value)
@@ -184,12 +181,6 @@ export class PanelMessages {
       const name = `Instance ${manager.instances().length + 1}`
       return this.postInstanceForm({ mode: 'new', name, home: defaultInstanceHome(name), homePrefix: defaultInstanceHomePrefix() })
     }
-    if (value !== 'new') {
-      const existing = manager.instance(value)
-      if (existing && isExternalInstance(existing)) {
-        return this.postInstanceFormError('External instances are configured in the dsh.instances setting and cannot be edited here')
-      }
-    }
     const instance = manager.instance(value)
     if (!instance) return this.postInstanceFormError('Instance was not found')
     this.postInstanceForm({
@@ -217,9 +208,6 @@ export class PanelMessages {
     if (editing) {
       const current = form.id ? manager.instance(form.id) : undefined
       if (!current) return this.postInstanceFormError('Instance was not found')
-      if (isExternalInstance(current)) {
-        return this.postInstanceFormError('External instances are configured in the dsh.instances setting and cannot be edited here')
-      }
       port = current.port
       profile = current.profile
     } else {

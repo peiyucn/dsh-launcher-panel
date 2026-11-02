@@ -61,8 +61,6 @@ export function panelScript(values: PanelScriptValues): string {
     let gotUpdate = false
     let instanceList = []
     let currentInstanceId = ''
-    let externalActive = false
-    let externalUiAvailable = false
     // Last rendered activity: text drives auto-scroll, HTML avoids needless repaints.
     let lastActivityText = ''
     let lastLogHtml = ''
@@ -105,51 +103,7 @@ export function panelScript(values: PanelScriptValues): string {
       const installing = !!status.installing
       const stopping = !!status.stopping
       const updating = !!status.updating
-      const external = !!status.external
-      externalActive = external
-      externalUiAvailable = status.uiAvailable === true
       whenRunning.forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
-      const mode = status.mode === 'source' ? 'source' : 'pnpm'
-      modeOptions.forEach((b) => {
-        const activeColor = b.dataset.mode === mode
-        b.classList.toggle('active', activeColor)
-        b.setAttribute('aria-pressed', String(activeColor))
-      })
-      if (external) {
-        // External instances are observed only: never show Start/Stop; Open needs a known token.
-        el.startBtn.dataset.cmd = 'open'
-        el.editInstanceBtn.style.display = 'none'
-        if (el.stopBtn) el.stopBtn.style.display = 'none'
-        stopElapsed()
-        if (starting || installing || stopping || updating) {
-          el.startBtn.style.display = 'none'
-          el.statusText.textContent = 'External instance'
-          el.statusSub.textContent = 'Waiting for its supervisor…'
-        } else if (status.unknown) {
-          el.startBtn.style.display = 'none'
-          el.statusText.textContent = 'Status unknown'
-          el.statusSub.textContent = 'Status refresh failed — retrying…'
-        } else if (running) {
-          el.statusText.textContent = 'Running (external)'
-          el.statusSub.textContent = status.url || ''
-          if (externalUiAvailable) {
-            el.startBtn.style.display = ''
-            el.startBtn.disabled = false
-            el.startBtn.textContent = '↗ Open Web UI'
-          } else {
-            el.startBtn.style.display = 'none'
-          }
-        } else {
-          el.startBtn.style.display = 'none'
-          el.statusText.textContent = 'Stopped (external)'
-          el.statusSub.textContent = 'Managed outside the launcher — start it with its supervisor'
-        }
-        return
-      }
-      el.startBtn.dataset.cmd = 'start'
-      el.startBtn.style.display = ''
-      el.editInstanceBtn.style.display = ''
-      if (el.stopBtn) el.stopBtn.style.display = ''
       if (starting || installing || stopping || updating) {
         if (startElapsed()) el.statusSub.textContent = 'Waited 0s'
         el.statusText.textContent = stopping ? 'Stopping…' : updating ? 'Updating dsh…' : installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'
@@ -175,6 +129,12 @@ export function panelScript(values: PanelScriptValues): string {
         el.stopBtn.disabled = stopping
         el.stopBtn.textContent = stopping ? 'Stopping…' : '■ Stop'
       }
+      const mode = status.mode === 'source' ? 'source' : 'pnpm'
+      modeOptions.forEach((b) => {
+        const active = b.dataset.mode === mode
+        b.classList.toggle('active', active)
+        b.setAttribute('aria-pressed', String(active))
+      })
     }
 
     function instanceDot(state) {
@@ -220,9 +180,6 @@ export function panelScript(values: PanelScriptValues): string {
       home.title = showHome ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
       home.dataset.path = showHome ? status.home : ''
       el.editInstanceBtn.disabled = el.deleteInstanceBtn.disabled = !active || busy
-      if (!active) el.startBtn.dataset.cmd = 'start'
-      if (active && status.external) el.editInstanceBtn.style.display = 'none'
-      else if (active) el.editInstanceBtn.style.display = ''
       document.getElementById('instanceError').textContent = active && status.error ? status.error : ''
       if (!active) {
         el.startBtn.disabled = true
@@ -371,11 +328,6 @@ export function panelScript(values: PanelScriptValues): string {
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
       b.addEventListener('click', () => {
-        // External instances are observed only: the Start slot becomes an Open action.
-        if (b.id === 'startBtn' && externalActive) {
-          vscode.postMessage({ command: 'open', value: currentInstanceId })
-          return
-        }
         // Acknowledge the click instantly: Start and Stop are greyed until the next status
         // update, and Stop also relabels itself because an adopted-server scan takes ~1s.
         if (b.dataset.cmd === 'start') b.disabled = true

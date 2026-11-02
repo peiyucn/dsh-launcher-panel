@@ -5,13 +5,12 @@ import type { ChildProcess } from 'node:child_process'
 import { isProcessAlive, sleep } from '../../shared/proc.ts'
 import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
-import { instanceHome, displayHome, instanceLogPath, isExternalInstance, type DshInstance } from '../model.ts'
-import { resolveExternalToken } from '../external-token.ts'
+import { instanceHome, instanceLogPath, type DshInstance } from '../model.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
 import { buildSpawnSpec } from '../../dsh/start-spec.ts'
-import { LOG_TAIL_LINES, readTokenFromLog, sanitizeStartupLines } from '../../shared/logs.ts'
+import { LOG_TAIL_LINES, sanitizeStartupLines } from '../../shared/logs.ts'
 import { ensureInstanceBrand, removeInstanceBrand } from './brand.ts'
 import { adoptServer, isListening, loopbackUrl, waitForReady } from './health.ts'
 import { LogTailPump } from './log-pump.ts'
@@ -49,7 +48,6 @@ export class InstanceRuntime {
   private stopPromise: Promise<boolean> | undefined
   private untrackedPort = false
   private consoleLog: string[] = []
-  private externalTokenError = ''
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -62,13 +60,7 @@ export class InstanceRuntime {
   }
 
   private resolveHome(): string {
-    // External instances have no launcher-owned home; an empty home stays empty.
-    if (isExternalInstance(this.instance)) return displayHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
     return instanceHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
-  }
-
-  private isExternal(): boolean {
-    return isExternalInstance(this.instance)
   }
 
   get logPath(): string {
@@ -103,35 +95,13 @@ export class InstanceRuntime {
     return path.join(dshBaseDir(), 'logs', 'server.log')
   }
 
-  private async adoptionToken(): Promise<string | undefined> {
-    const own = readTokenFromLog(this.logPath) ?? readTokenFromLog(this.legacyLogPath)
-    if (own !== undefined) return own
-    if (!this.isExternal()) return undefined
-    const result = await resolveExternalToken(this.instance.tokenSource)
-    this.externalTokenError = result.error ?? ''
-    return result.token
-  }
-
-  private async adopt(): Promise<boolean> {
-    const adopted = await adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
+  private adopt(): Promise<boolean> {
+    return adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
       setUrl: (url) => { this.url = url },
       clearError: () => { this.error = '' },
       clearConsoleLog: () => { this.consoleLog = [] },
       adopt: () => this.transition('adopt'),
-    }, () => this.adoptionToken())
-    if (adopted) return true
-    if (!this.isExternal()) return false
-    // The port may belong to an externally supervised dsh whose token we could not read.
-    // Show it as running (observed) so the dashboard is honest, but without a URL to open.
-    if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return false
-    this.error = this.externalTokenError !== ''
-      ? this.externalTokenError
-      : 'external dsh is running, but its launch token could not be resolved — set tokenSource for this instance'
-    this.untrackedPort = false
-    this.url = ''
-    this.transition('adopt')
-    this.activity(`⚠ ${this.error}`)
-    return true
+    })
   }
 
   private ensureProfile(prepared: PreparedDsh, home: string): Promise<boolean> {
@@ -269,20 +239,8 @@ export class InstanceRuntime {
     return ready
   }
 
-  /**
-   * External instances are never started by the launcher: a Start click only checks whether the
-   * supervisor has them up and attaches. When they are down, say who owns them instead of
-   * spawning a second server against the same port/home.
-   */
-  private async startExternal(): Promise<boolean> {
-    if (this.state === 'running' || await isListening(this.instance.port)) return this.adopt()
-    this.activity('ℹ external instance is not running — start it with its own manager (systemd/docker/manual)')
-    return false
-  }
-
   start(): Promise<boolean> {
     if (this.startPromise) return this.startPromise
-    if (this.isExternal()) return this.startExternal()
     if (this.state === 'running') {
       void this.adopt()
       return Promise.resolve(true)
@@ -356,10 +314,6 @@ export class InstanceRuntime {
   }
 
   private async stopInternal(): Promise<boolean> {
-    if (this.isExternal()) {
-      this.activity('ℹ external instance is managed outside the launcher — not stopping it')
-      return false
-    }
     this.clearStartWatchdog()
     this.installing = false
     // Flip to stopping before the port scan: the scan takes about a second on an adopted
@@ -468,8 +422,6 @@ export class InstanceRuntime {
     return {
       id: this.instance.id,
       name: this.instance.name,
-      lifecycle: this.instance.lifecycle ?? 'launcher',
-      external: this.isExternal(),
       home,
       homeShort: maskPath(home),
       profile: this.instance.profile,
@@ -480,7 +432,6 @@ export class InstanceRuntime {
       installing: this.installing,
       stopping: this.state === 'stopping',
       adopted: this.isAdopted(),
-      uiAvailable: this.url !== '',
       untrackedPort: this.untrackedPort,
       error: this.error,
       url: loopbackUrl(this.instance.port),
@@ -499,7 +450,6 @@ export class InstanceRuntime {
   }
 
   holdsHome(): boolean {
-    // An external instance's home belongs to its supervisor, so it never reserves one here.
-    return this.isExternal() ? false : holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
+    return holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
   }
 }

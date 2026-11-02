@@ -3,9 +3,7 @@ import * as net from 'node:net'
 import * as vscode from 'vscode'
 import { MIN_INSTANCE_PORT_BASE } from '../shared/env.ts'
 import {
-  displayHome,
   instanceHome,
-  isExternalInstance,
   nextPort,
   resolveActiveId,
   sameHome,
@@ -254,10 +252,8 @@ export class InstanceManager {
 
   async remove(id: string): Promise<boolean> {
     await this.ready()
-    const instance = this.settings.instances.find((entry) => entry.id === id)
-    if (instance === undefined) return false
-    // Removing the dashboard entry of an external instance does not touch its process.
-    if (this.isBusy(id) && !isExternalInstance(instance)) return false
+    if (this.isBusy(id)) return false
+    if (!this.settings.instances.some((instance) => instance.id === id)) return false
     const next = this.settings.instances.filter((instance) => instance.id !== id)
     const nextActiveId = this.settings.activeId === id ? (next[0]?.id ?? '') : this.settings.activeId
     const saveError = await this.writeList(next)
@@ -294,14 +290,6 @@ export class InstanceManager {
     })
   }
 
-  /** External instances are not owned by the launcher, so they must not block dsh updates/rebuilds. */
-  anyLauncherActive(): boolean {
-    return [...this.runtimes.values()].some((runtime) => {
-      const status = runtime.status()
-      return !status.external && (status.running || status.starting || status.installing || status.stopping)
-    })
-  }
-
   /** A stopping runtime still owns its child, and an error one can hold a live child or port. */
   isHomeRunning(home: string, exceptId: string): boolean {
     for (const [id, runtime] of this.runtimes) {
@@ -310,19 +298,18 @@ export class InstanceManager {
     return false
   }
 
-  /** An import-method rebuild must not touch the install while another launcher-owned instance is live. */
+  /** An import-method rebuild must not touch the install while another instance is live. */
   prepare(exceptId?: string): Promise<PreparedDsh | undefined> {
     const otherActive = exceptId !== undefined && [...this.runtimes].some(([id, runtime]) => {
       if (id === exceptId) return false
       const status = runtime.status()
-      if (status.external) return false
       return status.running || status.starting || status.stopping || status.installing
     })
     return this.shared.prepare(otherActive ? false : exceptId !== undefined)
   }
 
   async updateDsh(): Promise<void> {
-    if (this.anyLauncherActive()) throw new Error('Stop all instances before updating dsh')
+    if (this.anyActive()) throw new Error('Stop all instances before updating dsh')
     await this.shared.runUpdate()
     this.shared.invalidateDetection()
     await this.refresh()
@@ -331,7 +318,7 @@ export class InstanceManager {
 
   /** Rebuild the install with the configured import method; requires all instances stopped. */
   async reinstallDsh(): Promise<boolean> {
-    if (this.anyLauncherActive()) throw new Error('Stop all instances before reinstalling dsh')
+    if (this.anyActive()) throw new Error('Stop all instances before reinstalling dsh')
     const ok = await this.shared.reinstallPkg()
     await this.refresh()
     return ok
@@ -357,7 +344,7 @@ export class InstanceManager {
   }
 
   homeOf(instance: DshInstance): string {
-    return displayHome(instance, instanceModelOptions())
+    return instanceHome(instance, instanceModelOptions())
   }
 
   private isBusy(id: string): boolean {
