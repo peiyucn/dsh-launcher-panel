@@ -141,6 +141,12 @@ export function effectivePackageImportMethod(dir: string): PackageImportMethod |
   return installedPackageImportMethod(dir) ?? (installUsesHardlinks(dir) ? 'hardlink' : 'copy')
 }
 
+/** True when the install exists and was produced with a different method than configured. */
+export function importMethodNeedsConversion(dir: string, configured: PackageImportMethod): boolean {
+  const actual = effectivePackageImportMethod(dir)
+  return actual !== undefined && actual !== configured
+}
+
 function checkoutScripts(checkout: string): Record<string, string> | undefined {
   return readJson<{ scripts?: Record<string, string> }>(path.join(checkout, 'package.json'))?.scripts
 }

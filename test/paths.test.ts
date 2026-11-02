@@ -23,6 +23,7 @@ import {
   installedPackageImportMethod,
   installUsesHardlinks,
   effectivePackageImportMethod,
+  importMethodNeedsConversion,
   isDshCheckout,
   installManifestRepairable,
   isDshInstallDirUsable,
@@ -304,6 +305,23 @@ test('installUsesHardlinks samples the installed dsh package instead of trusting
     // A recorded method wins over what the sample shows.
     assert.equal(writeInstallManifest('0.3.8', root, 'copy'), true)
     assert.equal(effectivePackageImportMethod(root), 'copy')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('importMethodNeedsConversion compares the configured method with the actual install', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-import-convert-'))
+  try {
+    const lib = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib')
+    mkdirSync(lib, { recursive: true })
+    writeFileSync(join(lib, 'bin.js'), 'x')
+    assert.equal(importMethodNeedsConversion(root, 'copy'), false)
+    assert.equal(importMethodNeedsConversion(root, 'hardlink'), true)
+    linkSync(join(lib, 'bin.js'), join(lib, 'linked.js'))
+    assert.equal(importMethodNeedsConversion(root, 'copy'), true)
+    assert.equal(importMethodNeedsConversion(root, 'hardlink'), false)
+    assert.equal(importMethodNeedsConversion(join(root, 'missing'), 'copy'), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
