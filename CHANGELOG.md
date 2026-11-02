@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.7] - 2026-11-03
+
+- Start in pkg mode is faster: the launcher runs the installed dsh CLI directly instead of going through `pnpm exec`, and an already-installed start no longer probes pnpm or runs `pnpm --version`. In testing the removed packaging layer cost 1.8–2.3 seconds per start and up to about 7 seconds on a full boot.
+- The first readiness probe now runs immediately, so a server that is already answering is detected without waiting an extra poll interval (up to 0.5 seconds per start).
+- Source mode no longer runs a second `git describe` during the same start.
+- Each Start records per-stage timings in the launcher log (`start: preflight/prepare/profile/server spawned/settled`), so a slow start can be attributed to the launcher, the profile, or dsh itself.
+
 ## [0.3.6] - 2026-11-01
 
 - The DeepSeek status section is now titled **DeepSeek API Status**. Its status-page link moved into the section header as an arrow icon right after the title; the account row no longer carries it.

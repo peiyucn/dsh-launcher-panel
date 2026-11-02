@@ -4,6 +4,13 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.3.7] - 2026-11-03
+
+- pkg 模式 Start 变快：直接运行已安装的 dsh CLI，不再经 `pnpm exec` 转发；已安装情况下的启动也不再探测 pnpm 或执行 `pnpm --version`。实测去掉的包装层每次启动约 1.8–2.3 秒，完整启动最多约 7 秒。
+- 首次就绪探测改为立即执行，已经能应答的服务器不再多等一个轮询间隔（每次启动最多省 0.5 秒）。
+- source 模式同一次启动不再重复执行 `git describe`。
+- 每次 Start 会把各阶段耗时写入 launcher 日志（`start: preflight/prepare/profile/server spawned/settled`），可据此区分慢在扩展前置、profile 还是 dsh 自身。
+
 ## [0.3.6] - 2026-11-01
 
 - DeepSeek 状态区改名 **DeepSeek API Status**；状态页链接移到标题行，改为紧接标题的小箭头图标，账户行不再保留。
