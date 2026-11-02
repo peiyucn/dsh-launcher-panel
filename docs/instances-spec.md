@@ -238,7 +238,7 @@ stopped ──start──▶ starting ──port/url ready──▶ running
    - 参数为 `[<profile>, '--port', '<port>']`，dsh 版本足够新时追加 `--no-open`；
    - pkg 模式直接用 Node 运行已安装包的 `lib/bin.js`（pnpm 只负责安装/更新，不承担启动转发），source 模式经 `node --import tsx/esm apps/cli/src/bin.ts` 启动；
    - `hideConsole` → `windowsHide`；source 模式且 `sourceDebug` 时加 `NODE_DEBUG=module`。
-7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。
+7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。每次 Start 的阶段耗时（`start: preflight/prepare/profile/server spawned/settled`）以 dbg 行写入共享的 `~/.dsh-launcher-panel/logs/client.log`，用于区分扩展前置、profile 与 dsh 自身耗时；只记耗时，不记日志内容或 token。
 8. 面板 Console 的「startup output」只收**本次 Start 之后**写入的内容（spawn 前记录日志偏移）：即使 `clearServerLogOnStart=false` 保留了历史日志，旧运行的输出也不会混进本次启动输出。显示前还会过滤周期性 plugin 日志（如 `model listing`）并给 launch token 打码；完整原文始终在 `server.log`。
 9. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
 10. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。

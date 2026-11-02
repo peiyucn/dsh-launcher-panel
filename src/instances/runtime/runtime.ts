@@ -189,6 +189,8 @@ export class InstanceRuntime {
   }
 
   private async startFlow(): Promise<boolean> {
+    const startedAt = Date.now()
+    const elapsed = () => `${Date.now() - startedAt}ms`
     const cfg = this.config()
     if (await isListening(cfg.port)) {
       return (await this.adopt()) || this.fail(`port ${cfg.port} is already in use by another process`)
@@ -207,6 +209,9 @@ export class InstanceRuntime {
     } catch (error) {
       return this.fail(`cannot create home ${home}: ${error instanceof Error ? error.message : String(error)}`)
     }
+    // Stage timings go to the launcher log only: a slow Start has to be diagnosable
+    // without guessing whether the launcher, dsh itself or the profile is responsible.
+    this.host.dbg(`[${this.instance.id}] start: preflight done at ${elapsed()}`)
     // Only say Installing when dsh is really missing, or every Start flashes it.
     this.installing = this.host.isDshMissing()
     let prepared: PreparedDsh | undefined
@@ -217,8 +222,10 @@ export class InstanceRuntime {
     }
     if (prepared === undefined) return this.fail('dsh install or detection failed — see the launcher log')
     if (this.state !== 'starting') return false
+    this.host.dbg(`[${this.instance.id}] start: prepare done at ${elapsed()}`)
     if (!(await this.ensureProfile(prepared, home))) return false
     if (this.state !== 'starting') return false
+    this.host.dbg(`[${this.instance.id}] start: profile ready at ${elapsed()}`)
     try {
       if (cfg.instanceBrand) ensureInstanceBrand(home, this.instance.profile, this.instance.name)
       else removeInstanceBrand(home, this.instance.profile)
@@ -226,7 +233,10 @@ export class InstanceRuntime {
       this.activity(`⚠ Instance brand skipped: ${error instanceof Error ? error.message : String(error)}`)
     }
     if (!(await this.spawnServer(prepared, home))) return false
-    return this.waitForReady()
+    this.host.dbg(`[${this.instance.id}] start: server spawned at ${elapsed()}`)
+    const ready = await this.waitForReady()
+    this.host.dbg(`[${this.instance.id}] start: settled (ready=${ready}) at ${elapsed()}`)
+    return ready
   }
 
   start(): Promise<boolean> {
