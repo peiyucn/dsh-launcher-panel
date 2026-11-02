@@ -66,7 +66,7 @@
 * **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API Status 区默认收起（标题、紧随标题的状态页图标和 Peak/Off-peak），展开后模型 API 和其他 API 分两栏，另有一行 chat-service 分区三个服务的状态与「Open chat」链接。底部 **Settings** 不设边框。
 * Update 检查和更新的是这一份共享 dsh，要求所有实例停止。
 * 关闭 VS Code 不会停止服务：dsh 与扩展宿主分离，窗口重载或关闭后仍会继续运行；需要停止时用面板或命令面板的 Stop。
-* pkg 模式用 pnpm 的 `package-import-method` 安装 dsh。默认 `copy` 会为每个文件保留独立副本：多占一点磁盘、安装稍慢，但在有安全软件过滤文件访问的机器上避免硬链接的打开开销；`hardlink`/`auto` 则相反。改设置不会动现有安装——先停止所有实例，再从命令面板运行 **Reinstall dsh (apply install method)**：它在暂存目录里重建，完成后才切换，构建失败时现有安装完全不受影响；切换失败会恢复旧安装。
+* pkg 模式用 pnpm 的 `package-import-method` 安装 dsh。默认 `copy` 会为每个文件保留独立副本：多占一点磁盘、安装稍慢，但在有安全软件过滤文件访问的机器上避免硬链接的打开开销；`hardlink`/`auto` 则相反。改设置会在下一次 Start 时生效：同版本在暂存目录里重建，完成后才切换，构建失败时现有安装完全不受影响；有其他实例在运行时跳过。**Reinstall dsh (apply install method)** 命令可立即强制重装。
 * **DeepSeek API Status** 卡片目前只支持 DeepSeek，且仅当当前实例的 home 里配置了 DeepSeek 模型时才显示；余额用当前实例的凭据查询；chat-service 行和「Open chat」链接遵循同样的显示规则。
 * 日志按实例分开：每个实例有 `~/.dsh-launcher-panel/logs/instances/<id>/client.log`（该实例的启动器活动）与 `.../server.log`（dsh 自身输出），两者跟随当前 tab、可在面板点击打开。与实例无关的扩展级事件（dsh 安装/更新/检测、窗口活动）写到共享的 `~/.dsh-launcher-panel/logs/client.log`；每次 Start 的阶段耗时（`start: preflight/prepare/profile/server spawned/settled`）也记在这里，可据此区分慢在扩展前置、profile 还是 dsh 自身。默认实例接管旧运行时仍会读旧的单实例 `logs/server.log`。这些目录直接位于用户主目录下（Windows 为 `%USERPROFILE%`）。面板 Console 只显示本次启动的输出（即使关闭 `dsh.clearServerLogOnStart`，旧运行也不会混入），并会过滤 model listing 这类周期性插件日志、给 launch token 打码；完整原文在该实例的 `server.log` 里。
 * 🐳 图形（活动栏图标与状态栏图标字体）为 Twemoji 的喷水鲸鱼（Twitter, Inc.，CC-BY 4.0），以单色剪影呈现，详见 NOTICE。

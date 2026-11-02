@@ -53,7 +53,7 @@ export class InstanceManager {
   constructor(private readonly context: Pick<vscode.ExtensionContext, 'globalState'>) {
     this.shared = new SharedDsh(() => !this.anyActive())
     this.host = {
-      prepare: () => this.prepare(),
+      prepare: (exceptId) => this.prepare(exceptId),
       isDshMissing: () => this.shared.isDshMissing(),
       isHomeRunning: (home, exceptId) => this.isHomeRunning(home, exceptId),
       addActivity: (line, isBusy, instanceId) => addActivity(line, isBusy, instanceId),
@@ -298,8 +298,14 @@ export class InstanceManager {
     return false
   }
 
-  prepare(): Promise<PreparedDsh | undefined> {
-    return this.shared.prepare()
+  /** An import-method rebuild must not touch the install while another instance is live. */
+  prepare(exceptId?: string): Promise<PreparedDsh | undefined> {
+    const otherActive = exceptId !== undefined && [...this.runtimes].some(([id, runtime]) => {
+      if (id === exceptId) return false
+      const status = runtime.status()
+      return status.running || status.starting || status.stopping || status.installing
+    })
+    return this.shared.prepare(otherActive ? false : exceptId !== undefined)
   }
 
   async updateDsh(): Promise<void> {

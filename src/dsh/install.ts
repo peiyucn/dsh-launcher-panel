@@ -1,11 +1,12 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
+import { dshBaseDir, driveRootExists, importMethodNeedsConversion, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
 import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '../shared/env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
+import { stagedReinstall } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {
@@ -130,10 +131,22 @@ export async function ensureDshInstalled(
 
 export async function preparePkgStart(
   cfg: { pkgPath: string; npmChannel: NpmChannel; packageImportMethod: PackageImportMethod }, host: InstallHost,
+  convertAllowed = false,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
+    // Rebuild into a staging folder, then swap; only when no other instance is live.
+    if (convertAllowed && importMethodNeedsConversion(dir, cfg.packageImportMethod)) {
+      const pnpm = await ensurePnpmAvailable(host)
+      if (!pnpm) {
+        host.addActivity('⚠ dsh import method not applied — pnpm is not available')
+      } else {
+        host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (staged rebuild)…`)
+        const converted = await stagedReinstall(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
+        if (!converted) host.addActivity('⚠ import method not applied — continuing with the existing install')
+      }
+    }
     // The installed version is what runs; the channel only governs future installs.
     if (!writeInstallManifest(installed, dir)) {
       host.dbg('install manifest not rewritten (absent ownership or write failure); continuing with the installed dsh')

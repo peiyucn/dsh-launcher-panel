@@ -216,7 +216,7 @@ export class InstanceRuntime {
     this.installing = this.host.isDshMissing()
     let prepared: PreparedDsh | undefined
     try {
-      prepared = await this.host.prepare()
+      prepared = await this.host.prepare(this.instance.id)
     } finally {
       this.installing = false
     }

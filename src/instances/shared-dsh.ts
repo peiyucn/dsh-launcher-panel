@@ -126,15 +126,15 @@ export class SharedDsh {
     return this.checkPromise
   }
 
-  prepare(): Promise<PreparedDsh | undefined> {
+  prepare(convertAllowed = false): Promise<PreparedDsh | undefined> {
     if (this.preparePromise) return this.preparePromise
-    this.preparePromise = this.prepareInternal().finally(() => {
+    this.preparePromise = this.prepareInternal(convertAllowed).finally(() => {
       this.preparePromise = undefined
     })
     return this.preparePromise
   }
 
-  private async prepareInternal(): Promise<PreparedDsh | undefined> {
+  private async prepareInternal(convertAllowed: boolean): Promise<PreparedDsh | undefined> {
     const cfg = readConfig()
     // Read the source version after readiness: setup may build or change the checkout,
     // and a warm start needs no throwaway `git describe` before that guard.
@@ -160,7 +160,7 @@ export class SharedDsh {
     if (unreachable !== undefined) {
       addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
     }
-    const version = await preparePkgStart(cfg, installHost)
+    const version = await preparePkgStart(cfg, installHost, convertAllowed)
     if (!version) return undefined
     this.dshVersionValue = version
     this.dshPathValue = pkgInstallDir(cfg)
