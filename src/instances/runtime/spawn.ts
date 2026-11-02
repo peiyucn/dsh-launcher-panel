@@ -41,7 +41,10 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
       cwd: spec.cwd,
       env: spec.env,
       windowsHide: hooks.hideConsole(),
-      detached: process.platform !== 'win32',
+      // Detach on every platform: VS Code tears down the extension host (and, on
+      // Windows, its process tree) on window reload/close, which would otherwise
+      // take the server down with the window. Stop still kills it by pid tree.
+      detached: true,
       stdio: ['ignore', logFd, logFd],
     })
     hooks.setChild(child)

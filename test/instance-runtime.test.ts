@@ -110,6 +110,12 @@ test('runtime delegates spawn, health, profile and process handling to their own
   assert.doesNotMatch(source, /function readTokenFromLog\(/, 'the duplicated token reader must not come back')
 })
 
+test('the server is detached on every platform so a window reload does not take it down', () => {
+  const spawn = readFileSync(new URL('../src/instances/runtime/spawn.ts', import.meta.url), 'utf8')
+  assert.match(spawn, /detached:\s*true/, 'spawn must detach the server on Windows too')
+  assert.doesNotMatch(spawn, /detached:\s*process\.platform/, 'platform-conditional detaching is what killed the server on reload')
+})
+
 test('log tail reads live in the shared helpers and the live pump outside them', () => {
   const pump = readFileSync(new URL('../src/instances/runtime/log-pump.ts', import.meta.url), 'utf8')
   assert.match(pump, /from '\.\.\/\.\.\/shared\/logs\.ts'/)
