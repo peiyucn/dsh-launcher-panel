@@ -318,6 +318,18 @@
           "scope": "machine",
           "default": true,
           "description": "Show the instance name under the DeepSeek Harness wordmark in the Web UI. The launcher maintains a tiny local client bundle in each instance profile; no manual plugin install is needed."
+        },
+        "dsh.packageImportMethod": {
+          "order": 16,
+          "type": "string",
+          "scope": "machine",
+          "enum": [
+            "copy",
+            "hardlink",
+            "auto"
+          ],
+          "default": "copy",
+          "description": "How pnpm places dsh's files in the launcher-managed install: 'copy' duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), 'hardlink' links them to the pnpm store (less disk, faster install), 'auto' lets pnpm choose. Changing it applies on the next Update, which reinstalls the same version with the new method. Machine-local, not synced."
         }
       }
     }

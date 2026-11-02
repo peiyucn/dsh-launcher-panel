@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import type { PackageImportMethod } from '../shared/env.ts'
 
 export const DSH_INSTALL_MANIFEST_NAME = 'dsh-install'
 
@@ -73,18 +74,71 @@ export function installManifestRepairable(dir: string): boolean {
 }
 
 // The ownership check lives in the writer so no caller can bypass it.
-export function writeInstallManifest(version: string, dir: string): boolean {
+// Without `packageImportMethod` an existing record is preserved: a plain Start must
+// not claim the configured method was applied when no reinstall happened.
+export function writeInstallManifest(version: string, dir: string, packageImportMethod?: PackageImportMethod): boolean {
   if (!installManifestRepairable(dir)) return false
   try {
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(
-      path.join(dir, 'package.json'),
-      JSON.stringify({ name: DSH_INSTALL_MANIFEST_NAME, private: true, dependencies: { '@deepseek-ai/dsh': version } }, null, 2) + '\n',
-    )
+    const file = path.join(dir, 'package.json')
+    const previous = readJson<{ dshLauncher?: unknown }>(file)
+    const launcher = packageImportMethod !== undefined
+      ? { packageImportMethod }
+      : previous?.dshLauncher
+    const body: Record<string, unknown> = {
+      name: DSH_INSTALL_MANIFEST_NAME,
+      private: true,
+      dependencies: { '@deepseek-ai/dsh': version },
+    }
+    if (launcher !== undefined) body.dshLauncher = launcher
+    fs.writeFileSync(file, JSON.stringify(body, null, 2) + '\n')
     return true
   } catch {
     return false
   }
+}
+
+/** The import method recorded for the current install; absent means "unknown/legacy". */
+export function installedPackageImportMethod(dir: string): PackageImportMethod | undefined {
+  const value = readJson<{ dshLauncher?: { packageImportMethod?: string } }>(path.join(dir, 'package.json'))
+    ?.dshLauncher?.packageImportMethod
+  return value === 'auto' || value === 'copy' || value === 'hardlink' ? value : undefined
+}
+
+// pnpm hardlinks store files into node_modules; a manual or older install left no record.
+// Sampling the installed dsh package tells copy and hardlink installs apart without metadata.
+export function installUsesHardlinks(dir: string): boolean {
+  const pkgDir = path.join(dir, 'node_modules', '@deepseek-ai', 'dsh')
+  const files: string[] = []
+  const walk = (current: string): void => {
+    if (files.length >= 20) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (files.length >= 20) return
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (entry.isFile()) files.push(full)
+    }
+  }
+  walk(pkgDir)
+  return files.some((file) => {
+    try {
+      return fs.statSync(file).nlink > 1
+    } catch {
+      return false
+    }
+  })
+}
+
+/** What the install actually is: the recorded method, else what the files show. */
+export function effectivePackageImportMethod(dir: string): PackageImportMethod | undefined {
+  if (!fs.existsSync(dir)) return undefined
+  return installedPackageImportMethod(dir) ?? (installUsesHardlinks(dir) ? 'hardlink' : 'copy')
 }
 
 function checkoutScripts(checkout: string): Record<string, string> | undefined {

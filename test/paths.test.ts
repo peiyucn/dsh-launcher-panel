@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
@@ -20,6 +20,9 @@ import {
   dshBaseDir,
   driveRootExists,
   installedDshVersion,
+  installedPackageImportMethod,
+  installUsesHardlinks,
+  effectivePackageImportMethod,
   isDshCheckout,
   installManifestRepairable,
   isDshInstallDirUsable,
@@ -253,6 +256,63 @@ test('writeInstallManifest writes into an absent or launcher-owned dir', () => {
       JSON.parse(readFileSync(join(fresh, 'package.json'), 'utf8')).dependencies['@deepseek-ai/dsh'],
       '0.1.7-rc.3',
     )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('writeInstallManifest records and preserves the package import method', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-import-method-'))
+  try {
+    const dir = join(root, 'pkg')
+    assert.equal(installedPackageImportMethod(dir), undefined, 'no manifest yet')
+    assert.equal(writeInstallManifest('0.3.7', dir, 'copy'), true)
+    assert.equal(installedPackageImportMethod(dir), 'copy')
+    // A plain Start rewrites the manifest without a method: the recorded one must survive.
+    assert.equal(writeInstallManifest('0.3.7', dir), true)
+    assert.equal(installedPackageImportMethod(dir), 'copy')
+    assert.equal(writeInstallManifest('0.3.8', dir, 'hardlink'), true)
+    assert.equal(installedPackageImportMethod(dir), 'hardlink')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('installedPackageImportMethod ignores an unknown recorded value', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-import-method-bad-'))
+  try {
+    const dir = join(root, 'pkg')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: DSH_INSTALL_MANIFEST_NAME, dshLauncher: { packageImportMethod: 'clone' } }))
+    assert.equal(installedPackageImportMethod(dir), undefined)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('installUsesHardlinks samples the installed dsh package instead of trusting a record', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-link-detect-'))
+  try {
+    const lib = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib')
+    mkdirSync(lib, { recursive: true })
+    writeFileSync(join(lib, 'bin.js'), 'x')
+    assert.equal(installUsesHardlinks(root), false)
+    assert.equal(effectivePackageImportMethod(root), 'copy')
+    linkSync(join(lib, 'bin.js'), join(lib, 'linked.js'))
+    assert.equal(installUsesHardlinks(root), true)
+    assert.equal(effectivePackageImportMethod(root), 'hardlink')
+    // A recorded method wins over what the sample shows.
+    assert.equal(writeInstallManifest('0.3.8', root, 'copy'), true)
+    assert.equal(effectivePackageImportMethod(root), 'copy')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('effectivePackageImportMethod is undefined for a directory that does not exist', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-link-absent-'))
+  try {
+    assert.equal(effectivePackageImportMethod(join(root, 'missing')), undefined)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

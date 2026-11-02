@@ -6,6 +6,7 @@ import {
   normalizeBrowser,
   npmSpecForChannel,
   parseNpmChannel,
+  parsePackageImportMethod,
   shouldOpenBrowser,
   toEnglish,
 } from '../src/shared/env.ts'
@@ -50,4 +51,12 @@ test('npmSpecForChannel maps channels to npm specs', () => {
   assert.equal(npmSpecForChannel('latest'), '@deepseek-ai/dsh')
   assert.equal(npmSpecForChannel('next'), '@deepseek-ai/dsh@next')
   assert.equal(npmSpecForChannel('alpha'), '@deepseek-ai/dsh@alpha')
+})
+
+test('parsePackageImportMethod defaults to copy and accepts the pnpm values', () => {
+  assert.equal(parsePackageImportMethod('copy'), 'copy')
+  assert.equal(parsePackageImportMethod('hardlink'), 'hardlink')
+  assert.equal(parsePackageImportMethod('auto'), 'auto')
+  assert.equal(parsePackageImportMethod(undefined), 'copy')
+  assert.equal(parsePackageImportMethod('garbage'), 'copy')
 })

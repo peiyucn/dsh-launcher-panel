@@ -6,7 +6,9 @@ import {
   MAX_PORT,
   MIN_INSTANCE_PORT_BASE,
   parseNpmChannel,
+  parsePackageImportMethod,
   type NpmChannel,
+  type PackageImportMethod,
 } from '../shared/env.ts'
 
 type RunMode = 'pnpm' | 'source'
@@ -24,6 +26,7 @@ export interface DshConfig {
   hideConsole: boolean
   clearServerLogOnStart: boolean
   instanceBrand: boolean
+  packageImportMethod: PackageImportMethod
 }
 
 const LEGACY_CONFIG_KEYS: [newKey: string, oldKey: string][] = [
@@ -53,6 +56,7 @@ export function readConfig(): DshConfig {
     hideConsole: c.get<boolean>('hideConsole') ?? true,
     clearServerLogOnStart: c.get<boolean>('clearServerLogOnStart') ?? true,
     instanceBrand: c.get<boolean>('instanceBrand') ?? true,
+    packageImportMethod: parsePackageImportMethod(c.get<string>('packageImportMethod')),
   }
 }
 

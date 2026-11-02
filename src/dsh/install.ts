@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { dshBaseDir, driveRootExists, installManifestRepairable, installedDshVersion, isDshCheckout, isDshInstallDirUsable, maskPath, writeInstallManifest } from './paths.ts'
-import { npmSpecForChannel, type NpmChannel } from '../shared/env.ts'
+import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '../shared/env.ts'
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
@@ -98,6 +98,7 @@ export async function latestDshVersion(
 
 export async function ensureDshInstalled(
   version: string, pnpmCmd: string, allowBuild: boolean, dir: string, host: InstallHost,
+  importMethod: PackageImportMethod, force = false,
 ): Promise<boolean> {
   if (!isDshInstallDirUsable(dir)) {
     reportStepFailure(
@@ -110,12 +111,15 @@ export async function ensureDshInstalled(
   // A usable folder can still hold the user's own package.json; never replace it.
   if (!installManifestRepairable(dir)) {
     host.addActivity(`ℹ ${maskPath(dir)} already contains a dsh install with its own package.json — leaving that file untouched`)
-  } else if (!writeInstallManifest(version, dir)) {
+  } else if (!writeInstallManifest(version, dir, importMethod)) {
     host.addActivity('✗ could not write the dsh install manifest — check write permissions')
     return false
   }
-  host.addActivity(`▶ Installing dsh v${version} (pnpm install)…`)
-  const args = ['install', '--dir', dir]
+  host.addActivity(`▶ Installing dsh v${version} (pnpm install, ${importMethod} import)…`)
+  // `force` makes pnpm re-import every file, which is what converts an existing
+  // hardlink install to copies (or back) without a fresh directory.
+  const args = ['install', '--dir', dir, '--package-import-method', importMethod]
+  if (force) args.push('--force')
   if (allowBuild) args.push('--dangerously-allow-all-builds')
   const ok = await host.runInstalling(() => host.runInTerminal(`Install dsh v${version}`, pnpmCmd, args))
   if (ok && installedDshVersion(dir) === version) return true
@@ -128,7 +132,7 @@ export async function ensureDshInstalled(
 }
 
 export async function preparePkgStart(
-  cfg: { pkgPath: string; npmChannel: NpmChannel }, host: InstallHost,
+  cfg: { pkgPath: string; npmChannel: NpmChannel; packageImportMethod: PackageImportMethod }, host: InstallHost,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
   const installed = installedDshVersion(dir)
@@ -176,7 +180,7 @@ export async function preparePkgStart(
   }
   host.addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
   host.setDshVersion(version)
-  return (await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir, host)) ? version : undefined
+  return (await ensureDshInstalled(version, pnpmCmd, allowBuild, installDir, host, cfg.packageImportMethod)) ? version : undefined
 }
 
 async function pnpmVersion(pnpmCmd: string): Promise<string> {

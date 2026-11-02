@@ -7,16 +7,23 @@ import {
 } from './versions.ts'
 import { GIT_FETCH_TIMEOUT_MS } from '../shared/timing.ts'
 import { runFile } from '../shared/proc.ts'
-import type { NpmChannel } from '../shared/env.ts'
+import type { NpmChannel, PackageImportMethod } from '../shared/env.ts'
 import { commitIsContained, explainGitFailure, listReleaseTags, releaseVersion } from './release-tags.ts'
 import { ensureDshInstalled, ensurePnpmAvailable, latestDshVersion, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 import type { InstallHost } from './install.ts'
+import { effectivePackageImportMethod } from './paths.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './checkout.ts'
 
 export type DshUpdate = UpdateCheckOutcome
 
 export interface UpdateHost {
-  readConfig: () => { runMode: 'pnpm' | 'source'; npmChannel: NpmChannel; srcPath: string; pkgPath: string }
+  readConfig: () => {
+    runMode: 'pnpm' | 'source'
+    npmChannel: NpmChannel
+    srcPath: string
+    pkgPath: string
+    packageImportMethod: PackageImportMethod
+  }
   findSourceCheckout: () => string | undefined
   addActivity: (line: string, isBusy?: boolean) => number
   withBusy: <T>(label: string, task: () => Promise<T>) => Promise<T>
@@ -107,13 +114,22 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
           : `↑ Update check failed (network) — ${latest.error}`)
         return
       }
-      if (pkgInstalledVersion(cfg) === latest.version) {
+      const installed = pkgInstalledVersion(cfg)
+      const dir = pkgInstallDir(cfg)
+      // A configured import method that differs from the recorded one needs a forced
+      // re-import even when the version is unchanged (hardlink <-> copy conversion).
+      const methodChange = installed !== undefined && effectivePackageImportMethod(dir) !== cfg.packageImportMethod
+      if (installed === latest.version && !methodChange) {
         host.addActivity('↑ dsh is already up to date')
         return
       }
-      host.addActivity(`↑ Updating dsh to v${latest.version}…`)
+      if (installed === latest.version) {
+        host.addActivity(`↑ Reinstalling dsh to apply ${cfg.packageImportMethod} import…`)
+      } else {
+        host.addActivity(`↑ Updating dsh to v${latest.version}…`)
+      }
       if (!mayProceed(host)) return
-      if (!(await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, pkgInstallDir(cfg), host.installHost))) {
+      if (!(await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, dir, host.installHost, cfg.packageImportMethod, methodChange))) {
         host.addActivity('↑ Update failed — dsh was not updated (see the terminal output above)')
         return
       }
