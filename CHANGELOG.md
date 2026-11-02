@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.3.8] - 2026-11-03
+
+- dsh is now detached from the VS Code extension host: reloading or closing the window no longer stops a running server. Use Stop in the panel or the command palette to end it.
+- New `dsh.packageImportMethod` setting (default `copy`): pnpm installs dsh's files as independent copies instead of hardlinks. On machines where security software filters file access, hardlinked files are much slower to open, which delays every Start; copying costs roughly 150–200MB of extra disk and some install time. Changing the setting applies on the next Update, which reinstalls the same version with the new method.
+
 ## [0.3.7] - 2026-11-03
 
 - Start in pkg mode is faster: the launcher runs the installed dsh CLI directly instead of going through `pnpm exec`, and an already-installed start no longer probes pnpm or runs `pnpm --version`. In testing the removed packaging layer cost 1.8–2.3 seconds per start and up to about 7 seconds on a full boot.
