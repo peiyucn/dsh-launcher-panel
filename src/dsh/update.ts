@@ -12,6 +12,7 @@ import { commitIsContained, explainGitFailure, listReleaseTags, releaseVersion }
 import { ensureDshInstalled, ensurePnpmAvailable, latestDshVersion, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 import type { InstallHost } from './install.ts'
 import { effectivePackageImportMethod } from './paths.ts'
+import { cleanReinstall } from './reinstall.ts'
 import { ensureCheckoutReady, type CheckoutHost } from './checkout.ts'
 
 export type DshUpdate = UpdateCheckOutcome
@@ -129,7 +130,12 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
         host.addActivity(`↑ Updating dsh to v${latest.version}…`)
       }
       if (!mayProceed(host)) return
-      if (!(await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, dir, host.installHost, cfg.packageImportMethod, methodChange))) {
+      // A method change rebuilds from scratch: forcing an in-place re-import keeps the
+      // old lockfile/workspace state and can pull unrelated packages into the install.
+      const ok = methodChange
+        ? await cleanReinstall(latest.version, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host.installHost)
+        : await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, dir, host.installHost, cfg.packageImportMethod)
+      if (!ok) {
         host.addActivity('↑ Update failed — dsh was not updated (see the terminal output above)')
         return
       }

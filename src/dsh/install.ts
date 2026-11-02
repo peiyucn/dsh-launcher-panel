@@ -6,6 +6,7 @@ import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '..
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
+import { cleanReinstall } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
 export interface InstallHost {
@@ -98,7 +99,7 @@ export async function latestDshVersion(
 
 export async function ensureDshInstalled(
   version: string, pnpmCmd: string, allowBuild: boolean, dir: string, host: InstallHost,
-  importMethod: PackageImportMethod, force = false,
+  importMethod: PackageImportMethod,
 ): Promise<boolean> {
   if (!isDshInstallDirUsable(dir)) {
     reportStepFailure(
@@ -116,10 +117,7 @@ export async function ensureDshInstalled(
     return false
   }
   host.addActivity(`▶ Installing dsh v${version} (pnpm install, ${importMethod} import)…`)
-  // `force` makes pnpm re-import every file, which is what converts an existing
-  // hardlink install to copies (or back) without a fresh directory.
   const args = ['install', '--dir', dir, '--package-import-method', importMethod]
-  if (force) args.push('--force')
   if (allowBuild) args.push('--dangerously-allow-all-builds')
   const ok = await host.runInstalling(() => host.runInTerminal(`Install dsh v${version}`, pnpmCmd, args))
   if (ok && installedDshVersion(dir) === version) return true
@@ -141,8 +139,8 @@ async function applyConfiguredImportMethod(
     host.addActivity('⚠ dsh import method not applied — pnpm is not available')
     return
   }
-  host.addActivity(`ℹ Converting the dsh install to "${importMethod}" import (same version, one-time)…`)
-  const ok = await ensureDshInstalled(version, pnpm.command, pnpm.allowBuild, dir, host, importMethod, true)
+  host.addActivity(`ℹ Converting the dsh install to "${importMethod}" import (clean reinstall, one-time)…`)
+  const ok = await cleanReinstall(version, dir, pnpm.command, pnpm.allowBuild, importMethod, host)
   // A failed conversion must not block starting the existing install.
   if (!ok) host.addActivity('⚠ dsh import method was not applied — continuing with the existing install')
 }
