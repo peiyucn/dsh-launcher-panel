@@ -59,16 +59,28 @@ export interface ReadyHooks {
   killTracked(): void
 }
 
-export async function waitForReady(port: number, hooks: ReadyHooks): Promise<boolean> {
+/** Test seams only: production callers rely on the defaults. */
+export interface ReadyDeps {
+  probeUrl?: typeof probeUrl
+  sleep?: typeof sleep
+}
+
+export async function waitForReady(port: number, hooks: ReadyHooks, deps: ReadyDeps = {}): Promise<boolean> {
+  const probe = deps.probeUrl ?? probeUrl
+  const wait = deps.sleep ?? sleep
   const startedAt = Date.now()
+  let firstProbe = true
   for (;;) {
-    await sleep(PORT_POLL_INTERVAL_MS)
+    // A fast local server can already answer when spawn returns; do not add a full poll
+    // interval to that best case. Back off only after a failed probe.
+    if (firstProbe) firstProbe = false
+    else await wait(PORT_POLL_INTERVAL_MS)
     if (hooks.state() !== 'starting') return false
     if (Date.now() - startedAt > START_TIMEOUT_MS) {
       hooks.killTracked()
       return hooks.fail(`start timed out after ${Math.round(START_TIMEOUT_MS / 60_000)} minutes`)
     }
-    const url = await probeUrl(port, hooks.logPath(), hooks.legacyLogPath())
+    const url = await probe(port, hooks.logPath(), hooks.legacyLogPath())
     if (url !== undefined) {
       if (hooks.state() !== 'starting') return false
       hooks.setUrl(url)
