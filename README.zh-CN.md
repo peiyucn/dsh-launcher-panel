@@ -24,6 +24,7 @@
 * **源码运行** — 把 deepseek-harness clone 到自管目录并运行（`dsh.srcPath` 可指定别处；该路径下已有检出则直接复用）。依赖缺失/过期、或检出切过了上次构建时会先装依赖并构建；构建前跑 `pnpm run clean` 清理旧产物，并使用 dsh 官方 profile，使 Web UI 品牌与 pkg 模式一致。
 * **仪表盘面板** — 服务状态、实时控制台（日志文件可点击）、带峰谷标志的 DeepSeek 官方 API 状态（周末与法定节假日全天按低谷计费）、chat-service 分区（chat-service / file-upload-service / search-service 三个服务）状态与一键打开 chat.deepseek.com 的链接，以及账户余额。
 * **多实例** — 每个实例有自己的 DSH home（`DSH_HOME`）和其中的 profile；端口由 launcher 分配（`Default` 保持 3080，新实例用五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建；每个 tab 可启动/停止/打开该实例、编辑名称、home、自动打开与浏览器覆盖、删除（先停止；不删除 DSH 数据）。所有实例共用一份 dsh 安装和全局 `dsh.runMode`。
+* **外部托管实例** — `"lifecycle": "external"` 的实例表示 dsh 由 systemd、docker 或手动方式托管（例如服务器上）。仪表盘只探测：不会安装、启动、停止、重启或更新该进程，面板也不提供 Start/Stop。服务运行中且能读到启动 token 时，面板可在新标签页打开其 Web UI；需配置 `tokenSource` 才能读取 token，未配置时仍能探测到运行中但无法打开。
 * **DSH 更新** — 点 ⟳ 检查，有新版本时显示 Update（pkg 重装该通道最新版；source 检出最新的官方 `dsh-v…` tag，不拉 upstream master）。检查只列 tag 并比对 commit，不下载任何东西；源码模式真正更新时会先拉取该 tag，检出落后较多时可能耗时较长。更新要求所有实例都停止。
 * **浏览器选择** — 内置浏览器或系统浏览器。
 
@@ -32,6 +33,22 @@
 点击活动栏中的 🐳DSH WebUI 小鲸鱼图标，然后点击 **Start**。状态栏的鲸鱼图标反映启动器状态（运行中为蓝底白字、启动中喷水跳动）——点击它可弹出快捷菜单：顶部一行显示当前运行信息（状态、模式、dsh 版本，运行中还有 Web 地址）；下面列出全部实例（名称、端口、状态、home，活动实例有标记），选中某个实例可执行它的动作（Open / Start / Restart / Stop / Make Active）；菜单底部是全局动作（Open Web UI、Open Dashboard、Stop、Open Global Settings）。
 
 面板顶部的 tab 条就是实例列表。`+` 打开新建表单；每个实例 tab 的 Start/Stop/Open 只作用于该实例。Edit 修改名称、home、自动打开与浏览器覆盖；home 默认跟随 `.dsh-{name}`，手动改过后就不再自动跟随；新实例固定使用 `web` profile。Delete 只从 launcher 移除实例。端口由 launcher 分配，面板里不编辑——运行中的 URL 会显示当前端口。新建实例本身不会安装或启动任何东西——第一次 Start 时才按需创建 home/profile。
+
+**外部托管实例**不在新建表单里配置，因为进程由别处管理。在 `dsh.instances` 里加一条带 `"lifecycle": "external"`、`port` 和 `tokenSource` 的配置：
+
+```jsonc
+"dsh.instances": [
+  {
+    "id": "superagent",
+    "name": "Superagent (ECS)",
+    "port": 3082,
+    "lifecycle": "external",
+    "tokenSource": { "kind": "journal", "unit": "dsh-superagent" }
+  }
+]
+```
+
+它们会出现在 tab 条里，但仪表盘只探测进程是否在运行；能读到 token 时提供 **Open Web UI**（新标签页打开）。launcher 不会安装、启动、停止、重启或更新它们：Start/Stop 隐藏，Edit 不可用；进程本身用 systemd/docker/手动命令管理。未配置 `tokenSource` 时仍能探测到运行状态，但会提示无法解析启动 token。`tokenSource` 还支持 `{ "kind": "file", "path": "/home/agent/.dsh/token" }`（绝对路径，`~` 会展开）和 `{ "kind": "docker", "container": "dsh" }`；`journal` 依赖 systemd，Windows 上不可用。
 
 ## 设置
 
@@ -51,7 +68,7 @@
 | dsh.hideConsole | true | 在 Windows 上隐藏控制台窗口，让 dsh 和它的工具子进程都不闪 cmd 窗口；关掉可显示窗口用于调试。 |
 | dsh.clearServerLogOnStart | true | 每次启动前清空该实例的服务端日志，使其只含本次运行内容。 |
 | dsh.sourceDebug | false | source 模式打印模块加载进度（`NODE_DEBUG=module`）。输出很多：console 只显示周期性计数，完整明细在服务端日志。 |
-| dsh.instances | `[]` | 实例列表：`{ id, name, home, profile, port, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。机器本地，不同步。 |
+| dsh.instances | `[]` | 仪表盘实例列表：`{ id, name, port, home?, profile?, lifecycle?, tokenSource?, autoOpenBrowser?, browser? }`。`home` 是 `DSH_HOME`（launcher 托管实例为空表示默认 home）；`profile` 是 `<home>/profiles` 下的 profile；`port` 由 launcher 分配且唯一。`lifecycle: "external"` 表示进程由 systemd/docker/手动方式托管，launcher 只探测并打开其 Web UI。`tokenSource` 为 `{ kind: "journal", unit }`、`{ kind: "file", path }` 或 `{ kind: "docker", container }`。机器本地，不同步。 |
 | dsh.activeInstance | 空 | 新开窗口的初始活动实例；窗口打开期间各自保持自己的活动实例，其他窗口切换不会影响本窗口；空则回退到第一个实例。机器本地，不同步。 |
 | dsh.instanceBrand | true | 在 Web UI 的 DeepSeek Harness 官方 wordmark 下方显示实例名。launcher 会在每个 profile 维护一个很小的本地 client bundle，文字跟随 DSH 当前语言；不需要手动安装插件。机器本地，不同步。 |
 | dsh.packageImportMethod | copy | pnpm 把 dsh 文件放进自管安装目录的方式：`copy` 复制文件（更占磁盘、安装更慢，但在带文件过滤安全软件的机器上避免硬链接带来的打开开销），`hardlink` 链接到 pnpm store（省磁盘、安装快），`auto` 交给 pnpm 决定。修改后在下一次 Start 时生效：会在原目录重装为新方式（终端跑完前不要关闭；有其他实例在运行时跳过）。若重装失败，删除安装目录后重新 Start 即可全新安装。**Reinstall dsh (apply install method)** 命令可立即强制重装。机器本地，不同步。 |

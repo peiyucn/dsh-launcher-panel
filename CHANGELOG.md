@@ -4,8 +4,9 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
-## [0.3.8] - 2026-11-03
+## [0.4.0] - 2026-11-03
 
+- **External instances** — set `"lifecycle": "external"` on a `dsh.instances` entry when dsh is owned by systemd, docker or manual tooling (for example on a server). The dashboard only detects it and opens its Web UI in a new tab; it never installs, starts, stops, restarts or updates the process. Configure `tokenSource` (`journal` with a unit, `file` with a token path, or `docker` with a container) so the launcher can read the launch token; without it the running server is still detected but cannot be opened. External instances do not block dsh updates or import-method reinstalls.
 - dsh is now detached from the VS Code extension host: reloading or closing the window no longer stops a running server. Use Stop in the panel or the command palette to end it.
 - New `dsh.packageImportMethod` setting (default `copy`): pnpm installs dsh's files as independent copies instead of hardlinks. On machines where security software filters file access, hardlinked files are much slower to open, which delays every Stop→Start (about 7s instead of 11–16s measured); a clean install costs only a few MB of extra disk. Changing the setting takes effect on the next Start: the same version is reinstalled in place with the new method (keep the terminal open; skipped while another instance is running); if it fails, deleting the install folder and starting again recovers with a clean install. The **Reinstall dsh (apply install method)** command forces it immediately.
 

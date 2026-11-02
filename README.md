@@ -24,6 +24,7 @@ Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/item
 * **Source run** — clones deepseek-harness into a managed location and runs it (`dsh.srcPath` overrides the location; an existing checkout there is reused). Installs deps and builds when they are missing, stale, or the checkout moved past its last build; the build runs `pnpm run clean` first and uses dsh's official profile so the web UI carries the same branding as the packaged dsh.
 * **Dashboard panel** — server status, a live console (log files are clickable), DeepSeek's official API status with Peak / Off-peak pricing (weekends and Chinese public holidays bill at off-peak), a chat-service section listing the official chat, file-upload and search services with a one-click link to chat.deepseek.com, and your account balance.
 * **Multiple instances** — each instance owns a DSH home (`DSH_HOME`) and a profile inside it; the launcher assigns its Web UI port (`Default` keeps 3080, new instances get a five-digit port). The panel shows one tab per instance plus a `+` tab to create another; each tab can start/stop/open that instance, edit its name, home, auto-open and browser overrides, and delete it (stop first; the DSH data is never deleted). All instances share one dsh install and the global `dsh.runMode`.
+* **External instances** — an instance with `"lifecycle": "external"` is a dsh owned by systemd, docker or manual tooling (for example on a server). The dashboard only detects it: it never installs, starts, stops, restarts or updates the process, and the panel offers no Start/Stop for it. When it is running and its launch token can be read, the panel opens its Web UI in a new tab. Configure `tokenSource` so the token can be read; without it a running server is still detected but cannot be opened.
 * **DSH Update** — the ⟳ button checks for a new version and reveals Update when there is one (pkg reinstalls the channel's latest; source checks out the newest official `dsh-v…` tag, never upstream master). The check only lists tags and compares commits, so it downloads nothing; the actual source update fetches that tag first and can take a while on a checkout that is far behind. All instances must be stopped for an update.
 * **Browser choice** — built-in or system browser.
 
@@ -32,6 +33,22 @@ Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/item
 Click the 🐳DSH WebUI whale icon in the activity bar, then click **Start**. The status bar whale icon mirrors the launcher state (blue pill while running, pulsing spout while starting) — click it for a quick menu: its top line summarizes the current run (state, mode, dsh version and, while running, the web address); below that, every instance is listed with its port, state and home (the active one is marked), and picking one offers that instance's actions (Open / Start / Restart / Stop / Make Active). The bottom of the menu has the global actions (Open Web UI, Open Dashboard, Stop, Open Global Settings).
 
 The panel's tab strip is the instance list. `+` opens the create form; each instance tab's Start/Stop/Open acts on that instance. Edit changes its name, home, auto-open and browser overrides; the home field follows `.dsh-{name}` until you edit it by hand, and new instances always use the `web` profile. Delete removes the instance from the launcher only. Ports are assigned by the launcher and are not edited in the panel — the running URL shows the active port. Creating an instance does not install or start anything by itself; the first Start creates the home/profile as needed.
+
+**External instances** are configured in `dsh.instances` rather than the create form, because their process is owned elsewhere. Add an entry with `"lifecycle": "external"`, a `port`, and a `tokenSource`:
+
+```jsonc
+"dsh.instances": [
+  {
+    "id": "superagent",
+    "name": "Superagent (ECS)",
+    "port": 3082,
+    "lifecycle": "external",
+    "tokenSource": { "kind": "journal", "unit": "dsh-superagent" }
+  }
+]
+```
+
+They appear as tabs, but the dashboard only reports whether the process is up and, when the token is readable, offers **Open Web UI** in a new tab. The launcher never installs, starts, stops, restarts or updates them: Start/Stop are hidden and Edit is unavailable. Use systemd/docker/manual commands for the process itself. Without a `tokenSource` the running state is still detected, with an error explaining that the launch token could not be resolved. `tokenSource` also accepts `{ "kind": "file", "path": "/home/agent/.dsh/token" }` (absolute, `~` expanded) and `{ "kind": "docker", "container": "dsh" }`; `journal` needs systemd and is unavailable on Windows.
 
 ## Settings
 
@@ -51,7 +68,7 @@ Settings → search "dsh":
 | dsh.hideConsole | true | Hide the console window on Windows so neither dsh nor its tool subprocesses flash a cmd window; turn off to show it for debugging. |
 | dsh.clearServerLogOnStart | true | Clear each instance's server log at launch, so it holds only the current run. |
 | dsh.sourceDebug | false | Print module-loading progress in source mode (`NODE_DEBUG=module`). Very verbose: the console shows a periodic count, the full detail goes to the server log. |
-| dsh.instances | `[]` | Managed instances. Each entry has `{ id, name, home, profile, port, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. Machine-local, not synced. |
+| dsh.instances | `[]` | Dashboard instances. Each entry has `{ id, name, port, home?, profile?, lifecycle?, tokenSource?, autoOpenBrowser?, browser? }`. `home` is `DSH_HOME` (empty means the default home for launcher-managed instances); `profile` is a profile under `<home>/profiles`; `port` is assigned by the launcher and unique. `lifecycle: "external"` marks a process owned by systemd/docker/manual tooling: the launcher only detects it and opens its Web UI. `tokenSource` is `{ kind: "journal", unit }`, `{ kind: "file", path }` or `{ kind: "docker", container }`. Machine-local, not synced. |
 | dsh.activeInstance | empty | Initial active instance for a newly opened window. Each window keeps its own active instance while open, so switching in another window does not change this one. Empty falls back to the first instance. Machine-local, not synced. |
 | dsh.instanceBrand | true | Show the instance name below the official DeepSeek Harness wordmark in the Web UI. The launcher maintains a tiny local client bundle per profile; the line follows the current DSH language. No manual plugin install. Machine-local, not synced. |
 | dsh.packageImportMethod | copy | How pnpm places dsh's files in the launcher-managed install: `copy` duplicates files (more disk, slower install, but avoids hardlink file-open overhead on machines with file-filtering security software), `hardlink` links them to the pnpm store (less disk, faster install), `auto` lets pnpm choose. Changing it takes effect on the next Start: dsh is reinstalled in place with the new method (keep the terminal open until it finishes; skipped while another instance is running). If the reinstall fails, delete the install folder and Start again to reinstall from scratch. The **Reinstall dsh (apply install method)** command forces it immediately. Machine-local, not synced. |

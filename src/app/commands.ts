@@ -65,6 +65,12 @@ function instanceRow(instance: InstanceRuntimeStatus, activeId: string): MenuPic
 // Rows carry the instance id so an action never depends on which tab is active.
 function instanceMenuItems(status: InstanceRuntimeStatus, activeId: string): MenuPick[] {
   const items: MenuPick[] = []
+  if (status.external) {
+    // External instances are observed only: open the UI when its token is known, nothing else.
+    if (status.running && status.uiAvailable) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
+    if (status.id !== activeId) items.push(menuItem(status, `Make ${status.name} Active`, 'star', 'select'))
+    return items
+  }
   if (status.running) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
   if (status.state !== 'stopping') {
     if (status.running) {
@@ -84,8 +90,10 @@ export function registerCommands(context: vscode.ExtensionContext, manager: Inst
   const runMenuAction = async (action: StatusMenuAction): Promise<void> => {
     switch (action) {
       case 'start':
-      case 'open':
         await actionStart()
+        break
+      case 'open':
+        await actionOpen()
         break
       case 'stop':
         await actionStop()

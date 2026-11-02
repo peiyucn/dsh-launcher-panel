@@ -10,14 +10,28 @@ const MAX_PROFILE_LENGTH = 64
 const LEGACY_INSTANCE_ID = 'default'
 const PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+const SYSTEMD_UNIT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.@-]*$/
+const DOCKER_CONTAINER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/
 
 // An instance is only a runtime coordinate (DSH home, profile, port); model and credentials belong to the profile.
+// `lifecycle` decides who owns the process: the launcher (default) or an external supervisor
+// (systemd/docker/manual). An external instance is observed only — the launcher never
+// installs, spawns, stops or updates it; `tokenSource` says where its launch token can be read.
+export type InstanceLifecycle = 'launcher' | 'external'
+
+export type ExternalTokenSource =
+  | { kind: 'journal'; unit: string }
+  | { kind: 'file'; path: string }
+  | { kind: 'docker'; container: string }
+
 export interface DshInstance {
   id: string
   name: string
   home: string
   profile: string
   port: number
+  lifecycle?: InstanceLifecycle
+  tokenSource?: ExternalTokenSource
   autoOpenBrowser?: boolean
   browser?: 'built-in' | 'external'
 }
@@ -29,6 +43,8 @@ type InstanceIssueField =
   | 'home'
   | 'profile'
   | 'port'
+  | 'lifecycle'
+  | 'tokenSource'
   | 'autoOpenBrowser'
   | 'browser'
 
@@ -217,6 +233,53 @@ function validateOptionalBrowser(
   return pushIssue(index, 'browser', 'warning', 'browser must be "built-in" or "external"; using the global default', issues)
 }
 
+function validateTokenSource(
+  index: number,
+  raw: unknown,
+  lifecycle: InstanceLifecycle | undefined,
+  options: InstanceModelOptions,
+  issues: InstanceIssue[],
+): ExternalTokenSource | undefined {
+  if (raw === undefined) return undefined
+  if (lifecycle !== 'external') {
+    return fail(index, 'tokenSource', 'tokenSource is only valid when lifecycle is "external"', issues)
+  }
+  if (!isRecord(raw)) return fail(index, 'tokenSource', 'tokenSource must be an object', issues)
+  if (raw.kind === 'journal') {
+    const unit = nonEmptyString(raw.unit)
+    if (unit === undefined || unit.length > 128 || !SYSTEMD_UNIT_PATTERN.test(unit)) {
+      return fail(index, 'tokenSource', 'journal token source needs a systemd unit name (for example "dsh-superagent")', issues)
+    }
+    return { kind: 'journal', unit }
+  }
+  if (raw.kind === 'docker') {
+    const container = nonEmptyString(raw.container)
+    if (container === undefined || container.length > 128 || !DOCKER_CONTAINER_PATTERN.test(container)) {
+      return fail(index, 'tokenSource', 'docker token source needs a container name', issues)
+    }
+    return { kind: 'docker', container }
+  }
+  if (raw.kind === 'file') {
+    const rawPath = nonEmptyString(raw.path)
+    if (rawPath === undefined || hasControlCharacters(rawPath)) {
+      return fail(index, 'tokenSource', 'file token source needs a token file path', issues)
+    }
+    let expanded = rawPath
+    if (rawPath === '~' || rawPath.startsWith('~/') || rawPath.startsWith('~\\')) {
+      expanded = path.join(options.homeDir, rawPath.slice(1))
+    }
+    if (!path.isAbsolute(expanded)) {
+      return fail(index, 'tokenSource', 'file token source path must be absolute (or start with ~/)', issues)
+    }
+    return { kind: 'file', path: path.resolve(expanded) }
+  }
+  return fail(index, 'tokenSource', 'tokenSource kind must be "journal", "file" or "docker"', issues)
+}
+
+function isBlankHome(raw: unknown): boolean {
+  return raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')
+}
+
 function validateOptionalAutoOpen(index: number, raw: unknown, issues: InstanceIssue[]): boolean | undefined {
   if (raw === undefined) return undefined
   if (typeof raw === 'boolean') return raw
@@ -242,12 +305,24 @@ function normalizeInstance(
   if (name === undefined) return undefined
   if (seenNames.has(name.toLowerCase())) return fail(index, 'name', `name "${name}" is duplicated`, issues)
 
-  const home = validateHome(index, raw.home, options, issues)
+  const lifecycleRaw = raw.lifecycle
+  let lifecycle: InstanceLifecycle | undefined
+  if (lifecycleRaw !== undefined) {
+    if (lifecycleRaw !== 'launcher' && lifecycleRaw !== 'external') {
+      return fail(index, 'lifecycle', 'lifecycle must be "launcher" or "external"', issues)
+    }
+    lifecycle = lifecycleRaw
+  }
+  // An external instance has no home the launcher may touch; an empty home is valid there.
+  const external = lifecycle === 'external'
+  const home = external && isBlankHome(raw.home) ? '' : validateHome(index, raw.home, options, issues)
   if (home === undefined) return undefined
   const profile = validateProfile(index, raw.profile, issues)
   if (profile === undefined) return undefined
   const port = validatePort(index, raw.port, [], undefined, issues)
   if (port === undefined) return undefined
+  const tokenSource = validateTokenSource(index, raw.tokenSource, lifecycle, options, issues)
+  if (raw.tokenSource !== undefined && tokenSource === undefined) return undefined
   const autoOpenBrowser = validateOptionalAutoOpen(index, raw.autoOpenBrowser, issues)
   const browser = validateOptionalBrowser(index, raw.browser, issues)
 
@@ -259,6 +334,8 @@ function normalizeInstance(
     home,
     profile,
     port,
+    ...lifecycle === undefined ? {} : { lifecycle },
+    ...tokenSource === undefined ? {} : { tokenSource },
     ...autoOpenBrowser === undefined ? {} : { autoOpenBrowser },
     ...browser === undefined ? {} : { browser },
   }
@@ -293,6 +370,10 @@ export function normalizeInstances(
       seenPorts.set(instance.port, instance.name)
     }
     const homeKey = (options.platform ?? process.platform) === 'win32' ? instance.home.toLowerCase() : instance.home
+    if (instance.home === '') {
+      instances.push(instance)
+      return
+    }
     const homeOwner = seenHomes.get(homeKey)
     if (homeOwner !== undefined) {
       pushIssue(index, 'home', 'warning', `home is shared with "${homeOwner}"; only one can run at a time`, issues)
@@ -400,6 +481,17 @@ export function validateInstance(
 
 export function instanceHome(instance: DshInstance, options: InstanceModelOptions): string {
   return instance.home === '' ? path.resolve(options.defaultHome) : path.resolve(instance.home)
+}
+
+/** An external instance lives outside the launcher's ownership; treat it as observe-only. */
+export function isExternalInstance(instance: Pick<DshInstance, 'lifecycle'>): boolean {
+  return instance.lifecycle === 'external'
+}
+
+/** What the UI should show as the instance home; external instances may have none. */
+export function displayHome(instance: DshInstance, options: InstanceModelOptions): string {
+  if (isExternalInstance(instance) && instance.home === '') return ''
+  return instanceHome(instance, options)
 }
 
 /**

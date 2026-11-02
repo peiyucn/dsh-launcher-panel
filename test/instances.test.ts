@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import * as path from 'node:path'
 import {
   DEFAULT_PROFILE,
+  displayHome,
   instanceHome,
   instanceLogPath,
+  isExternalInstance,
   isNestedHome,
   migrateLegacyInstance,
   nextPort,
@@ -240,4 +242,87 @@ test('instanceHome resolves the effective home and instanceLogPath uses the id',
   assert.equal(instanceHome(instance(), options), path.resolve(options.defaultHome))
   assert.equal(instanceHome(instance({ home: path.join(homeDir, 'custom') }), options), path.resolve(path.join(homeDir, 'custom')))
   assert.equal(instanceLogPath(path.join(homeDir, '.dsh-launcher-panel'), 'abc'), path.join(homeDir, '.dsh-launcher-panel', 'logs', 'instances', 'abc', 'server.log'))
+})
+
+test('an external instance needs no home and keeps its tokenSource', () => {
+  const result = normalizeInstances(
+    [{ id: 'ecs', name: 'ECS', port: 3082, lifecycle: 'external', tokenSource: { kind: 'journal', unit: 'dsh-superagent' } }],
+    'ecs',
+    options,
+  )
+  assert.deepEqual(result.issues, [])
+  assert.equal(result.instances[0]?.home, '')
+  assert.equal(isExternalInstance(result.instances[0]!), true)
+  assert.deepEqual(result.instances[0]?.tokenSource, { kind: 'journal', unit: 'dsh-superagent' })
+})
+
+test('external without a port is still invalid', () => {
+  const result = normalizeInstances([{ id: 'ecs', name: 'ECS', lifecycle: 'external' }], undefined, options)
+  assert.deepEqual(result.instances, [])
+  assert.ok(result.issues.some((entry) => entry.field === 'port' && entry.severity === 'error'))
+})
+
+test('lifecycle must be "launcher" or "external"', () => {
+  const result = normalizeInstances([{ id: 'one', name: 'One', home: '', profile: 'web', port: 3080, lifecycle: 'remote' }], undefined, options)
+  assert.deepEqual(result.instances, [])
+  assert.ok(result.issues.some((entry) => entry.field === 'lifecycle' && entry.severity === 'error'))
+})
+
+test('tokenSource is only valid on external instances', () => {
+  const result = normalizeInstances(
+    [{ id: 'one', name: 'One', home: '', profile: 'web', port: 3080, tokenSource: { kind: 'file', path: '/tmp/token' } }],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.instances, [])
+  assert.ok(result.issues.some((entry) => entry.field === 'tokenSource' && entry.severity === 'error'))
+})
+
+test('tokenSource validates its unit, container and file path', () => {
+  const invalid = [
+    { kind: 'journal' },
+    { kind: 'journal', unit: 'bad unit' },
+    { kind: 'docker' },
+    { kind: 'file' },
+    { kind: 'file', path: 'relative/token' },
+    { kind: 'nonsense' },
+  ]
+  for (const tokenSource of invalid) {
+    const result = normalizeInstances(
+      [{ id: 'ecs', name: 'ECS', port: 3082, lifecycle: 'external', tokenSource }],
+      undefined,
+      options,
+    )
+    assert.deepEqual(result.instances, [], `tokenSource ${JSON.stringify(tokenSource)} must be rejected`)
+    assert.ok(result.issues.some((entry) => entry.field === 'tokenSource' && entry.severity === 'error'))
+  }
+})
+
+test('a file tokenSource expands a leading ~ against the user home', () => {
+  const result = normalizeInstances(
+    [{ id: 'ecs', name: 'ECS', port: 3082, lifecycle: 'external', tokenSource: { kind: 'file', path: '~/.dsh/token' } }],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.issues, [])
+  assert.deepEqual(result.instances[0]?.tokenSource, { kind: 'file', path: path.join(homeDir, '.dsh/token') })
+})
+
+test('external instances without a home do not trigger the shared-home warning', () => {
+  const result = normalizeInstances(
+    [
+      { id: 'a', name: 'A', port: 3082, lifecycle: 'external' },
+      { id: 'b', name: 'B', port: 3083, lifecycle: 'external' },
+    ],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.issues, [])
+  assert.equal(result.instances.length, 2)
+})
+
+test('displayHome keeps an external instance home empty instead of pinning the default', () => {
+  const external = instance({ id: 'ecs', name: 'ECS', home: '', port: 3082, lifecycle: 'external' })
+  assert.equal(displayHome(external, options), '')
+  assert.equal(displayHome(instance({ home: path.join(homeDir, 'x') }), options), path.resolve(path.join(homeDir, 'x')))
 })

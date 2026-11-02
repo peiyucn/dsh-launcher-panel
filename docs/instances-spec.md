@@ -53,17 +53,28 @@
 ## 四、实例模型
 
 ```ts
+type InstanceLifecycle = 'launcher' | 'external'
+
+type TokenSource =
+  | { kind: 'journal'; unit: string }
+  | { kind: 'file'; path: string }
+  | { kind: 'docker'; container: string }
+
 interface DshInstance {
   /** 稳定 ID，UUID；日志目录和运行时状态用它，重命名不变 */
   id: string
   /** 显示名；唯一（大小写不敏感）；只影响 UI */
   name: string
-  /** DSH_HOME；空字符串 = 默认 home（resolveDshHome()） */
+  /** DSH_HOME；空字符串 = 默认 home（resolveDshHome()）；external 时空表示没有 home */
   home: string
   /** home 下的 profile 名；默认 'web' */
   profile: string
   /** Web UI 端口；1–65535；实例间唯一 */
   port: number
+  /** 可选；缺省 'launcher'。external = 进程由 systemd/docker/手动托管，launcher 只观察 */
+  lifecycle?: InstanceLifecycle
+  /** 可选；仅 external 有效：从哪里读启动 token */
+  tokenSource?: TokenSource
   /** 可选；缺省时继承 dsh.autoOpenBrowser */
   autoOpenBrowser?: boolean
   /** 可选；缺省时继承 dsh.browser */
@@ -78,6 +89,7 @@ interface DshInstance {
 - `id` 不可编辑；`name`、`home`、auto-open 与浏览器覆盖可编辑。`profile` 只在创建/迁移时写入（新建固定 `web`，迁移也固定 `web`），界面不提供编辑入口——编辑保存时保留 `dsh.instances` 中的当前值，手改 settings 写入的自定义 profile 不会被表单覆盖。`port` 由 launcher 分配：`Default` 沿用 3080，新实例从 `dsh.instancePortBase` + 1 开始；面板不直接编辑端口。
 - `home` 的修改不移动、不复制任何数据，只改变下次启动指向。
 - 实例对象可以安全地出现在 `settings.json` 里：没有秘密。
+- **生命周期归属**由 `lifecycle` 声明，缺省 `'launcher'`：launcher 负责安装、启动、停止、更新；`'external'` 时进程归 systemd/docker/手动管理，launcher **只观察**——不安装、不 spawn、不 Stop/Restart、不参与 dsh 更新，打开 UI 只读 token。external 实例可以在 `dsh.instances` 里手写配置，面板的创建/编辑表单不提供该生命周期（表单编辑 external 实例会被拒绝，避免把它的配置改写成 launcher 托管）。`home` 在 external 下可为空（表示 launcher 不拥有 home）。
 
 ## 五、设置与迁移
 
@@ -90,7 +102,7 @@ interface DshInstance {
 | `dsh.instancePortBase` | `number` | `machine` | `31000` | 新实例端口根；5 位，范围 10000–65535；新实例取 base+1、base+2…… |
 | `dsh.instanceBrand` | `boolean` | `machine` | `true` | 在实例 profile 内维护 launcher 自有的 client bundle，在 Web UI wordmark 下方显示实例名；关闭时移除该 bundle（已在 0.3.0 发布，本节补充记录） |
 
-`dsh.instances` 的 schema 至少包含 `id`、`name`、`home`、`profile`、`port`，并允许 `autoOpenBrowser`、`browser`；`additionalProperties: false`，避免拼写错误静默进入配置。
+`dsh.instances` 的 schema 至少包含 `id`、`name`、`port`，并允许 `home`、`profile`、`lifecycle`、`tokenSource`、`autoOpenBrowser`、`browser`；`additionalProperties: false`，避免拼写错误静默进入配置。`home`/`profile` 在 external 实例上可省略（home 为空表示 launcher 不拥有 home；profile 仅展示/品牌用）；`tokenSource` 只对 external 生效：`journal` 需要 systemd unit，`file` 需要绝对路径（`~` 展开），`docker` 需要容器名，Windows 上不支持 `journal`。
 
 ### 保留的全局设置
 
@@ -260,6 +272,17 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 - 子进程 `close` 且不是主动 Stop：标记 `stopped`，并记录 `error = "dsh exited unexpectedly (exit code N) — see <logPath>"`（面板错误行与活动流都能看到原因与日志路径）；清除 PID/URL；不自动重启。
 - 面板显示「已退出」和日志路径。
 
+### 外部托管实例（lifecycle: external）
+
+- **只观察，不拥有**：Start 不安装、不 spawn；Stop/Restart 不杀进程；不参与 dsh 更新、安装方式重装与 runMode 切换限制。UI 对它们不显示 Start/Stop/Restart，Edit 也不可用（配置手写在 `dsh.instances` 里），只保留 Open 与 Make Active；删除只移除仪表盘条目，不影响进程。
+- **状态探测**：按端口判断运行中/未运行；运行中且能拿到 token 时显示 `running (external)` 并可打开 Web UI；运行中但 token 不可得时仍显示运行中，同时给出错误（提示配置 `tokenSource`）；未运行显示 `stopped (external)`，不提供启动按钮，面板提示由外部管理器负责。
+- **token 来源**（按顺序）：实例自己的 `server.log`（如果以前由 launcher 启动过）→ `tokenSource`：
+  - `journal`：`journalctl -u <unit> -n 500 --no-pager --output=cat`（仅 Linux）；
+  - `file`：读取文件尾部（最多 256 KB）；
+  - `docker`：`docker logs --tail 500 <container>`。
+  从输出中取**最新**的 `?token=`；命令带 10 秒超时，失败返回具体错误，不抛异常。
+- **并发**：external 实例运行中不阻塞 launcher 自己实例的安装/更新/重装；`holdsHome()` 对 external 恒为 false，不参与 home 冲突。
+
 ### 扩展重启 / 接管
 
 - 现状是扩展 deactivate 时**故意不杀服务**，VS Code 关闭后 Web UI 继续可用。多实例保持这个契约：deactivate 只停日志 tail，不杀实例。
@@ -400,6 +423,16 @@ node · launcher
 - 规范化（realpath/大小写）后相同 home 的实例，同一时间只允许一个运行。
 - 启动第二个时返回明确错误，并在 UI 指向占用者。
 - 这是技术约束：DSH 的 sessions/workspaces/credentials 都在 home 下，两个服务器同时写不安全；不代表 launcher 对实例用途做判断。
+- external 实例的 `holdsHome()` 恒为 false：home 归外部管理，不参与本冲突判断。
+
+### lifecycle / tokenSource
+
+- `lifecycle` 缺省 `'launcher'`；只接受 `'launcher'` / `'external'`，其他值视为该条目配置错误（跳过并报告，不静默降级）。
+- `tokenSource` 仅允许出现在 external 实例上；出现在 launcher 实例上是配置错误。
+- `journal`：`unit` 必填，匹配 `[A-Za-z0-9][A-Za-z0-9_.@-]*`，≤128 字符；Windows 上配置合法但运行时返回「需要 systemd」错误。
+- `file`：`path` 必填、绝对路径或 `~/` 开头（按用户 home 展开）、无控制字符。
+- `docker`：`container` 必填，匹配 `[A-Za-z0-9][A-Za-z0-9_.-]*`，≤128 字符。
+- external 的 `home` 可省略/为空（不触发共享 home 警告）；提供了就按普通 home 校验。
 
 ## 十一、全局操作
 
@@ -440,6 +473,9 @@ node · launcher
 ### 单元（`test/*.test.ts`，不依赖 vscode；随实现更新）
 
 - 实例正常化：`~` 展开、相对路径拒绝、空 home 回退默认、profile 去空白。
+- external 生命周期：`lifecycle` 枚举与非法值、external 无 home、`tokenSource` 三种 kind 的必填/格式校验、`tokenSource` 只允许 external、`~/` 文件路径展开。
+- 外部 token 解析：file 尾部取最新 token、journal/docker 命令与参数、Windows 上 journal 拒绝、命令失败错误透出、缺 `tokenSource` 报配置错误。
+- 状态栏菜单：external 运行中/停止/无 token 时不出现 Start/Stop，摘要标注 external。
 - 名称/ID/端口/profile 校验；重复检测；共享/嵌套 home 警告。
 - 端口自动建议：跳过已配置、跳过已占用、无可用端口报错。
 - 同一 home 并发守卫；共享 home 检测。
@@ -500,6 +536,7 @@ node · launcher
 - 每个 tab 可 Start/New Tab/Open、Delete（停止时）；端口与 profile 不可在界面编辑；运行中编辑/删除有明确提示。
 - 编辑运行中实例会要求先停止；改 home 不移动数据；删除只移除列表。
 - 扩展重启后能接管仍在运行的实例；Stop 能停掉接管实例；端口被无法识别的进程占用时不杀、只提示。
+- external 实例：只探测不启停；未运行时无启动按钮；运行中且 token 可读时可在新标签页打开 Web UI；token 不可读时仍显示运行中并给出配置提示；删除只移除仪表盘条目；external 运行中不阻塞 launcher 自己实例的更新/重装。
 - 设置中无秘密；删除不删 home；非法设置不导致崩溃或静默改写。
 - `npm run verify` 全绿；README/CHANGELOG 双语更新。
 

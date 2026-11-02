@@ -4,8 +4,9 @@
 
 简体中文 | [English](CHANGELOG.md)
 
-## [0.3.8] - 2026-11-03
+## [0.4.0] - 2026-11-03
 
+- **外部托管实例** — 当 dsh 由 systemd、docker 或手动方式托管时（例如服务器上），在 `dsh.instances` 条目里设置 `"lifecycle": "external"`。仪表盘只探测它，并在新标签页打开其 Web UI；不会安装、启动、停止、重启或更新该进程。配置 `tokenSource`（`journal` + unit、`file` + token 文件路径、`docker` + 容器名）让 launcher 读取启动 token；未配置时仍能探测到服务在运行，但无法打开 UI。外部实例不会阻塞 dsh 更新或安装方式重装。
 - dsh 与 VS Code 扩展宿主分离：重载或关闭窗口不再带走正在运行的 dsh 服务；需要停止时用面板或命令面板的 Stop。
 - 新增 `dsh.packageImportMethod` 设置（默认 `copy`）：pnpm 以独立复制方式而非硬链接安装 dsh 文件。在有安全软件过滤文件访问的机器上，硬链接文件打开明显更慢，会拖慢每次 Stop→Start（实测约 7 秒，硬链接为 11–16 秒）；干净安装只多占几 MB 磁盘。改设置会在下一次 Start 时生效：同一版本会在原目录重装为新方式（终端跑完前不要关闭；有其他实例在运行时跳过）；失败时删除安装目录后重新 Start 即可干净恢复。**Reinstall dsh (apply install method)** 命令可立即强制重装。
 
