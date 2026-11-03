@@ -62,6 +62,7 @@
 ## 说明
 
 * pkg 模式用 pnpm（dsh 仓库自己用的工具）安装并直接运行 dsh。不提供 `npx`：npm 的 peer 解析器在 dsh 的依赖图上可能无限挂起。首次安装的位置会写入 `dsh.pkgPath` / `dsh.srcPath`，在设置里可见并在本机保持固定。`dsh.pkgPath`、`dsh.srcPath`、`dsh.nodePath` 都是机器本地路径，刻意不参与 Settings Sync 同步；如果 `dsh.pkgPath` 里还留着别的机器同步来的路径、而它的盘符在本机不存在，launcher 会忽略它并改用自管位置。
+* 从 0.3.x 升级：第一次 Start 会把现有 launcher 自管安装转成新的默认 `copy` 方式。这是正常现象——一次性原地重装（视机器几秒到一分钟），终端任务结束前不要关闭。如果你更想要硬链接，把 `dsh.packageImportMethod` 设为 `hardlink`（需要切回时运行 **Reinstall dsh**）。
 * 面板上的模式 pill 用简写：`pkg` 即 pnpm 模式，`src` 即 source 模式。模式是全局的：所有实例共用同一份 dsh 树，切换前须停止全部实例。
 * 实例只描述运行坐标：一个 `DSH_HOME`、其中的 profile、一个自动分配的端口。模型/provider/preset/凭据都在该 home 的 profile 里，launcher 不管理。两个实例可以指向同一个 home，但同一时间只能跑一个（DSH 的 sessions/workspaces/credentials 是共享的）；面板会显示警告。
 * Delete 只从 `dsh.instances` 移除实例，绝不删除 home、sessions 或 workspaces；要清理由你自己处理。
