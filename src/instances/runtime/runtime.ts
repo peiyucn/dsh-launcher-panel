@@ -7,6 +7,7 @@ import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '.
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
 import { displayHome, instanceHome, instanceLogPath, isObservedInstance, type DshInstance } from '../model.ts'
 import { resolveObservedToken } from '../observed-token.ts'
+import { resolveObservedInstall } from '../observed-info.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
@@ -50,6 +51,8 @@ export class InstanceRuntime {
   private untrackedPort = false
   private consoleLog: string[] = []
   private observedTokenError = ''
+  private observedPackagePath = ''
+  private observedVersion = ''
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -110,6 +113,14 @@ export class InstanceRuntime {
     return result.token
   }
 
+  /** Read the detected process's package root/version so the panel can show them. */
+  private async loadObservedInstall(): Promise<void> {
+    if (!this.isObserved()) return
+    const info = await resolveObservedInstall(this.instance.port)
+    this.observedPackagePath = info.packagePath ?? ''
+    this.observedVersion = info.version ?? ''
+  }
+
   private async adopt(): Promise<boolean> {
     const adopted = await adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
       setUrl: (url) => { this.url = url },
@@ -117,11 +128,15 @@ export class InstanceRuntime {
       clearConsoleLog: () => { this.consoleLog = [] },
       adopt: () => this.transition('adopt'),
     }, this.isObserved() ? () => this.adoptionToken() : undefined)
-    if (adopted) return true
+    if (adopted) {
+      await this.loadObservedInstall()
+      return true
+    }
     if (!this.isObserved()) return false
     // The port answers but no usable launch token was found: keep the observed entry visible
     // (Running (detected)) with a concrete reason instead of pretending it is stopped.
     if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return false
+    await this.loadObservedInstall()
     this.error = this.observedTokenError !== ''
       ? this.observedTokenError
       : 'the detected dsh is running, but its launch token could not be resolved'
@@ -424,6 +439,10 @@ export class InstanceRuntime {
     if (this.state !== 'running') return
     this.url = ''
     this.logPump.stop()
+    if (this.isObserved()) {
+      this.observedPackagePath = ''
+      this.observedVersion = ''
+    }
     this.transition('lost')
   }
 
@@ -463,6 +482,9 @@ export class InstanceRuntime {
       id: this.instance.id,
       name: this.instance.name,
       observed: this.isObserved(),
+      observedPackagePath: this.observedPackagePath,
+      observedPackagePathShort: maskPath(this.observedPackagePath),
+      observedVersion: this.observedVersion,
       home,
       homeShort: maskPath(home),
       profile: this.instance.profile,

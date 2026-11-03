@@ -68,6 +68,10 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
   const cfg = readConfig()
   const active = facts.instances.find((instance) => instance.id === facts.activeId)
   const consoleLogPath = active ? instanceActivityLogFile(active.id) : activityLogFile()
+  // A detected instance is not backed by the launcher-managed install: show its own package
+  // root and version instead of the shared install's (which would be misleading).
+  const observed = active?.observed === true
+  const observedVersion = active?.observedVersion ?? ''
   return {
     status: {
       running: active?.running ?? false,
@@ -76,14 +80,14 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
       stopping: active?.stopping ?? false,
       checking: facts.checking,
       updating: isUpdating(),
-      observed: active?.observed ?? false,
+      observed,
       uiAvailable: active?.uiAvailable ?? false,
       url: active?.url ?? '',
-      dsh: facts.dsh,
-      dshVersion: facts.dshVersion,
-      dshPath: facts.dshPath,
+      dsh: observed ? (observedVersion !== '' ? 'ok' : 'unknown') : facts.dsh,
+      dshVersion: observed ? observedVersion : facts.dshVersion,
+      dshPath: observed ? (active?.observedPackagePath ?? '') : facts.dshPath,
       dshHome: active?.home ?? '',
-      dshPathShort: maskPath(facts.dshPath),
+      dshPathShort: observed ? (active?.observedPackagePathShort ?? '') : maskPath(facts.dshPath),
       dshHomeShort: maskPath(active?.home ?? ''),
       nodeVersion: facts.nodeVersion,
       mode: cfg.runMode,

@@ -20,6 +20,10 @@ export interface InstanceRuntimeStatus {
   name: string
   /** True for a "detect running dsh" takeover: read-only, never started/stopped/updated. */
   observed: boolean
+  /** Detected dsh install (observed instances only): package root, masked form and version. */
+  observedPackagePath: string
+  observedPackagePathShort: string
+  observedVersion: string
   home: string
   homeShort: string
   profile: string

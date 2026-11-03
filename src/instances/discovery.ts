@@ -4,6 +4,12 @@ import { decodeChildOutput } from '../shared/proc.ts'
 import { NODE_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 import { isPortOpen } from '../dsh/probes.ts'
 
+/** The dsh CLI entry token (a path) from a command line. */
+export function dshEntryToken(command: string): string | undefined {
+  const tokens = command.replace(/["']/g, '').split(/\s+/).filter((token) => token !== '')
+  return tokens.find(isDshEntryToken)
+}
+
 /** One process as reported by the platform's process list. */
 export interface ProcessEntry {
   pid: number
