@@ -4,7 +4,7 @@ import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
 import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
 import { isObservedInstance } from './instances/model.ts'
-import { detectedName } from './instances/discovery.ts'
+import { detectedName, type DetectedDsh } from './instances/discovery.ts'
 import type { InstanceIssue } from './instances/model.ts'
 import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
 
@@ -324,35 +324,58 @@ export async function actionReinstallDsh(): Promise<void> {
   })
 }
 
+interface DetectPick extends vscode.QuickPickItem {
+  entry?: DetectedDsh
+}
+
 /** One-shot, user-triggered detection of dsh servers the launcher did not start. */
 export async function actionDetectDsh(): Promise<void> {
   await withManager(async (manager) => {
-    // The process scan takes seconds (CIM on Windows, /proc+ps on Linux); show it in the
-    // notification area so the command never looks like a no-op while it runs.
-    const detected = await vscode.window.withProgress({
-      location: vscode.ProgressLocation.Notification,
-      title: 'Detecting running dsh servers…',
-      cancellable: false,
-    }, () => manager.detectRunningDsh())
-    if (detected.length === 0) {
-      void vscode.window.showInformationMessage('No running dsh servers were detected on this machine.')
-      return
-    }
-    const picked = await vscode.window.showQuickPick(
-      detected.map((entry) => ({
-        label: detectedName(entry.profile, entry.port),
-        description: `${entry.profile || 'dsh'} :${entry.port}`,
-        detail: entry.home === '' ? entry.command : entry.home,
-        entry,
-      })),
-      {
-        title: 'Detect running dsh',
-        placeHolder: 'Select one or more running dsh servers to add as read-only instances',
-        canPickMany: true,
-      },
-    )
-    if (picked === undefined || picked.length === 0) return
-    const result = await manager.takeOverDetected(picked.map((item) => item.entry))
+    // One QuickPick for the whole interaction: it opens with a busy spinner while the
+    // process scan runs (seconds on Windows), then turns into the selection list or a
+    // "nothing found" row in place. No second popup.
+    const picked = await new Promise<DetectPick[] | undefined>((resolve) => {
+      const quickPick = vscode.window.createQuickPick<DetectPick>()
+      let settled = false
+      const finish = (value: DetectPick[] | undefined): void => {
+        if (settled) return
+        settled = true
+        resolve(value)
+      }
+      quickPick.title = 'Detect running dsh'
+      quickPick.canSelectMany = true
+      quickPick.busy = true
+      quickPick.placeholder = 'Scanning for dsh servers this launcher did not start…'
+      quickPick.onDidAccept(() => {
+        const selected = quickPick.selectedItems.filter((item) => item.entry !== undefined)
+        quickPick.hide()
+        finish(selected.length === 0 ? undefined : selected)
+      })
+      quickPick.onDidHide(() => finish(undefined))
+      quickPick.show()
+      void (async () => {
+        const detected = await manager.detectRunningDsh()
+        if (settled) return
+        quickPick.busy = false
+        if (detected.length === 0) {
+          quickPick.items = [{
+            label: 'No running dsh servers were detected on this machine',
+            detail: 'Start a dsh server outside the launcher (systemd/docker/manual), then run Detect again.',
+          }]
+          quickPick.placeholder = 'Nothing detected'
+          return
+        }
+        quickPick.items = detected.map((entry) => ({
+          label: detectedName(entry.profile, entry.port),
+          description: `${entry.profile || 'dsh'} :${entry.port}`,
+          detail: entry.home === '' ? entry.command : entry.home,
+          entry,
+        }))
+        quickPick.placeholder = 'Select one or more running dsh servers to add as read-only instances'
+      })()
+    })
+    if (picked === undefined) return
+    const result = await manager.takeOverDetected(picked.map((item) => item.entry as DetectedDsh))
     if (result.error !== undefined) {
       void vscode.window.showErrorMessage(`Could not save the detected instances: ${result.error}`)
       return
