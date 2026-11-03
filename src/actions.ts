@@ -343,7 +343,9 @@ export async function actionDetectDsh(): Promise<void> {
         resolve(value)
       }
       quickPick.title = 'Detect running dsh'
-      quickPick.canSelectMany = true
+      // Multi-select only becomes meaningful once there is a list; enabling it during the
+      // scan shows an empty select-all checkbox and an OK button for nothing.
+      quickPick.canSelectMany = false
       quickPick.busy = true
       quickPick.placeholder = 'Scanning for dsh servers this launcher did not start…'
       quickPick.onDidAccept(() => {
@@ -373,6 +375,7 @@ export async function actionDetectDsh(): Promise<void> {
           detail: entry.home === '' ? entry.command : entry.home,
           entry,
         }))
+        quickPick.canSelectMany = true
         quickPick.placeholder = 'Select one or more running dsh servers to add as read-only instances'
       })()
     })
