@@ -438,7 +438,7 @@ export function panelScript(values: PanelScriptValues): string {
     // The chevron sits outside the toggle button (after the status link) but stays a
     // pointer shortcut; keyboard users reach the same action through dsToggle.
     dsChevron.addEventListener('click', () => setDsOpen(dsBody.hidden))
-    setDsOpen(false)
+    setDsOpen(true)
     document.getElementById('settingsBtn').addEventListener('click', () => vscode.postMessage({ command: 'openSettings' }))
     document.getElementById('clearConsoleBtn').addEventListener('click', () => vscode.postMessage({ command: 'clearConsole' }))
     el.debugToggle.addEventListener('click', () => vscode.postMessage({ command: 'toggleDebug' }))

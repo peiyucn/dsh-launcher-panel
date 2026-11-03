@@ -6,7 +6,8 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [0.4.1] - 2026-11-03
 
-- No user-perceivable changes: internal refactor of the detected-instance support. Process listing and dsh command-line matching are shared in one module, the launch token and package/version of a detected dsh are resolved in a single process scan, and the read-only state is extracted from the runtime state machine. Behaviour and settings are unchanged.
+- The **DeepSeek API Status** section is expanded by default when the panel opens; it can still be collapsed with the section header.
+- No other user-perceivable changes: internal refactor of the detected-instance support. Process listing and dsh command-line matching are shared in one module, the launch token and package/version of a detected dsh are resolved in a single process scan, and the read-only state is extracted from the runtime state machine. Behaviour and settings are unchanged.
 
 ## [0.4.0] - 2026-11-03
 
