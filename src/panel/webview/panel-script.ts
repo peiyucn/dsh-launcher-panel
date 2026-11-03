@@ -131,8 +131,7 @@ export function panelScript(values: PanelScriptValues): string {
           el.statusSub.textContent = 'Status refresh failed — retrying…'
         } else if (running) {
           el.statusText.textContent = 'Running (detected)'
-          el.statusSub.textContent = [status.dshVersion ? 'dsh v' + status.dshVersion : '', status.url || '']
-            .filter(Boolean).join(' · ')
+          el.statusSub.textContent = status.url || ''
           if (status.uiAvailable) {
             el.startBtn.style.display = ''
             el.startBtn.disabled = false
