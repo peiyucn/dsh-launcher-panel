@@ -326,42 +326,42 @@ export async function actionReinstallDsh(): Promise<void> {
 
 interface DetectPick extends vscode.QuickPickItem {
   entry?: DetectedDsh
+  addAll?: true
 }
 
 /** One-shot, user-triggered detection of dsh servers the launcher did not start. */
 export async function actionDetectDsh(): Promise<void> {
   await withManager(async (manager) => {
-    // One QuickPick for the whole interaction: it opens with a busy spinner while the
-    // process scan runs (seconds on Windows), then turns into the selection list or a
-    // "nothing found" row in place. No second popup.
-    const picked = await new Promise<DetectPick[] | undefined>((resolve) => {
+    // One QuickPick for the whole interaction: a busy spinner while the process scan runs,
+    // then a plain single-select list (no checkboxes/OK) — clicking a server adds it.
+    const selected = await new Promise<DetectedDsh[] | undefined>((resolve) => {
       const quickPick = vscode.window.createQuickPick<DetectPick>()
       let settled = false
-      const finish = (value: DetectPick[] | undefined): void => {
+      let allDetected: DetectedDsh[] = []
+      const finish = (value: DetectedDsh[] | undefined): void => {
         if (settled) return
         settled = true
         resolve(value)
       }
       quickPick.title = 'Detect running dsh'
-      // Multi-select only becomes meaningful once there is a list; enabling it during the
-      // scan shows an empty select-all checkbox and an OK button for nothing.
       quickPick.canSelectMany = false
       quickPick.busy = true
       quickPick.placeholder = 'Scanning for dsh servers this launcher did not start…'
       quickPick.onDidAccept(() => {
-        const selected = quickPick.selectedItems.filter((item) => item.entry !== undefined)
+        const item = quickPick.selectedItems[0]
         quickPick.hide()
-        finish(selected.length === 0 ? undefined : selected)
+        if (item?.entry !== undefined) finish([item.entry])
+        else if (item?.addAll === true) finish(allDetected)
+        else finish(undefined)
       })
       quickPick.onDidHide(() => finish(undefined))
       quickPick.show()
       void (async () => {
         const detected = await manager.detectRunningDsh()
         if (settled) return
+        allDetected = detected
         quickPick.busy = false
         if (detected.length === 0) {
-          // Informational row, not a choice: drop multi-select so no checkbox/OK shows up.
-          quickPick.canSelectMany = false
           quickPick.items = [{
             label: 'No running dsh servers were detected on this machine',
             detail: 'Start a dsh server outside the launcher (systemd/docker/manual), then run Detect again.',
@@ -369,18 +369,21 @@ export async function actionDetectDsh(): Promise<void> {
           quickPick.placeholder = 'Nothing detected — close this dialog to continue'
           return
         }
-        quickPick.items = detected.map((entry) => ({
+        const items: DetectPick[] = detected.map((entry) => ({
           label: detectedName(entry.profile, entry.port),
           description: `${entry.profile || 'dsh'} :${entry.port}`,
           detail: entry.home === '' ? entry.command : entry.home,
           entry,
         }))
-        quickPick.canSelectMany = true
-        quickPick.placeholder = 'Select dsh servers to add as read-only instances'
+        if (detected.length > 1) {
+          items.push({ label: 'Add all detected servers', description: `${detected.length} servers`, addAll: true })
+        }
+        quickPick.items = items
+        quickPick.placeholder = 'Select a detected dsh server to add as a read-only instance'
       })()
     })
-    if (picked === undefined) return
-    const result = await manager.takeOverDetected(picked.map((item) => item.entry as DetectedDsh))
+    if (selected === undefined) return
+    const result = await manager.takeOverDetected(selected)
     if (result.error !== undefined) {
       void vscode.window.showErrorMessage(`Could not save the detected instances: ${result.error}`)
       return
