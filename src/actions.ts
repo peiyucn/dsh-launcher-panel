@@ -358,11 +358,13 @@ export async function actionDetectDsh(): Promise<void> {
         if (settled) return
         quickPick.busy = false
         if (detected.length === 0) {
+          // Informational row, not a choice: drop multi-select so no checkbox/OK shows up.
+          quickPick.canSelectMany = false
           quickPick.items = [{
             label: 'No running dsh servers were detected on this machine',
             detail: 'Start a dsh server outside the launcher (systemd/docker/manual), then run Detect again.',
           }]
-          quickPick.placeholder = 'Nothing detected'
+          quickPick.placeholder = 'Nothing detected — close this to continue'
           return
         }
         quickPick.items = detected.map((entry) => ({
