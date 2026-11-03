@@ -344,13 +344,10 @@ export async function actionDetectDsh(): Promise<void> {
       }
       quickPick.title = 'Detect running dsh'
       // Multi-select only becomes meaningful once there is a list; enabling it during the
-      // scan shows an empty select-all checkbox and an OK button for nothing. The filter
-      // input is part of QuickPick and cannot be hidden, so it is disabled until there is
-      // something to filter.
+      // scan shows an empty select-all checkbox and an OK button for nothing.
       quickPick.canSelectMany = false
-      quickPick.enabled = false
       quickPick.busy = true
-      quickPick.placeholder = 'Scanning for dsh servers this launcher did not start… (no input needed)'
+      quickPick.placeholder = 'Scanning for dsh servers this launcher did not start…'
       quickPick.onDidAccept(() => {
         const selected = quickPick.selectedItems.filter((item) => item.entry !== undefined)
         quickPick.hide()
@@ -362,7 +359,6 @@ export async function actionDetectDsh(): Promise<void> {
         const detected = await manager.detectRunningDsh()
         if (settled) return
         quickPick.busy = false
-        quickPick.enabled = true
         if (detected.length === 0) {
           // Informational row, not a choice: drop multi-select so no checkbox/OK shows up.
           quickPick.canSelectMany = false
@@ -380,7 +376,7 @@ export async function actionDetectDsh(): Promise<void> {
           entry,
         }))
         quickPick.canSelectMany = true
-        quickPick.placeholder = 'Select dsh servers to add (type to filter the list)'
+        quickPick.placeholder = 'Select dsh servers to add as read-only instances'
       })()
     })
     if (picked === undefined) return
