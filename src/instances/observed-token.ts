@@ -31,9 +31,11 @@ export interface TokenDeps {
 
 /** Parse a Linux cgroup line into the supervisor that owns the process. */
 export function parseCgroupSource(cgroup: string): SupervisorSource | undefined {
-  const unit = /(?:^|\/)([^/\n]+\.service)(?:\/|$)/.exec(cgroup)?.[1]
+  // /proc/<pid>/cgroup ends with a newline; a trailing newline must not defeat the match.
+  const line = cgroup.trim()
+  const unit = /(?:^|\/)([^/\n]+\.service)(?:\/|$)/.exec(line)?.[1]
   if (unit !== undefined) return { kind: 'systemd', unit }
-  const container = /docker[/-]([0-9a-f]{12,64})/i.exec(cgroup)?.[1]
+  const container = /docker[/-]([0-9a-f]{12,64})/i.exec(line)?.[1]
   if (container !== undefined) return { kind: 'docker', container }
   return undefined
 }

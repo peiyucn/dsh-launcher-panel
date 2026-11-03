@@ -402,7 +402,11 @@ export async function actionCopyObservedInfo(id?: string): Promise<void> {
     const info = await manager.takeoverInfo(target)
     if (info === undefined) return
     await vscode.env.clipboard.writeText(info)
-    void vscode.window.showInformationMessage('Takeover info copied — hand it to an agent to convert this dsh into a launcher-managed instance.')
+    // Show the briefing itself (read-only preview) so the user can review what was copied
+    // before handing it to an agent, instead of a blind clipboard write.
+    const doc = await vscode.workspace.openTextDocument({ content: info, language: 'markdown' })
+    await vscode.window.showTextDocument(doc, { preview: true })
+    void vscode.window.showInformationMessage('Takeover info opened as a preview and copied to the clipboard.')
   })
 }
 

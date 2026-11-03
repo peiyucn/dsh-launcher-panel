@@ -14,6 +14,8 @@ const TOKEN = 'AbCdEfGh12345678'
 
 test('parses systemd and docker cgroup sources', () => {
   assert.deepEqual(parseCgroupSource('0::/system.slice/dsh-superagent.service'), { kind: 'systemd', unit: 'dsh-superagent.service' })
+  // /proc/<pid>/cgroup ends with a newline in the real world.
+  assert.deepEqual(parseCgroupSource('0::/system.slice/dsh-superagent.service\n'), { kind: 'systemd', unit: 'dsh-superagent.service' })
   assert.deepEqual(parseCgroupSource('0::/docker/0123456789abcdef0123456789abcdef'), { kind: 'docker', container: '0123456789abcdef0123456789abcdef' })
   assert.equal(parseCgroupSource('0::/user.slice/session.scope'), undefined)
 })

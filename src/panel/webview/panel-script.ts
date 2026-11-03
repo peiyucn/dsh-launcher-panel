@@ -222,7 +222,8 @@ export function panelScript(values: PanelScriptValues): string {
       // No selected instance: hide the empty meta rows and the Stop action.
       const meta = document.querySelector('.instance-meta')
       if (meta) meta.style.display = active ? '' : 'none'
-      if (el.stopBtn) el.stopBtn.style.display = active ? '' : 'none'
+      // Detected instances are read-only: never show Stop for them.
+      if (el.stopBtn) el.stopBtn.style.display = active && !status.observed ? '' : 'none'
       document.getElementById('instanceError').textContent = active && status.error ? status.error : ''
       if (!active) {
         el.startBtn.disabled = true
