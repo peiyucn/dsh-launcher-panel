@@ -327,7 +327,13 @@ export async function actionReinstallDsh(): Promise<void> {
 /** One-shot, user-triggered detection of dsh servers the launcher did not start. */
 export async function actionDetectDsh(): Promise<void> {
   await withManager(async (manager) => {
-    const detected = await manager.detectRunningDsh()
+    // The process scan takes seconds (CIM on Windows, /proc+ps on Linux); show it in the
+    // notification area so the command never looks like a no-op while it runs.
+    const detected = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Detecting running dsh servers…',
+      cancellable: false,
+    }, () => manager.detectRunningDsh())
     if (detected.length === 0) {
       void vscode.window.showInformationMessage('No running dsh servers were detected on this machine.')
       return
