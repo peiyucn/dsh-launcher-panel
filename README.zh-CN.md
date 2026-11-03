@@ -24,7 +24,7 @@
 * **源码运行** — 把 deepseek-harness clone 到自管目录并运行（`dsh.srcPath` 可指定别处；该路径下已有检出则直接复用）。依赖缺失/过期、或检出切过了上次构建时会先装依赖并构建；构建前跑 `pnpm run clean` 清理旧产物，并使用 dsh 官方 profile，使 Web UI 品牌与 pkg 模式一致。
 * **仪表盘面板** — 服务状态、实时控制台（日志文件可点击）、带峰谷标志的 DeepSeek 官方 API 状态（周末与法定节假日全天按低谷计费）、chat-service 分区（chat-service / file-upload-service / search-service 三个服务）状态与一键打开 chat.deepseek.com 的链接，以及账户余额。
 * **多实例** — 每个实例有自己的 DSH home（`DSH_HOME`）和其中的 profile；端口由 launcher 分配（`Default` 保持 3080，新实例用五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建；每个 tab 可启动/停止/打开该实例、编辑名称、home、自动打开与浏览器覆盖、删除（先停止；不删除 DSH 数据）。所有实例共用一份 dsh 安装和全局 `dsh.runMode`。
-* **探测实例** — `+` → **Detect running dsh…** 会在用户点击时扫描一次（不后台轮询）本机非 launcher 启动的 dsh Web 服务，例如 systemd/docker/手动安装。选中的服务会加为**只读实例**：launcher 只观察并在新标签页打开其 Web UI，不会启动、停止或更新它。启动 token 自动从进程读取（systemd journal、docker logs 或被重定向的日志文件），无需任何配置。允许改名和删除；**Copy takeover info** 按钮会复制一段不含 token 的信息卡，交给 agent 把该实例转成 launcher 托管。
+* **探测实例** — `+` → **Detect running dsh…** 会在用户点击时扫描一次（不后台轮询）本机非 launcher 启动的 dsh Web 服务，例如 systemd/docker/手动安装。选中的服务会加为**只读实例**：launcher 只观察并在新标签页打开其 Web UI，不会启动、停止或更新它。启动 token 自动从进程读取（systemd journal、docker logs 或被重定向的日志文件），无需任何配置。允许改名和删除；面板会显示该实例自己的 package 路径与 dsh 版本。在 Remote-SSH 窗口中，Web UI 通过 VS Code 端口转发打开，标签页访问的是远端主机。**Copy takeover info** 按钮会打开一段不含 token 的信息卡 Markdown 预览（并同时复制），交给 agent 把该实例转成 launcher 托管。
 * **DSH 更新** — 点 ⟳ 检查，有新版本时显示 Update（pkg 重装该通道最新版；source 检出最新的官方 `dsh-v…` tag，不拉 upstream master）。检查只列 tag 并比对 commit，不下载任何东西；源码模式真正更新时会先拉取该 tag，检出落后较多时可能耗时较长。更新要求所有实例都停止。
 * **浏览器选择** — 内置浏览器或系统浏览器。
 
@@ -34,7 +34,7 @@
 
 面板顶部的 tab 条就是实例列表。`+` 打开一个小菜单：**New instance…**（新建表单）或 **Detect running dsh…**。每个实例 tab 的 Start/Stop/Open 只作用于该实例。Edit 修改名称、home、自动打开与浏览器覆盖；home 默认跟随 `.dsh-{name}`，手动改过后就不再自动跟随；新实例固定使用 `web` profile。Delete 只从 launcher 移除实例。端口由 launcher 分配，面板里不编辑——运行中的 URL 会显示当前端口。新建实例本身不会安装或启动任何东西——第一次 Start 时才按需创建 home/profile。
 
-探测实例以 tab 形式出现，状态为 `Running (detected)` / `Stopped (detected)`。它们是只读的：Start、Stop、Restart、Update 与模式切换都不适用，编辑只允许改名。进程在运行且能解析 token 时，Open 会在新标签页打开 Web UI；否则 tab 会说明打不开的原因。Delete 只移除 launcher 条目，不影响进程。需要完整接管时用 **Copy takeover info**：它把探测事实和接管检查单（不含 token）复制到剪贴板，交给 agent 执行。
+探测实例以 tab 形式出现，状态为 `Running (detected)` / `Stopped (detected)`。它们是只读的：Start、Stop、Restart、Update 与模式切换都不适用，编辑只允许改名。进程在运行且能解析 token 时，Open 会在新标签页打开 Web UI；否则 tab 会说明打不开的原因。面板会显示探测实例自己的 package 路径与 dsh 版本，进程重启后会自动重新解析 token。在 Remote-SSH 窗口中，Web UI 通过 VS Code 端口转发打开。Delete 只移除 launcher 条目，不影响进程。需要完整接管时用 **Copy takeover info**：它会打开探测事实 + 接管检查单（不含 token）的 Markdown 预览，并同时复制同样内容，交给 agent 执行。
 
 ## 设置
 
