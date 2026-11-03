@@ -18,15 +18,24 @@ async function withManager<T>(task: (manager: InstanceManager) => Promise<T>): P
 
 export async function openUrl(url: string, browserOverride?: 'built-in' | 'external'): Promise<void> {
   const browser = browserOverride ?? normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
+  // In a Remote-SSH window the Simple Browser and the system browser run on the client, so a
+  // raw 127.0.0.1 URL points at the local machine. asExternalUri makes VS Code forward the
+  // remote port and returns a client-usable URI (a no-op locally).
+  let target = vscode.Uri.parse(url)
+  try {
+    target = await vscode.env.asExternalUri(target)
+  } catch {
+    // Keep the local URL when the host cannot forward (e.g. non-remote hosts).
+  }
   if (browser === 'external') {
-    await vscode.env.openExternal(vscode.Uri.parse(url))
+    await vscode.env.openExternal(target)
     return
   }
   try {
-    await vscode.commands.executeCommand('simpleBrowser.show', url)
+    await vscode.commands.executeCommand('simpleBrowser.show', target.toString(true))
   } catch {
     void vscode.window.showInformationMessage('VS Code built-in browser is unavailable; opened the system browser instead.')
-    await vscode.env.openExternal(vscode.Uri.parse(url))
+    await vscode.env.openExternal(target)
   }
 }
 
