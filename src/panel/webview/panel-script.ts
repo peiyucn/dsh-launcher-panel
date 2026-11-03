@@ -219,10 +219,18 @@ export function panelScript(values: PanelScriptValues): string {
       // A detected instance's name is editable even while it runs; home/profile/port are not.
       el.editInstanceBtn.disabled = !active || (busy && !status.observed)
       el.deleteInstanceBtn.disabled = !active
+      // No selected instance: hide the empty meta rows and the Stop action.
+      const meta = document.querySelector('.instance-meta')
+      if (meta) meta.style.display = active ? '' : 'none'
+      if (el.stopBtn) el.stopBtn.style.display = active ? '' : 'none'
       document.getElementById('instanceError').textContent = active && status.error ? status.error : ''
       if (!active) {
         el.startBtn.disabled = true
         el.startBtn.textContent = '+ New'
+        if (!Array.isArray(instanceList) || instanceList.length === 0) {
+          el.statusText.textContent = 'No instances'
+          el.statusSub.textContent = 'Click + to create one or detect a running dsh'
+        }
       }
     }
 

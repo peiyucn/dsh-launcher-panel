@@ -216,6 +216,18 @@ function isBlankHome(raw: unknown): boolean {
   return raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')
 }
 
+/**
+ * A Windows drive path on POSIX (or a POSIX absolute path on Windows) almost always means the
+ * entry came from a settings layer shared with another host (User settings apply to remote
+ * windows too). Those entries are skipped as one concise warning instead of per-entry errors.
+ */
+function looksForeignHome(raw: unknown, platform: NodeJS.Platform): boolean {
+  if (typeof raw !== 'string') return false
+  const trimmed = raw.trim()
+  if (trimmed === '') return false
+  return platform === 'win32' ? /^\/(?!\/)/.test(trimmed) : /^[A-Za-z]:[\\/]/.test(trimmed)
+}
+
 function validateOptionalBrowser(
   index: number,
   raw: unknown,
@@ -298,8 +310,16 @@ export function normalizeInstances(
   const seenNames = new Set<string>()
   const seenPorts = new Map<number, string>()
   const seenHomes = new Map<string, string>()
+  const platform = options.platform ?? process.platform
+  let foreignEntries = 0
 
   raw.forEach((entry, index) => {
+    // Entries configured on another host are not errors for this machine: skip quietly and
+    // report once, instead of one "home must be an absolute path" line per entry.
+    if (isRecord(entry) && looksForeignHome(entry.home, platform)) {
+      foreignEntries += 1
+      return
+    }
     const instance = normalizeInstance(entry, index, options, seenIds, seenNames, issues)
     if (instance === undefined) return
     const portOwner = seenPorts.get(instance.port)
@@ -321,6 +341,16 @@ export function normalizeInstances(
     }
     instances.push(instance)
   })
+
+  if (foreignEntries > 0) {
+    pushIssue(
+      -1,
+      'home',
+      'warning',
+      `${foreignEntries} instance(s) were skipped because their home paths belong to another host; configure dsh.instances in this machine's Remote settings.`,
+      issues,
+    )
+  }
 
   const activeId = typeof activeRaw === 'string' && instances.some((instance) => instance.id === activeRaw)
     ? activeRaw

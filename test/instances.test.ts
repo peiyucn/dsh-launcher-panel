@@ -284,3 +284,31 @@ test('observed instances without homes do not trigger the shared-home warning', 
   assert.deepEqual(result.issues, [])
   assert.equal(result.instances.length, 2)
 })
+
+test('instances configured on another host are skipped as one warning', () => {
+  const result = normalizeInstances(
+    [
+      { id: 'win', name: 'Windows', home: 'C:\\Users\\u\\.dsh', profile: 'web', port: 3080 },
+      { id: 'win2', name: 'Windows 2', home: 'D:\\work\\.dsh', profile: 'web', port: 3081 },
+      { id: 'ok', name: 'Ok', home: '', profile: 'web', port: 3090 },
+    ],
+    'win',
+    { ...options, platform: 'linux' },
+  )
+  assert.deepEqual(result.instances.map((entry) => entry.id), ['ok'])
+  assert.equal(result.issues.length, 1)
+  assert.equal(result.issues[0]?.severity, 'warning')
+  assert.match(result.issues[0]?.message ?? '', /2 instance\(s\) were skipped/)
+  assert.equal(result.activeId, '')
+})
+
+test('POSIX homes on Windows are treated as another host too', () => {
+  const result = normalizeInstances(
+    [{ id: 'nix', name: 'Nix', home: '/home/u/.dsh', profile: 'web', port: 3080 }],
+    undefined,
+    { ...options, platform: 'win32' },
+  )
+  assert.deepEqual(result.instances, [])
+  assert.equal(result.issues.length, 1)
+  assert.match(result.issues[0]?.message ?? '', /another host/)
+})
