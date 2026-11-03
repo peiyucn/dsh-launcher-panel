@@ -344,10 +344,13 @@ export async function actionDetectDsh(): Promise<void> {
       }
       quickPick.title = 'Detect running dsh'
       // Multi-select only becomes meaningful once there is a list; enabling it during the
-      // scan shows an empty select-all checkbox and an OK button for nothing.
+      // scan shows an empty select-all checkbox and an OK button for nothing. The filter
+      // input is part of QuickPick and cannot be hidden, so it is disabled until there is
+      // something to filter.
       quickPick.canSelectMany = false
+      quickPick.enabled = false
       quickPick.busy = true
-      quickPick.placeholder = 'Scanning for dsh servers this launcher did not start…'
+      quickPick.placeholder = 'Scanning for dsh servers this launcher did not start… (no input needed)'
       quickPick.onDidAccept(() => {
         const selected = quickPick.selectedItems.filter((item) => item.entry !== undefined)
         quickPick.hide()
@@ -359,6 +362,7 @@ export async function actionDetectDsh(): Promise<void> {
         const detected = await manager.detectRunningDsh()
         if (settled) return
         quickPick.busy = false
+        quickPick.enabled = true
         if (detected.length === 0) {
           // Informational row, not a choice: drop multi-select so no checkbox/OK shows up.
           quickPick.canSelectMany = false
@@ -366,7 +370,7 @@ export async function actionDetectDsh(): Promise<void> {
             label: 'No running dsh servers were detected on this machine',
             detail: 'Start a dsh server outside the launcher (systemd/docker/manual), then run Detect again.',
           }]
-          quickPick.placeholder = 'Nothing detected — close this to continue'
+          quickPick.placeholder = 'Nothing detected — close this dialog to continue'
           return
         }
         quickPick.items = detected.map((entry) => ({
@@ -376,7 +380,7 @@ export async function actionDetectDsh(): Promise<void> {
           entry,
         }))
         quickPick.canSelectMany = true
-        quickPick.placeholder = 'Select one or more running dsh servers to add as read-only instances'
+        quickPick.placeholder = 'Select dsh servers to add (type to filter the list)'
       })()
     })
     if (picked === undefined) return
