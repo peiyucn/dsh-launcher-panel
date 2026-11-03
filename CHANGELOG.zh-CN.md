@@ -8,7 +8,7 @@
 
 - **探测实例**：`+` 菜单与 `Detect Running dsh` 命令会在用户点击时扫描一次本机非 launcher 启动的 dsh Web 服务（systemd、docker 或手动启动的安装）。选中的服务会成为只读实例：launcher 只观察并在新标签页打开其 Web UI，不会启动、停止、重启或更新它。启动 token 自动从进程读取（systemd journal、docker logs 或被重定向的日志文件），无需任何配置；读不到时实例仍显示运行状态并说明原因。探测实例可改名、可删除，面板会显示它自己的 package 路径与 dsh 版本。在 Remote-SSH 窗口中，Web UI 通过 VS Code 端口转发打开，标签页访问的是远端主机而不是本机。**Copy takeover info** 会先打开一段不含 token 的信息卡 Markdown 预览（并同时复制），交给 agent 把实例转成 launcher 托管。
 - dsh 与 VS Code 扩展宿主分离：重载或关闭窗口不再带走正在运行的 dsh 服务；需要停止时用面板或命令面板的 Stop。
-- 新增 `dsh.packageImportMethod` 设置（默认 `copy`）：pnpm 以独立复制方式而非硬链接安装 dsh 文件。在有安全软件过滤文件访问的机器上，硬链接文件打开明显更慢，会拖慢每次 Stop→Start（实测约 7 秒，硬链接为 11–16 秒）；干净安装只多占几 MB 磁盘。改设置会在下一次 Start 时生效：同一版本会在原目录重装为新方式（终端跑完前不要关闭；有其他实例在运行时跳过）；失败时删除安装目录后重新 Start 即可干净恢复。**Reinstall dsh (apply install method)** 命令可立即强制重装。**从 0.3.x 升级的用户会在第一次 Start 时遇到这次一次性转换**（旧安装是硬链接、新默认是 copy）：这是正常现象，可能需要一点时间，请在终端任务结束前不要关闭，完成后会照常启动。
+- 新增 `dsh.packageImportMethod` 设置（默认 `copy`）：pnpm 以独立复制方式而非硬链接安装 dsh 文件。在有安全软件过滤文件访问的机器上，硬链接文件打开可能明显更慢，从而拖慢每次 Stop→Start；copy 布局避免这种每次打开的开销，代价是多占一点磁盘。改设置会在下一次 Start 时生效：同一版本会在原目录重装为新方式（终端跑完前不要关闭；有其他实例在运行时跳过）；失败时删除安装目录后重新 Start 即可干净恢复。**Reinstall dsh (apply install method)** 命令可立即强制重装。**从 0.3.x 升级的用户会在第一次 Start 时遇到这次一次性转换**（旧安装是硬链接、新默认是 copy）：这是正常现象，可能需要一点时间，请在终端任务结束前不要关闭，完成后会照常启动。
 
 ## [0.3.7] - 2026-11-03
 
