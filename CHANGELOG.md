@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.1] - 2026-11-03
+
+- No user-perceivable changes: internal refactor of the detected-instance support. Process listing and dsh command-line matching are shared in one module, the launch token and package/version of a detected dsh are resolved in a single process scan, and the read-only state is extracted from the runtime state machine. Behaviour and settings are unchanged.
+
 ## [0.4.0] - 2026-11-03
 
 - **Detected instances**: the `+` menu and the `Detect Running dsh` command scan once (on demand) for dsh web servers on this machine that the launcher did not start, such as a systemd, docker or manually started install. Selected servers become read-only instances: the launcher observes them and opens their Web UI in a new tab, and never starts, stops, restarts or updates them. The launch token is resolved automatically from the process (systemd journal, docker logs or a redirected log file), with no configuration; when it cannot be resolved the tab still shows the running state and explains why. Detected instances can be renamed and deleted; the panel shows their own package path and dsh version. In a Remote-SSH window the Web UI opens through VS Code's port forwarding, so the tab reaches the remote host rather than the local machine. **Copy takeover info** opens a Markdown preview of a token-free briefing (and copies the same text) for handing the instance to an agent that converts it into a launcher-managed instance.

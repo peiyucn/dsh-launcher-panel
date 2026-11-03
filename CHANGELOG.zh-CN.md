@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.4.1] - 2026-11-03
+
+- 无用户可感知的变化：探测实例功能的内部重构。进程列表与 dsh 命令行识别收敛到共享模块；探测实例的启动 token 与 package/版本改为一次进程扫描解析；只读状态从运行状态机中抽出。行为与配置均不变。
+
 ## [0.4.0] - 2026-11-03
 
 - **探测实例**：`+` 菜单与 `Detect Running dsh` 命令会在用户点击时扫描一次本机非 launcher 启动的 dsh Web 服务（systemd、docker 或手动启动的安装）。选中的服务会成为只读实例：launcher 只观察并在新标签页打开其 Web UI，不会启动、停止、重启或更新它。启动 token 自动从进程读取（systemd journal、docker logs 或被重定向的日志文件），无需任何配置；读不到时实例仍显示运行状态并说明原因。探测实例可改名、可删除，面板会显示它自己的 package 路径与 dsh 版本。在 Remote-SSH 窗口中，Web UI 通过 VS Code 端口转发打开，标签页访问的是远端主机而不是本机。**Copy takeover info** 会先打开一段不含 token 的信息卡 Markdown 预览（并同时复制），交给 agent 把实例转成 launcher 托管。
