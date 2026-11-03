@@ -68,6 +68,8 @@ interface DshInstance {
   autoOpenBrowser?: boolean
   /** 可选；缺省时继承 dsh.browser */
   browser?: 'built-in' | 'external'
+  /** 可选；true = 由「探测接管」创建的只读观察实例（0.4.0，见第十九节） */
+  observed?: true
 }
 ```
 
@@ -90,7 +92,7 @@ interface DshInstance {
 | `dsh.instancePortBase` | `number` | `machine` | `31000` | 新实例端口根；5 位，范围 10000–65535；新实例取 base+1、base+2…… |
 | `dsh.instanceBrand` | `boolean` | `machine` | `true` | 在实例 profile 内维护 launcher 自有的 client bundle，在 Web UI wordmark 下方显示实例名；关闭时移除该 bundle（已在 0.3.0 发布，本节补充记录） |
 
-`dsh.instances` 的 schema 至少包含 `id`、`name`、`home`、`profile`、`port`，并允许 `autoOpenBrowser`、`browser`；`additionalProperties: false`，避免拼写错误静默进入配置。
+`dsh.instances` 的 schema 至少包含 `id`、`name`、`home`、`profile`、`port`，并允许 `autoOpenBrowser`、`browser`、`observed`；`additionalProperties: false`，避免拼写错误静默进入配置。`observed` 仅接受 `true`（0.4.0 的只读观察实例，见第十九节）。
 
 ### 保留的全局设置
 
@@ -519,3 +521,79 @@ node · launcher
 | 10 | 是否做实例复制/导入导出 | 后续；v1 只做新建/编辑/删除 |
 | 11 | 端口/名称内联改，home/profile 用 modal？ | **已定（已实现）**：端口由 `dsh.instancePortBase` 自动分配、面板不编辑；名称/home/auto-open/browser 用 Edit modal；profile 不在界面编辑，手改 settings 才能换 |
 | 12 | tab 顺序是否可拖拽 | v1 按 `dsh.instances` 顺序，不支持拖拽；后续 |
+
+## 十九、探测接管（observed 实例，0.4.0 草案 · 待 owner 确认）
+
+### 目标
+
+用户主动触发一次探测，把本机正在运行、但不是 launcher 启动的 dsh 接成**只读观察实例**：能打开 Web UI、能改名/删除，但**不启动、不停止、不升级、不改动它的 home/安装/端口/token**。完整接管交给 agent（用户把“信息卡”交给 agent 执行）。
+
+### 数据模型
+
+- `DshInstance` 增加可选 `observed?: true`（只认 `true`；其他值是该条目配置错误）。
+- observed 实例：必填 `id`/`name`/`port`；`home`/`profile` 可为空（探测不到 home 时为空）；`home`/`profile`/`port` 只读；`name` 可编辑；token 永不落盘。
+- 删除只移除 launcher 条目，不影响进程。
+- 列表仍写 `dsh.instances`（本机配置；跨主机同步问题另见开放问题，实施前需显式空列表/远端覆盖策略）。
+
+### 探测（仅手动，不后台）
+
+- 入口：命令 `dsh.detect`（"Detect running dsh"）+ 面板 `+` 菜单项 **Detect running dsh…**；
+- 一次性扫描本机进程：Linux `/proc`、Windows `Win32_Process`、macOS `ps`；
+- 匹配 dsh 入口：全局 `dsh`、`@deepseek-ai/dsh/lib/bin.js`、`apps/cli/(src|dist)/bin.*`，且参数含 `--port <n>`；
+- 端口必须在本机 `127.0.0.1` 监听；
+- `profile` = dsh 入口后的第一个非 flag 参数；`home` = 进程环境 `DSH_HOME`（可读时），否则为空；
+- 排除：launcher 自己 spawn 的 pid、已配置的端口（普通与 observed 均算）；
+- 无结果：提示 "No running dsh servers detected"。
+
+### 接管流程
+
+1. QuickPick `canPickMany`，每行：`<name> · <profile> :<port> — <home>`；
+2. 选中后逐条创建 observed 实例（按端口去重）；写设置失败走现有实例保存错误处理，不留内存幽灵；
+3. **不自动打开任何标签页**（即使只勾一条），由用户点 Open/New Tab；
+4. 重复探测不会重复创建同端口条目。
+
+### 名称
+
+- 默认：有 profile 用 `<profile>`，否则 `dsh :<port>`；
+- 用户可改名（现有 Edit 的 name 字段）；探测/刷新永不覆盖用户已设的名字；
+- 名称需唯一：与现有实例重名时自动追加端口后缀（如 `superagent :3082`），不打断接管。
+
+### 只读运行语义
+
+- observed 实例：Start / Stop / Restart / Update / Reinstall / 切换 runMode 一律拒绝（UI 隐藏，命令给说明）；
+- Open：端口在听且 token 可解析时可用；新标签页按实例 `browser` 设置打开；
+- 刷新/激活：只探测端口；token 按需解析并短期缓存（token 不进入状态、日志、webview）；
+- 进程消失：条目保留为 `Stopped (detected)`，Open 不可用，可删除；
+- observed 运行中计入“更新/安装方式重装需停止”的检查（不偷偷升级它可能正在使用的安装）。
+
+### token 自动解析（不落盘）
+
+端口监听 PID → `/proc/<pid>/cgroup` 识别 systemd unit 或 docker 容器 → `journalctl -u <unit>` / `docker logs <container>`；否则读 stdout 重定向文件；取最新 `?token=`；命令 10 秒超时；失败作为实例 error 展示。不写回配置、不保存 token。
+
+### UI
+
+- 面板：observed tab 文案 `Running (detected)` / `Stopped (detected)`；隐藏 Start/Stop/Update/⟳；Open 可用时显示 `↗ New Tab`；Edit 只开放 name（home/profile/port 只读）；保留 Delete；
+- `+` 变为菜单：**New instance…** / **Detect running dsh…**；
+- 状态栏菜单：observed 只给 Open / Copy takeover info / Delete；
+- 命令面板：`dsh.detect`、`dsh.copyDetectedInfo`（仅 observed）。
+
+### Agent 接管信息卡
+
+observed 实例提供 **Copy takeover info**，剪贴板内容包含：
+
+- 事实：name、home、profile、port、启动命令行（**绝不包含 token**）；
+- 目标与验收：先由用户停止/禁用外部管理器 → 用 launcher 管理的安装（pkg/src）接入 → 不移动/不复制 home 数据 → 端口与 profile 保持一致 → 删除 observed 条目并新建普通实例 → Open 成功；
+- 约束：agent 修改安装/配置前须用户确认；launcher 只生成文本，不自动执行、不调用 agent。
+
+### 非目标
+
+不后台扫描；不识别/路由 supervisor；不扩展 Stop/Update 语义；不改安装方式；不做 home 导入表单（后续）。
+
+### 验收
+
+1. 干净环境装扩展后：命令探测 → 选 `superagent :3082` → 面板出现 observed 条目，用户点 Open 成功打开 Web UI，且不自动弹标签页；
+2. observed 条目无 Start/Stop/Update/Edit（除 name）；命令 Start/Stop 给出明确说明；
+3. 外部 dsh 停止 → 条目显示 `Stopped (detected)`；重启后 Open 恢复；
+4. 用户改名后，重复探测/刷新不覆盖名字；
+5. Copy takeover info 含 home/profile/port/命令行，不含 token；
+6. launcher 管理的实例行为不变；`npm run verify` 全绿。
