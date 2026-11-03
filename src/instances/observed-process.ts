@@ -1,28 +1,33 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { dshEntryToken, findDshServerEntry, listProcessEntries, type ProcessEntry } from './discovery.ts'
+import { dshEntryToken, findDshServerEntry, listProcessEntries, type ProcessEntry, type ProcessLister } from './process-list.ts'
+import { tokenForPid, type TokenDeps } from './observed-token.ts'
 
-/** Information about the dsh installation behind an observed (externally started) server. */
-export interface ObservedInstallInfo {
+/** Everything the panel knows about the external process behind a detected instance. */
+export interface ObservedProcessInfo {
+  pid?: number
+  command?: string
   /** Absolute path of the dsh CLI entry, when it could be resolved. */
   entryPath?: string
   /** Package root (directory with the dsh package.json), when it could be found. */
   packagePath?: string
   version?: string
-  command?: string
+  token?: string
+  tokenError?: string
 }
 
-export interface ObservedInstallDeps {
-  list?: () => Promise<ProcessEntry[] | undefined>
+export interface ObservedProcessDeps {
+  list?: ProcessLister
   realpath?: (file: string) => string | undefined
   readFile?: (file: string) => string | undefined
+  token?: TokenDeps
 }
 
 const CACHE_TTL_MS = 30_000
 
-const cache = new Map<number, { info: ObservedInstallInfo; at: number }>()
+const cache = new Map<number, { info: ObservedProcessInfo; at: number }>()
 
-export function clearObservedInstallCache(): void {
+export function clearObservedProcessCache(): void {
   cache.clear()
 }
 
@@ -45,7 +50,7 @@ function defaultReadFile(file: string): string | undefined {
 /** Walk up from the entry file to the nearest package.json that describes dsh. */
 export function findDshPackageJson(
   entryPath: string,
-  deps: Pick<ObservedInstallDeps, 'realpath' | 'readFile'> = {},
+  deps: Pick<ObservedProcessDeps, 'realpath' | 'readFile'> = {},
 ): { packagePath: string; version: string } | undefined {
   const realpath = deps.realpath ?? defaultRealpath
   const readFile = deps.readFile ?? defaultReadFile
@@ -73,30 +78,43 @@ export function findDshPackageJson(
   return undefined
 }
 
-function readObservedInstall(
+async function readObservedProcess(
   entries: readonly ProcessEntry[],
   port: number,
-  deps: Pick<ObservedInstallDeps, 'realpath' | 'readFile'>,
-): ObservedInstallInfo {
+  deps: ObservedProcessDeps,
+): Promise<ObservedProcessInfo> {
   const entry = findDshServerEntry(entries, port)
-  if (entry === undefined) return {}
-  const token = dshEntryToken(entry.command)
-  if (token === undefined) return { command: entry.command }
-  const entryPath = path.isAbsolute(token) ? token : undefined
+  if (entry === undefined) {
+    return { tokenError: `no dsh process is serving 127.0.0.1:${port}` }
+  }
+  const token = await tokenForPid(entry.pid, deps.token ?? {})
+  const tokenPath = dshEntryToken(entry.command)
+  const entryPath = tokenPath !== undefined && path.isAbsolute(tokenPath) ? tokenPath : undefined
   const pkg = entryPath === undefined ? undefined : findDshPackageJson(entryPath, deps)
   return {
+    pid: entry.pid,
+    command: entry.command,
     ...entryPath === undefined ? {} : { entryPath },
     ...pkg === undefined ? {} : { packagePath: pkg.packagePath, version: pkg.version },
-    command: entry.command,
+    ...token.token === undefined ? {} : { token: token.token },
+    ...token.error === undefined ? {} : { tokenError: token.error },
   }
 }
 
-/** Resolve the installation behind the dsh serving `port` (cached briefly). */
-export async function resolveObservedInstall(port: number, deps: ObservedInstallDeps = {}): Promise<ObservedInstallInfo> {
+/**
+ * Resolve pid, package path/version and launch token of the dsh serving `port` in one
+ * process-list pass (cached briefly). Returns an error instead of throwing.
+ */
+export async function resolveObservedProcess(
+  port: number,
+  deps: ObservedProcessDeps = {},
+): Promise<ObservedProcessInfo> {
   const cached = cache.get(port)
   if (cached !== undefined && Date.now() - cached.at < CACHE_TTL_MS) return cached.info
   const entries = await (deps.list ?? listProcessEntries)()
-  const info = entries === undefined ? {} : readObservedInstall(entries, port, deps)
+  const info = entries === undefined
+    ? { tokenError: 'the process list is not available on this platform' }
+    : await readObservedProcess(entries, port, deps)
   cache.set(port, { info, at: Date.now() })
   return info
 }

@@ -6,8 +6,8 @@ import { isProcessAlive, sleep } from '../../shared/proc.ts'
 import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
 import { displayHome, instanceHome, instanceLogPath, isObservedInstance, type DshInstance } from '../model.ts'
-import { resolveObservedToken, clearObservedTokenCache } from '../observed-token.ts'
-import { resolveObservedInstall } from '../observed-info.ts'
+import { clearObservedProcessCache } from '../observed-process.ts'
+import { ObservedState } from './observed-state.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
@@ -50,9 +50,7 @@ export class InstanceRuntime {
   private stopPromise: Promise<boolean> | undefined
   private untrackedPort = false
   private consoleLog: string[] = []
-  private observedTokenError = ''
-  private observedPackagePath = ''
-  private observedVersion = ''
+  private readonly observedState = new ObservedState()
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -108,17 +106,7 @@ export class InstanceRuntime {
 
   private async adoptionToken(): Promise<string | undefined> {
     if (!this.isObserved()) return undefined
-    const result = await resolveObservedToken(this.instance.port)
-    this.observedTokenError = result.error ?? ''
-    return result.token
-  }
-
-  /** Read the detected process's package root/version so the panel can show them. */
-  private async loadObservedInstall(): Promise<void> {
-    if (!this.isObserved()) return
-    const info = await resolveObservedInstall(this.instance.port)
-    this.observedPackagePath = info.packagePath ?? ''
-    this.observedVersion = info.version ?? ''
+    return this.observedState.resolveToken(this.instance.port)
   }
 
   private attemptAdopt(): Promise<boolean> {
@@ -134,20 +122,16 @@ export class InstanceRuntime {
     let adopted = await this.attemptAdopt()
     if (!adopted && this.isObserved()) {
       // An externally restarted dsh printed a new token; a cached old one keeps failing.
-      clearObservedTokenCache()
+      clearObservedProcessCache()
       adopted = await this.attemptAdopt()
     }
-    if (adopted) {
-      await this.loadObservedInstall()
-      return true
-    }
+    if (adopted) return true
     if (!this.isObserved()) return false
     // The port answers but no usable launch token was found: keep the observed entry visible
     // (Running (detected)) with a concrete reason instead of pretending it is stopped.
     if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return false
-    await this.loadObservedInstall()
-    this.error = this.observedTokenError !== ''
-      ? this.observedTokenError
+    this.error = this.observedState.tokenError !== ''
+      ? this.observedState.tokenError
       : 'the detected dsh is running, but its launch token could not be resolved'
     this.untrackedPort = false
     this.url = ''
@@ -451,10 +435,7 @@ export class InstanceRuntime {
     if (this.state !== 'running') return
     this.url = ''
     this.logPump.stop()
-    if (this.isObserved()) {
-      this.observedPackagePath = ''
-      this.observedVersion = ''
-    }
+    if (this.isObserved()) this.observedState.reset()
     this.transition('lost')
   }
 
@@ -494,9 +475,9 @@ export class InstanceRuntime {
       id: this.instance.id,
       name: this.instance.name,
       observed: this.isObserved(),
-      observedPackagePath: this.observedPackagePath,
-      observedPackagePathShort: maskPath(this.observedPackagePath),
-      observedVersion: this.observedVersion,
+      observedPackagePath: this.observedState.packagePath,
+      observedPackagePathShort: maskPath(this.observedState.packagePath),
+      observedVersion: this.observedState.version,
       home,
       homeShort: maskPath(home),
       profile: this.instance.profile,

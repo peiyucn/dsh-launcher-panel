@@ -1,13 +1,10 @@
 import * as fs from 'node:fs'
 import { runFile } from '../shared/proc.ts'
 import { readLogTailBytes } from '../shared/logs.ts'
-import { listProcessEntries, newestLaunchToken, parseDshServerCommand, type ProcessEntry } from './discovery.ts'
+import { extractWebToken } from '../shared/env.ts'
 
 /** A supervisor command is local; a hung journalctl/docker must not stall the panel. */
 const TOKEN_COMMAND_TIMEOUT_MS = 10_000
-
-/** Tokens stay valid for the life of one dsh process; short cache avoids per-refresh commands. */
-const TOKEN_CACHE_TTL_MS = 60_000
 
 const TOKEN_LOG_LINES = '500'
 
@@ -22,11 +19,17 @@ export type SupervisorSource =
 
 export interface TokenDeps {
   platform?: NodeJS.Platform
-  list?: () => Promise<ProcessEntry[] | undefined>
   run?: typeof runFile
   readTail?: (file: string) => string | undefined
   readCgroup?: (pid: number) => string | undefined
   readStdoutTarget?: (pid: number) => string | undefined
+}
+
+/** The newest launch token in a log-like text, or undefined. */
+export function newestLaunchToken(text: string): string | undefined {
+  let token: string | undefined
+  for (const line of text.split(/\r?\n/)) token = extractWebToken(line) ?? token
+  return token
 }
 
 /** Parse a Linux cgroup line into the supervisor that owns the process. */
@@ -58,13 +61,21 @@ function defaultReadStdoutTarget(pid: number): string | undefined {
   }
 }
 
-/** The dsh server pid serving `port` (first command-line match). */
-export function findDshPidByPort(entries: readonly ProcessEntry[], port: number): number | undefined {
-  for (const entry of entries) {
-    const parsed = parseDshServerCommand(entry.command)
-    if (parsed !== undefined && parsed.port === port) return entry.pid
+function labelTokenSource(source: SupervisorSource): string {
+  return source.kind === 'systemd' ? `journal of ${source.unit}` : `logs of container ${source.container}`
+}
+
+async function tokenFromStdoutFile(pid: number, deps: TokenDeps): Promise<ObservedTokenResult> {
+  const readStdoutTarget = deps.readStdoutTarget ?? defaultReadStdoutTarget
+  const target = readStdoutTarget(pid)
+  if (target === undefined || target.startsWith('socket:') || target.startsWith('pipe:') || target.startsWith('/dev/')) {
+    return { error: 'the process does not log to a readable file' }
   }
-  return undefined
+  const readTail = deps.readTail ?? ((file: string) => readLogTailBytes(file))
+  const text = readTail(target)
+  if (text === undefined) return { error: `the process log file ${target} could not be read` }
+  const token = newestLaunchToken(text)
+  return token === undefined ? { error: `the process log file ${target} has no launch token` } : { token }
 }
 
 async function tokenFromSupervisor(cgroup: string, deps: TokenDeps): Promise<ObservedTokenResult> {
@@ -89,10 +100,6 @@ async function tokenFromSupervisor(cgroup: string, deps: TokenDeps): Promise<Obs
     : { token }
 }
 
-function labelTokenSource(source: SupervisorSource): string {
-  return source.kind === 'systemd' ? `journal of ${source.unit}` : `logs of container ${source.container}`
-}
-
 /** Resolve the launch token for an observed dsh process id. */
 export async function tokenForPid(pid: number, deps: TokenDeps = {}): Promise<ObservedTokenResult> {
   const platform = deps.platform ?? process.platform
@@ -109,46 +116,4 @@ export async function tokenForPid(pid: number, deps: TokenDeps = {}): Promise<Ob
     return fromFile.token !== undefined ? fromFile : fromSupervisor
   }
   return tokenFromStdoutFile(pid, deps)
-}
-
-async function tokenFromStdoutFile(pid: number, deps: TokenDeps): Promise<ObservedTokenResult> {
-  const readStdoutTarget = deps.readStdoutTarget ?? defaultReadStdoutTarget
-  const target = readStdoutTarget(pid)
-  if (target === undefined || target.startsWith('socket:') || target.startsWith('pipe:') || target.startsWith('/dev/')) {
-    return { error: 'the process does not log to a readable file' }
-  }
-  const readTail = deps.readTail ?? ((file: string) => readLogTailBytes(file))
-  const text = readTail(target)
-  if (text === undefined) return { error: `the process log file ${target} could not be read` }
-  const token = newestLaunchToken(text)
-  return token === undefined ? { error: `the process log file ${target} has no launch token` } : { token }
-}
-
-const cache = new Map<string, { token?: string; error?: string; at: number }>()
-
-/** Test seam: forget cached tokens (also useful after a 401). */
-export function clearObservedTokenCache(): void {
-  cache.clear()
-}
-
-/**
- * Resolve the launch token of the dsh server on `port`, caching the result briefly.
- * Returns an error instead of throwing; the caller surfaces it as the instance error.
- */
-export async function resolveObservedToken(port: number, deps: TokenDeps = {}): Promise<ObservedTokenResult> {
-  const key = `${deps.platform ?? process.platform}:${port}`
-  const cached = cache.get(key)
-  if (cached !== undefined && Date.now() - cached.at < TOKEN_CACHE_TTL_MS) {
-    return cached.token !== undefined ? { token: cached.token } : { error: cached.error }
-  }
-  const entries = await (deps.list ?? listProcessEntries)()
-  const pid = entries === undefined ? undefined : findDshPidByPort(entries, port)
-  if (pid === undefined) {
-    const result = { error: `no dsh process is serving 127.0.0.1:${port}` }
-    cache.set(key, { ...result, at: Date.now() })
-    return result
-  }
-  const result = await tokenForPid(pid, deps)
-  cache.set(key, { ...(result.token === undefined ? {} : { token: result.token }), ...(result.error === undefined ? {} : { error: result.error }), at: Date.now() })
-  return result
 }

@@ -17,7 +17,8 @@ import {
   type InstanceIssue,
   type NormalizedInstances,
 } from './model.ts'
-import { detectedName, detectDshServers as detectDshServersImpl, findDshServerEntry, listProcessEntries, type DetectedDsh } from './discovery.ts'
+import { detectedName, detectDshServers as detectDshServersImpl, type DetectedDsh } from './discovery.ts'
+import { findDshServerEntry, listProcessEntries } from './process-list.ts'
 import { buildTakeoverInfo } from './takeover-info.ts'
 import type { ActivityEntry } from '../shared/activity.ts'
 import { addActivity, clearInstanceConsole, dbg, getActivity, replayInstanceActivity } from '../shared/activity.ts'

@@ -28,17 +28,19 @@ src/
     store.ts            实例设置的持久化（VS Code settings）
     manager.ts          实例集合编排：CRUD、启停、活动记录、runtime 持有
     dashboard.ts        面板快照构造（manager.dashboard() 委托）
-    discovery.ts        手动探测：进程扫描、dsh 命令行解析、DetectedDsh
-    observed-token.ts   只读探测实例的启动 token 自动解析（journal/docker/stdout 文件）
+    discovery.ts        手动探测：一次进程扫描、DetectedDsh、名称推导
+    process-list.ts     平台进程列表、dsh 命令行解析/入口识别、按端口找 dsh 进程
+    observed-process.ts 只读实例的进程信息一次解析（pid、package/version、token）
     takeover-info.ts    agent 接管信息卡（不含 token）
     shared-dsh.ts       共享 dsh 安装/检测/更新：prepare、detect、update 检查与缓存
     runtime/            单实例运行时
       runtime.ts        状态机编排与公开 API
+      observed-state.ts 只读探测实例状态（token/package/version 与错误）
       spawn.ts          子进程 spawn / kill / close
       health.ts         端口/URL 探测、接管（adopt）、就绪等待
       profile.ts        profile 初始化（--dump-config）
       log-pump.ts       实例日志实时 tail
-      process.ts        杀进程树、按命令行识别本实例的 DSH 服务器
+      process.ts        杀进程树（列出/识别进程在 process-list.ts）
       brand.ts          profile 内 launcher 自有品牌 bundle
       types.ts          RuntimeHost / InstanceRuntimeStatus / PreparedDsh
   dsh/                  dsh 工具链集成（安装、检测、版本、更新、配置、路径）

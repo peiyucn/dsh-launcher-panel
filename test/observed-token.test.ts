@@ -1,14 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  clearObservedTokenCache,
-  findDshPidByPort,
+  newestLaunchToken,
   parseCgroupSource,
-  resolveObservedToken,
   tokenForPid,
   type TokenDeps,
 } from '../src/instances/observed-token.ts'
-import type { ProcessEntry } from '../src/instances/discovery.ts'
 
 const TOKEN = 'AbCdEfGh12345678'
 
@@ -79,36 +76,7 @@ test('automatic token lookup is Linux-only and says so', async () => {
   assert.match(result.error ?? '', /only available on Linux/)
 })
 
-test('findDshPidByPort matches the command line port', () => {
-  const entries: ProcessEntry[] = [
-    { pid: 1, command: 'node /usr/local/bin/dsh web --port 3080' },
-    { pid: 2, command: 'node /usr/local/bin/dsh superagent --port 3082 --no-open' },
-  ]
-  assert.equal(findDshPidByPort(entries, 3082), 2)
-  assert.equal(findDshPidByPort(entries, 3099), undefined)
-})
-
-test('resolveObservedToken finds the pid and caches the token', async () => {
-  clearObservedTokenCache()
-  let calls = 0
-  const deps: TokenDeps = {
-    platform: 'linux',
-    list: async () => [{ pid: 42, command: 'node /usr/local/bin/dsh superagent --port 3082' }],
-    readCgroup: () => '0::/system.slice/dsh-superagent.service',
-    run: async () => {
-      calls += 1
-      return { ok: true, stdout: `?token=${TOKEN}`, stderr: '' }
-    },
-  }
-  assert.deepEqual(await resolveObservedToken(3082, deps), { token: TOKEN })
-  assert.deepEqual(await resolveObservedToken(3082, deps), { token: TOKEN })
-  assert.equal(calls, 1, 'the token is resolved once per cache window')
-  clearObservedTokenCache()
-})
-
-test('resolveObservedToken reports when no process serves the port', async () => {
-  clearObservedTokenCache()
-  const result = await resolveObservedToken(3999, { platform: 'linux', list: async () => [] })
-  assert.match(result.error ?? '', /no dsh process is serving/)
-  clearObservedTokenCache()
+test('newestLaunchToken keeps the last token in the text', () => {
+  assert.equal(newestLaunchToken('x ?token=OLDOLDOLD\ny ?token=NEWNEWNEW\n'), 'NEWNEWNEW')
+  assert.equal(newestLaunchToken('no token here'), undefined)
 })

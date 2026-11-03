@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import {
   findDshServerPids,
   isDshServerCommand,
-  killPid,
   parsePosixProcessList,
   parseWindowsProcessList,
-} from '../src/instances/runtime/process.ts'
+} from '../src/instances/process-list.ts'
+import { killPid } from '../src/instances/runtime/process.ts'
 
 const PKG_COMMAND = 'node   "C:\\Users\\me\\.dsh-launcher-panel\\package\\node_modules\\.bin\\\\..\\@deepseek-ai\\dsh\\lib\\bin.js" "web" "--port" "3080" "--no-open"'
 const SOURCE_COMMAND = '"C:\\Program Files\\nodejs\\node.exe" --import tsx/esm apps/cli/src/bin.ts web --port 3080 --no-open'
