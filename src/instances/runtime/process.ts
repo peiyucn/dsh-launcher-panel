@@ -2,8 +2,6 @@ import { execFile } from 'node:child_process'
 import { TASKKILL_TIMEOUT_MS } from '../../shared/timing.ts'
 import { decodeChildOutput } from '../../shared/proc.ts'
 
-export { findDshServerPidsByPort } from '../process-list.ts'
-
 /**
  * Kill one process tree. Resolves after `taskkill` exits (Windows) or the signal is sent, so
  * the caller can wait for the port to close instead of racing a fire-and-forget kill.
