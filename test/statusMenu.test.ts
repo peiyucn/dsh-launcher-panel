@@ -98,3 +98,21 @@ test('stopping and updating still offer only the dashboard', () => {
   // Documented precedence when both are true: updating wins over stopping.
   assert.equal(buildStatusMenuSummary({ ...summaryBase, stopping: true, updating: true }), 'Updating · pkg mode · dsh v0.1.2-alpha.1')
 })
+
+test('observed instances offer only open/copy and never start or stop', () => {
+  const observed = { ...base, observed: true, uiAvailable: false }
+  assert.deepEqual(actions({ ...observed, running: true }), ['dashboard', 'copyInfo', 'settings'])
+  assert.deepEqual(actions({ ...observed, running: true, uiAvailable: true }), ['open', 'dashboard', 'copyInfo', 'settings'])
+  assert.deepEqual(actions(observed), ['dashboard', 'copyInfo', 'settings'])
+})
+
+test('observed status summaries say detected', () => {
+  assert.equal(
+    buildStatusMenuSummary({ ...summaryBase, running: true, observed: true, uiAvailable: true }),
+    'Running · pkg mode · detected · dsh v0.1.2-alpha.1 · 127.0.0.1:3080',
+  )
+  assert.equal(
+    buildStatusMenuSummary({ ...summaryBase, observed: true, uiAvailable: false }),
+    'Stopped · pkg mode · detected · dsh v0.1.2-alpha.1',
+  )
+})

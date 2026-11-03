@@ -1,6 +1,10 @@
 import * as vscode from 'vscode'
 import {
+  actionCopyObservedInfo,
   actionDeleteInstance,
+  actionDetectDsh,
+  actionEditInstance,
+  actionOpen,
   actionSetBrowser,
   actionStart,
   actionStop,
@@ -79,7 +83,10 @@ export class PanelMessages {
     switch (message.command) {
       case 'start': return actionStart(message.value)
       case 'stop': return actionStop(message.value)
+      case 'open': return actionOpen(message.value)
       case 'instanceForm': return this.openInstanceForm(message.value ?? 'new')
+      case 'newInstanceMenu': return this.newInstanceMenu()
+      case 'copyObservedInfo': return actionCopyObservedInfo(message.value ?? manager?.activeInstance()?.id)
       case 'saveInstanceForm': return this.saveInstanceForm(message.value)
       case 'selectInstance':
         if (manager && message.value) await manager.select(message.value)
@@ -111,6 +118,17 @@ export class PanelMessages {
       default:
         dbg(`ignored unknown webview command: ${JSON.stringify(message.command)}`)
     }
+  }
+
+  /** "+" menu: create a normal instance or detect running dsh servers. */
+  private async newInstanceMenu(): Promise<void> {
+    const picked = await vscode.window.showQuickPick([
+      { label: 'New instance…', description: 'create an empty DSH home and profile', value: 'new' as const },
+      { label: 'Detect running dsh…', description: 'add running dsh servers as read-only instances', value: 'detect' as const },
+    ], { title: 'New instance', placeHolder: 'Create one, or take over something already running' })
+    if (picked === undefined) return
+    if (picked.value === 'new') return this.openInstanceForm('new')
+    return actionDetectDsh()
   }
 
   private async updateDsh(): Promise<void> {
@@ -183,6 +201,11 @@ export class PanelMessages {
     }
     const instance = manager.instance(value)
     if (!instance) return this.postInstanceFormError('Instance was not found')
+    // Detected instances allow name-only edits; the host asks for the new name.
+    if (instance.observed === true) {
+      await actionEditInstance(instance.id)
+      return
+    }
     this.postInstanceForm({
       mode: 'edit',
       id: instance.id,

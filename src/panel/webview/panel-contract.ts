@@ -3,9 +3,9 @@ import type { DsStatus, DshBalance } from '../deepseek.ts'
 import type { PricingWindow } from '../pricing.ts'
 
 const COMMAND_NAMES = [
-  'ready', 'start', 'stop', 'instanceForm', 'saveInstanceForm', 'selectInstance',
+  'ready', 'start', 'stop', 'open', 'instanceForm', 'newInstanceMenu', 'saveInstanceForm', 'selectInstance',
   'deleteInstance', 'updateDsh', 'refreshRequirements', 'setMode', 'revealPath', 'openLog',
-  'balance', 'setBrowser', 'openStatus', 'openChat', 'openSettings', 'toggleDebug', 'clearConsole',
+  'balance', 'setBrowser', 'openStatus', 'openChat', 'openSettings', 'toggleDebug', 'clearConsole', 'copyObservedInfo',
 ] as const
 
 const MESSAGE_TYPE_NAMES = ['update', 'instanceForm', 'instanceFormError', 'instanceFormSaved'] as const
@@ -46,6 +46,8 @@ export interface PanelStatus {
   stopping: boolean
   checking: boolean
   updating: boolean
+  observed: boolean
+  uiAvailable: boolean
   unknown?: boolean
   url: string
   dsh: 'unknown' | 'ok' | 'missing'
@@ -69,6 +71,7 @@ export interface PanelStatus {
 interface PanelInstanceStatus {
   id: string
   name: string
+  observed?: boolean
   home: string
   port: number
   state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error'

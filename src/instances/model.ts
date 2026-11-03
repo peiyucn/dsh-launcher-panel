@@ -12,12 +12,15 @@ const PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 // An instance is only a runtime coordinate (DSH home, profile, port); model and credentials belong to the profile.
+// `observed: true` marks an instance created by the explicit "detect running dsh" takeover: it is a
+// read-only view of a process the launcher does not own and must never start, stop or update.
 export interface DshInstance {
   id: string
   name: string
   home: string
   profile: string
   port: number
+  observed?: true
   autoOpenBrowser?: boolean
   browser?: 'built-in' | 'external'
 }
@@ -29,6 +32,7 @@ type InstanceIssueField =
   | 'home'
   | 'profile'
   | 'port'
+  | 'observed'
   | 'autoOpenBrowser'
   | 'browser'
 
@@ -207,6 +211,11 @@ function validateHome(
   return home
 }
 
+/** True for "no home given": an observed instance may not know its DSH_HOME. */
+function isBlankHome(raw: unknown): boolean {
+  return raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')
+}
+
 function validateOptionalBrowser(
   index: number,
   raw: unknown,
@@ -242,7 +251,13 @@ function normalizeInstance(
   if (name === undefined) return undefined
   if (seenNames.has(name.toLowerCase())) return fail(index, 'name', `name "${name}" is duplicated`, issues)
 
-  const home = validateHome(index, raw.home, options, issues)
+  const observedRaw = raw.observed
+  if (observedRaw !== undefined && observedRaw !== true) {
+    return fail(index, 'observed', 'observed must be true when present', issues)
+  }
+  const observed = observedRaw === true
+  // A detected process may have no readable DSH_HOME; an empty home is valid for observed instances.
+  const home = observed && isBlankHome(raw.home) ? '' : validateHome(index, raw.home, options, issues)
   if (home === undefined) return undefined
   const profile = validateProfile(index, raw.profile, issues)
   if (profile === undefined) return undefined
@@ -259,6 +274,7 @@ function normalizeInstance(
     home,
     profile,
     port,
+    ...observed ? { observed: true as const } : {},
     ...autoOpenBrowser === undefined ? {} : { autoOpenBrowser },
     ...browser === undefined ? {} : { browser },
   }
@@ -291,6 +307,10 @@ export function normalizeInstances(
       pushIssue(index, 'port', 'warning', `port ${instance.port} is also used by "${portOwner}"`, issues)
     } else {
       seenPorts.set(instance.port, instance.name)
+    }
+    if (instance.home === '') {
+      instances.push(instance)
+      return
     }
     const homeKey = (options.platform ?? process.platform) === 'win32' ? instance.home.toLowerCase() : instance.home
     const homeOwner = seenHomes.get(homeKey)
@@ -400,6 +420,28 @@ export function validateInstance(
 
 export function instanceHome(instance: DshInstance, options: InstanceModelOptions): string {
   return instance.home === '' ? path.resolve(options.defaultHome) : path.resolve(instance.home)
+}
+
+/** An observed instance was created by the explicit "detect running dsh" takeover. */
+export function isObservedInstance(instance: Pick<DshInstance, 'observed'>): boolean {
+  return instance.observed === true
+}
+
+/** What the UI should show as the instance home; observed instances may have none. */
+export function displayHome(instance: DshInstance, options: InstanceModelOptions): string {
+  if (isObservedInstance(instance) && instance.home === '') return ''
+  return instanceHome(instance, options)
+}
+
+/** Validate a rename against existing instances; observed instances allow name-only edits. */
+export function validateInstanceName(
+  raw: unknown,
+  existing: readonly DshInstance[],
+  editingId?: string,
+): { name?: string; issues: InstanceIssue[] } {
+  const issues: InstanceIssue[] = []
+  const name = validateName(0, raw, existing, editingId, issues)
+  return name === undefined ? { issues } : { name, issues }
 }
 
 /**

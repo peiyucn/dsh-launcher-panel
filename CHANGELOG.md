@@ -4,8 +4,9 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
-## [0.3.8] - 2026-11-03
+## [0.4.0] - 2026-11-03
 
+- **Detected instances**: the `+` menu and the `Detect Running dsh` command scan once (on demand) for dsh web servers on this machine that the launcher did not start, such as a systemd, docker or manually started install. Selected servers become read-only instances: the launcher observes them and opens their Web UI in a new tab, and never starts, stops, restarts or updates them. The launch token is resolved automatically from the process (systemd journal, docker logs or a redirected log file), with no configuration; when it cannot be resolved the tab still shows the running state and explains why. Detected instances can be renamed and deleted, and **Copy takeover info** copies a token-free briefing for handing the instance to an agent that converts it into a launcher-managed instance.
 - dsh is now detached from the VS Code extension host: reloading or closing the window no longer stops a running server. Use Stop in the panel or the command palette to end it.
 - New `dsh.packageImportMethod` setting (default `copy`): pnpm installs dsh's files as independent copies instead of hardlinks. On machines where security software filters file access, hardlinked files are much slower to open, which delays every Stop→Start (about 7s instead of 11–16s measured); a clean install costs only a few MB of extra disk. Changing the setting takes effect on the next Start: the same version is reinstalled in place with the new method (keep the terminal open; skipped while another instance is running); if it fails, deleting the install folder and starting again recovers with a clean install. The **Reinstall dsh (apply install method)** command forces it immediately.
 

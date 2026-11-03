@@ -28,6 +28,9 @@ src/
     store.ts            实例设置的持久化（VS Code settings）
     manager.ts          实例集合编排：CRUD、启停、活动记录、runtime 持有
     dashboard.ts        面板快照构造（manager.dashboard() 委托）
+    discovery.ts        手动探测：进程扫描、dsh 命令行解析、DetectedDsh
+    observed-token.ts   只读探测实例的启动 token 自动解析（journal/docker/stdout 文件）
+    takeover-info.ts    agent 接管信息卡（不含 token）
     shared-dsh.ts       共享 dsh 安装/检测/更新：prepare、detect、update 检查与缓存
     runtime/            单实例运行时
       runtime.ts        状态机编排与公开 API

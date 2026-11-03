@@ -29,6 +29,7 @@ function getNonce(): string {
 
 const IDLE_STATUS: PanelStatus = {
   running: false, starting: false, installing: false, stopping: false, checking: false, updating: false,
+  observed: false, uiAvailable: false,
   url: '', dsh: 'unknown', dshVersion: '', dshPath: '', dshHome: '', dshPathShort: '', dshHomeShort: '',
   nodeVersion: '', mode: 'pnpm', update: undefined, consoleLogPath: '', consoleLogPathShort: '',
   serverLogPath: '', serverLogPathShort: '', consoleLogSize: 0, serverLogSize: 0, sourceDebug: false,

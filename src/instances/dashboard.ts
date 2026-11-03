@@ -13,6 +13,8 @@ export interface InstanceDashboard {
     stopping: boolean
     checking: boolean
     updating: boolean
+    observed: boolean
+    uiAvailable: boolean
     url: string
     dsh: 'unknown' | 'ok' | 'missing'
     dshVersion: string
@@ -74,6 +76,8 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
       stopping: active?.stopping ?? false,
       checking: facts.checking,
       updating: isUpdating(),
+      observed: active?.observed ?? false,
+      uiAvailable: active?.uiAvailable ?? false,
       url: active?.url ?? '',
       dsh: facts.dsh,
       dshVersion: facts.dshVersion,

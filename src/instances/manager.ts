@@ -1,18 +1,24 @@
 import * as fs from 'node:fs'
 import * as net from 'node:net'
+import { randomUUID } from 'node:crypto'
 import * as vscode from 'vscode'
 import { MIN_INSTANCE_PORT_BASE } from '../shared/env.ts'
 import {
+  displayHome,
   instanceHome,
+  isObservedInstance,
   nextPort,
   resolveActiveId,
   sameHome,
   validateInstance,
+  validateInstanceName,
   type DshInstance,
   type InstanceInput,
   type InstanceIssue,
   type NormalizedInstances,
 } from './model.ts'
+import { detectedName, detectDshServers as detectDshServersImpl, findDshServerEntry, listProcessEntries, type DetectedDsh } from './discovery.ts'
+import { buildTakeoverInfo } from './takeover-info.ts'
 import type { ActivityEntry } from '../shared/activity.ts'
 import { addActivity, clearInstanceConsole, dbg, getActivity, replayInstanceActivity } from '../shared/activity.ts'
 import { readConfig } from '../dsh/config.ts'
@@ -207,6 +213,72 @@ export class InstanceManager {
     return undefined
   }
 
+  /** One-shot scan for running dsh servers this launcher did not start (user-triggered only). */
+  async detectRunningDsh(): Promise<DetectedDsh[]> {
+    await this.ready()
+    const configuredPorts = new Set(this.settings.instances.map((instance) => instance.port))
+    return detectDshServersImpl(configuredPorts)
+  }
+
+  /** Persist selected detected servers as read-only observed instances. */
+  async takeOverDetected(detected: readonly DetectedDsh[]): Promise<{ created: DshInstance[]; error?: string }> {
+    await this.ready()
+    const knownPorts = new Set(this.settings.instances.map((instance) => instance.port))
+    const knownNames = new Set(this.settings.instances.map((instance) => instance.name.toLowerCase()))
+    const additions: DshInstance[] = []
+    for (const item of detected) {
+      if (knownPorts.has(item.port)) continue
+      const base = detectedName(item.profile, item.port)
+      let name = knownNames.has(base.toLowerCase()) ? `${base} :${item.port}` : base
+      let suffix = 2
+      while (knownNames.has(name.toLowerCase())) name = `${base} :${item.port} #${suffix++}`
+      additions.push({
+        id: randomUUID(),
+        name,
+        home: item.home.trim(),
+        profile: item.profile.trim() === '' ? 'web' : item.profile.trim(),
+        port: item.port,
+        observed: true,
+      })
+      knownPorts.add(item.port)
+      knownNames.add(name.toLowerCase())
+    }
+    if (additions.length === 0) return { created: [] }
+    const saveError = await this.writeList([...this.settings.instances, ...additions])
+    if (saveError !== undefined) return { created: [], error: saveError }
+    for (const instance of additions) this.runtimes.set(instance.id, new InstanceRuntime(instance, this.host))
+    const first = additions[0]
+    this.settings.activeId = first.id
+    await this.persistActiveId(first.id)
+    return { created: additions }
+  }
+
+  /** Rename an observed instance; its home/profile/port stay read-only. */
+  async renameObserved(id: string, name: string): Promise<{ instance?: DshInstance; issues: InstanceIssue[] }> {
+    await this.ready()
+    const current = this.instance(id)
+    if (current === undefined || !isObservedInstance(current)) return { issues: [issue('entry', 'instance not found')] }
+    const result = validateInstanceName(name, this.settings.instances, id)
+    if (result.name === undefined || result.issues.some((entry) => entry.severity === 'error')) {
+      return { issues: result.issues }
+    }
+    const updated: DshInstance = { ...current, name: result.name }
+    const saveError = await this.writeList(this.settings.instances.map((entry) => (entry.id === id ? updated : entry)))
+    if (saveError !== undefined) return { issues: [...result.issues, this.saveIssue(saveError)] }
+    this.runtimes.get(id)?.update(updated)
+    return { instance: updated, issues: result.issues }
+  }
+
+  /** Markdown briefing (no token) for handing an observed instance to an agent. */
+  async takeoverInfo(id: string): Promise<string | undefined> {
+    await this.ready()
+    const instance = this.instance(id)
+    if (instance === undefined) return undefined
+    const entries = await listProcessEntries()
+    const command = entries === undefined ? undefined : findDshServerEntry(entries, instance.port)?.command
+    return buildTakeoverInfo(instance, command === undefined ? {} : { command })
+  }
+
   private saveIssue(detail: string): InstanceIssue {
     return issue('entry', `could not save the instance list to VS Code settings: ${detail} — `
       + 'reload the window if the extension was just installed or updated, then try again')
@@ -238,7 +310,10 @@ export class InstanceManager {
 
   async update(id: string, input: InstanceInput): Promise<InstanceMutation> {
     await this.ready()
-    if (!this.settings.instances.some((instance) => instance.id === id)) return { issues: [issue('entry', 'instance not found')] }
+    const current = this.settings.instances.find((instance) => instance.id === id)
+    if (current === undefined) return { issues: [issue('entry', 'instance not found')] }
+    // Detected instances are read-only apart from the name (renameObserved).
+    if (isObservedInstance(current)) return { issues: [issue('entry', 'detected instances are read-only; only the name can be changed')] }
     if (this.isBusy(id)) return { issues: [issue('entry', 'stop the instance before editing it')] }
     const result = validateInstance(input, instanceModelOptions(), this.settings.instances, id)
     if (!result.instance) return { issues: result.issues }
@@ -344,7 +419,7 @@ export class InstanceManager {
   }
 
   homeOf(instance: DshInstance): string {
-    return instanceHome(instance, instanceModelOptions())
+    return displayHome(instance, instanceModelOptions())
   }
 
   private isBusy(id: string): boolean {

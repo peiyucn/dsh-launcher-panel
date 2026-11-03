@@ -1,7 +1,9 @@
 import * as vscode from 'vscode'
 import {
+  actionCopyObservedInfo,
   actionCreateInstance,
   actionDeleteInstance,
+  actionDetectDsh,
   actionEditInstance,
   actionOpen,
   actionReinstallDsh,
@@ -15,7 +17,7 @@ import type { InstanceRuntimeStatus } from '../instances/runtime/runtime.ts'
 import { buildStatusMenuItems, buildStatusMenuSummary, type StatusMenuAction } from './status-menu.ts'
 import type { StatusBar } from './status-bar.ts'
 
-type InstanceAction = 'start' | 'stop' | 'restart' | 'open' | 'select'
+type InstanceAction = 'start' | 'stop' | 'restart' | 'open' | 'copyInfo' | 'select'
 
 type MenuPick = vscode.QuickPickItem & {
   action?: StatusMenuAction
@@ -28,6 +30,7 @@ function instanceIdArg(value: unknown): string | undefined {
 }
 
 function instanceStateLabel(status: InstanceRuntimeStatus): string {
+  if (status.observed) return status.running ? 'running (detected)' : 'stopped (detected)'
   if (status.adopted) return 'running (external)'
   if (status.untrackedPort) return 'port held by an untracked process'
   return status.state
@@ -65,6 +68,13 @@ function instanceRow(instance: InstanceRuntimeStatus, activeId: string): MenuPic
 // Rows carry the instance id so an action never depends on which tab is active.
 function instanceMenuItems(status: InstanceRuntimeStatus, activeId: string): MenuPick[] {
   const items: MenuPick[] = []
+  if (status.observed) {
+    // Read-only view: open the Web UI, hand a briefing to an agent, or make it active.
+    if (status.running && status.uiAvailable) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
+    items.push(menuItem(status, 'Copy takeover info', 'clippy', 'copyInfo', 'for handing this dsh to an agent'))
+    if (status.id !== activeId) items.push(menuItem(status, `Make ${status.name} Active`, 'star', 'select'))
+    return items
+  }
   if (status.running) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
   if (status.state !== 'stopping') {
     if (status.running) {
@@ -84,8 +94,13 @@ export function registerCommands(context: vscode.ExtensionContext, manager: Inst
   const runMenuAction = async (action: StatusMenuAction): Promise<void> => {
     switch (action) {
       case 'start':
-      case 'open':
         await actionStart()
+        break
+      case 'open':
+        await actionOpen()
+        break
+      case 'copyInfo':
+        await actionCopyObservedInfo()
         break
       case 'stop':
         await actionStop()
@@ -116,6 +131,9 @@ export function registerCommands(context: vscode.ExtensionContext, manager: Inst
         break
       case 'open':
         await actionOpen(id)
+        break
+      case 'copyInfo':
+        await actionCopyObservedInfo(id)
         break
       case 'select':
         await manager.select(id)
@@ -183,5 +201,10 @@ export function registerCommands(context: vscode.ExtensionContext, manager: Inst
     command('dsh.instance.select', () => actionSelectInstance()),
     command('dsh.instance.open', (id) => actionOpen(id)),
     command('dsh.reinstall', () => actionReinstallDsh()),
+    command('dsh.detect', async () => {
+      await actionDetectDsh()
+      await manager.dashboard()
+    }),
+    command('dsh.copyObservedInfo', (id) => actionCopyObservedInfo(id)),
   )
 }

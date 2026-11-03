@@ -5,7 +5,8 @@ import type { ChildProcess } from 'node:child_process'
 import { isProcessAlive, sleep } from '../../shared/proc.ts'
 import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
-import { instanceHome, instanceLogPath, type DshInstance } from '../model.ts'
+import { displayHome, instanceHome, instanceLogPath, isObservedInstance, type DshInstance } from '../model.ts'
+import { resolveObservedToken } from '../observed-token.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
 import { isUpdating } from '../../dsh/update.ts'
@@ -48,6 +49,7 @@ export class InstanceRuntime {
   private stopPromise: Promise<boolean> | undefined
   private untrackedPort = false
   private consoleLog: string[] = []
+  private observedTokenError = ''
 
   constructor(instance: DshInstance, host: RuntimeHost) {
     this.instance = instance
@@ -60,7 +62,13 @@ export class InstanceRuntime {
   }
 
   private resolveHome(): string {
+    // An observed instance may not know its home; never pin it to the launcher default.
+    if (this.isObserved()) return displayHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
     return instanceHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
+  }
+
+  private isObserved(): boolean {
+    return isObservedInstance(this.instance)
   }
 
   get logPath(): string {
@@ -95,13 +103,33 @@ export class InstanceRuntime {
     return path.join(dshBaseDir(), 'logs', 'server.log')
   }
 
-  private adopt(): Promise<boolean> {
-    return adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
+  private async adoptionToken(): Promise<string | undefined> {
+    if (!this.isObserved()) return undefined
+    const result = await resolveObservedToken(this.instance.port)
+    this.observedTokenError = result.error ?? ''
+    return result.token
+  }
+
+  private async adopt(): Promise<boolean> {
+    const adopted = await adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
       setUrl: (url) => { this.url = url },
       clearError: () => { this.error = '' },
       clearConsoleLog: () => { this.consoleLog = [] },
       adopt: () => this.transition('adopt'),
-    })
+    }, this.isObserved() ? () => this.adoptionToken() : undefined)
+    if (adopted) return true
+    if (!this.isObserved()) return false
+    // The port answers but no usable launch token was found: keep the observed entry visible
+    // (Running (detected)) with a concrete reason instead of pretending it is stopped.
+    if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return false
+    this.error = this.observedTokenError !== ''
+      ? this.observedTokenError
+      : 'the detected dsh is running, but its launch token could not be resolved'
+    this.untrackedPort = false
+    this.url = ''
+    this.transition('adopt')
+    this.activity(`⚠ ${this.error}`)
+    return true
   }
 
   private ensureProfile(prepared: PreparedDsh, home: string): Promise<boolean> {
@@ -239,8 +267,16 @@ export class InstanceRuntime {
     return ready
   }
 
+  /** Observed instances are read-only views; "start" only re-checks whether the process is up. */
+  private async startObserved(): Promise<boolean> {
+    if (this.state === 'running' || await isListening(this.instance.port)) return this.adopt()
+    this.activity('ℹ detected dsh is not running — start it outside the launcher')
+    return false
+  }
+
   start(): Promise<boolean> {
     if (this.startPromise) return this.startPromise
+    if (this.isObserved()) return this.startObserved()
     if (this.state === 'running') {
       void this.adopt()
       return Promise.resolve(true)
@@ -314,6 +350,10 @@ export class InstanceRuntime {
   }
 
   private async stopInternal(): Promise<boolean> {
+    if (this.isObserved()) {
+      this.activity('ℹ detected dsh is read-only — stop it outside the launcher')
+      return false
+    }
     this.clearStartWatchdog()
     this.installing = false
     // Flip to stopping before the port scan: the scan takes about a second on an adopted
@@ -422,6 +462,7 @@ export class InstanceRuntime {
     return {
       id: this.instance.id,
       name: this.instance.name,
+      observed: this.isObserved(),
       home,
       homeShort: maskPath(home),
       profile: this.instance.profile,
@@ -432,6 +473,7 @@ export class InstanceRuntime {
       installing: this.installing,
       stopping: this.state === 'stopping',
       adopted: this.isAdopted(),
+      uiAvailable: this.url !== '',
       untrackedPort: this.untrackedPort,
       error: this.error,
       url: loopbackUrl(this.instance.port),
@@ -442,6 +484,8 @@ export class InstanceRuntime {
 
   /** Not a status field: status objects reach the webview, which must not get the token. */
   uiUrl(): string {
+    // An observed instance without a resolved token has no openable URL.
+    if (this.isObserved() && this.url === '') return ''
     return this.url || loopbackUrl(this.instance.port)
   }
 
@@ -450,6 +494,7 @@ export class InstanceRuntime {
   }
 
   holdsHome(): boolean {
-    return holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
+    // Observed instances never own a launcher home.
+    return this.isObserved() ? false : holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
   }
 }

@@ -3,6 +3,8 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
 import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
+import { isObservedInstance } from './instances/model.ts'
+import { detectedName } from './instances/discovery.ts'
 import type { InstanceIssue } from './instances/model.ts'
 import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
 
@@ -53,7 +55,12 @@ export async function actionStart(id?: string): Promise<void> {
       }
       const before = manager.statusOf(target)
       const instance = manager.instance(target)
-      if (!(await manager.start(target)) || !instance) return
+      if (!instance) return
+      if (isObservedInstance(instance)) {
+        void vscode.window.showInformationMessage(`"${instance.name}" is a detected dsh — start it outside the launcher.`)
+        return
+      }
+      if (!(await manager.start(target))) return
       const autoOpen = instance.autoOpenBrowser ?? (vscode.workspace.getConfiguration('dsh').get<boolean>('autoOpenBrowser') ?? true)
       if (!shouldOpenBrowser(autoOpen, before?.running ?? false)) return
       const now = Date.now()
@@ -70,9 +77,15 @@ export async function actionStart(id?: string): Promise<void> {
 export async function actionStop(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
+    if (!target) return
+    const instance = manager.instance(target)
+    if (instance && isObservedInstance(instance)) {
+      void vscode.window.showInformationMessage(`"${instance.name}" is a detected dsh — stop it outside the launcher.`)
+      return
+    }
     // A failed stop is reported by the runtime itself (panel error line + activity feed);
     // Stop never kills a port owner it cannot identify, so there is nothing to ask about.
-    if (target) await manager.stop(target)
+    await manager.stop(target)
   })
 }
 
@@ -80,6 +93,11 @@ export async function actionRestart(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
+    const instance = manager.instance(target)
+    if (instance && isObservedInstance(instance)) {
+      void vscode.window.showInformationMessage(`"${instance.name}" is a detected dsh — restart it outside the launcher.`)
+      return
+    }
     const status = manager.statusOf(target)
     const occupied = instanceBusy(status) || status?.adopted === true || status?.untrackedPort === true
     // A refused or failed stop leaves the port taken; starting would only hit "port already in use".
@@ -92,6 +110,11 @@ export async function actionOpen(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
+    const status = manager.statusOf(target)
+    if (status?.observed && !status.uiAvailable) {
+      void vscode.window.showInformationMessage('This detected dsh is running, but its launch token could not be resolved — start it outside the launcher or check its logs.')
+      return
+    }
     const url = manager.uiUrl(target)
     if (url) await openUrl(url, manager.instance(target)?.browser)
   })
@@ -203,6 +226,20 @@ export async function actionEditInstance(id?: string): Promise<void> {
     if (!target) return
     const current = manager.instance(target)
     if (!current) return
+    if (isObservedInstance(current)) {
+      const name = await vscode.window.showInputBox({
+        title: 'Rename detected instance',
+        prompt: 'Display name (home, profile and port stay read-only)',
+        value: current.name,
+      })
+      if (name === undefined) return
+      const renamed = await manager.renameObserved(target, name)
+      const renameError = firstError(renamed.issues)
+      if (!renamed.instance || renameError) {
+        void vscode.window.showErrorMessage(`Instance was not renamed: ${renameError ?? 'unknown error'}`)
+      }
+      return
+    }
     if (instanceBusy(manager.statusOf(target))) {
       void vscode.window.showWarningMessage('Stop the instance before editing it.')
       return
@@ -247,8 +284,11 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
       return
     }
     const home = manager.homeOf(current)
+    const detail = isObservedInstance(current) || home === ''
+      ? 'the detected dsh process is not affected'
+      : `DSH data in ${home} is not deleted`
     const picked = await vscode.window.showWarningMessage(
-      `Remove "${current.name}" from the launcher? DSH data in ${home} is not deleted.`,
+      `Remove "${current.name}" from the launcher? ${detail}.`,
       { modal: true },
       'Remove',
     )
@@ -281,6 +321,51 @@ export async function actionReinstallDsh(): Promise<void> {
     if (picked !== 'Reinstall') return
     const ok = await manager.reinstallDsh()
     if (!ok) void vscode.window.showErrorMessage('dsh reinstall failed — see the activity log and terminal output.')
+  })
+}
+
+/** One-shot, user-triggered detection of dsh servers the launcher did not start. */
+export async function actionDetectDsh(): Promise<void> {
+  await withManager(async (manager) => {
+    const detected = await manager.detectRunningDsh()
+    if (detected.length === 0) {
+      void vscode.window.showInformationMessage('No running dsh servers were detected on this machine.')
+      return
+    }
+    const picked = await vscode.window.showQuickPick(
+      detected.map((entry) => ({
+        label: detectedName(entry.profile, entry.port),
+        description: `${entry.profile || 'dsh'} :${entry.port}`,
+        detail: entry.home === '' ? entry.command : entry.home,
+        entry,
+      })),
+      {
+        title: 'Detect running dsh',
+        placeHolder: 'Select one or more running dsh servers to add as read-only instances',
+        canPickMany: true,
+      },
+    )
+    if (picked === undefined || picked.length === 0) return
+    const result = await manager.takeOverDetected(picked.map((item) => item.entry))
+    if (result.error !== undefined) {
+      void vscode.window.showErrorMessage(`Could not save the detected instances: ${result.error}`)
+      return
+    }
+    void vscode.window.showInformationMessage(`Added ${result.created.length} detected dsh instance(s). Open one from the panel to attach.`)
+  })
+}
+
+/** Copy a token-free takeover briefing for an observed instance. */
+export async function actionCopyObservedInfo(id?: string): Promise<void> {
+  await withManager(async (manager) => {
+    const target = id ?? manager.activeInstance()?.id
+    if (!target) return
+    const instance = manager.instance(target)
+    if (!instance || !isObservedInstance(instance)) return
+    const info = await manager.takeoverInfo(target)
+    if (info === undefined) return
+    await vscode.env.clipboard.writeText(info)
+    void vscode.window.showInformationMessage('Takeover info copied — hand it to an agent to convert this dsh into a launcher-managed instance.')
   })
 }
 

@@ -574,7 +574,7 @@ node · launcher
 
 - 面板：observed tab 文案 `Running (detected)` / `Stopped (detected)`；隐藏 Start/Stop/Update/⟳；Open 可用时显示 `↗ New Tab`；Edit 只开放 name（home/profile/port 只读）；保留 Delete；
 - `+` 变为菜单：**New instance…** / **Detect running dsh…**；
-- 状态栏菜单：observed 只给 Open / Copy takeover info / Delete；
+- 状态栏菜单：observed 只给 Open / Copy takeover info（Delete 在面板里）；
 - 命令面板：`dsh.detect`、`dsh.copyDetectedInfo`（仅 observed）。
 
 ### Agent 接管信息卡

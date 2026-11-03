@@ -241,3 +241,46 @@ test('instanceHome resolves the effective home and instanceLogPath uses the id',
   assert.equal(instanceHome(instance({ home: path.join(homeDir, 'custom') }), options), path.resolve(path.join(homeDir, 'custom')))
   assert.equal(instanceLogPath(path.join(homeDir, '.dsh-launcher-panel'), 'abc'), path.join(homeDir, '.dsh-launcher-panel', 'logs', 'instances', 'abc', 'server.log'))
 })
+
+test('observed instances may omit home and profile', () => {
+  const result = normalizeInstances(
+    [{ id: 'ecs', name: 'ECS', port: 3082, observed: true, profile: 'superagent' }],
+    'ecs',
+    options,
+  )
+  assert.deepEqual(result.issues, [])
+  assert.equal(result.instances[0]?.observed, true)
+  assert.equal(result.instances[0]?.home, '')
+  assert.equal(result.activeId, 'ecs')
+})
+
+test('observed must be exactly true when present', () => {
+  for (const observed of [false, 'yes', 1]) {
+    const result = normalizeInstances([{ id: 'x', name: 'X', home: '', profile: 'web', port: 3080, observed }], undefined, options)
+    assert.deepEqual(result.instances, [], `observed=${JSON.stringify(observed)} must be rejected`)
+    assert.ok(result.issues.some((entry) => entry.field === 'observed' && entry.severity === 'error'))
+  }
+})
+
+test('observed instances still validate a provided home', () => {
+  const result = normalizeInstances(
+    [{ id: 'x', name: 'X', home: 'relative/path', profile: 'web', port: 3080, observed: true }],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.instances, [])
+  assert.ok(result.issues.some((entry) => entry.field === 'home' && entry.severity === 'error'))
+})
+
+test('observed instances without homes do not trigger the shared-home warning', () => {
+  const result = normalizeInstances(
+    [
+      { id: 'a', name: 'A', port: 3082, observed: true },
+      { id: 'b', name: 'B', port: 3083, observed: true },
+    ],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.issues, [])
+  assert.equal(result.instances.length, 2)
+})

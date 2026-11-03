@@ -16,10 +16,18 @@ export function isListening(port: number, probeMs?: number): Promise<boolean> {
   return isPortOpen(LOOPBACK, port, probeMs)
 }
 
-export async function probeUrl(port: number, logPath: string, legacyLogPath: string): Promise<string | undefined> {
+export async function probeUrl(
+  port: number,
+  logPath: string,
+  legacyLogPath: string,
+  resolveToken?: () => Promise<string | undefined>,
+): Promise<string | undefined> {
   const plain = `${loopbackUrl(port)}/`
   if (await httpOk(plain, HTTP_PROBE_TIMEOUT_MS)) return plain
-  const token = readTokenFromLog(logPath) ?? readTokenFromLog(legacyLogPath)
+  // The launcher's own server.log is the default source; observed instances supply a resolver.
+  const token = resolveToken === undefined
+    ? readTokenFromLog(logPath) ?? readTokenFromLog(legacyLogPath)
+    : await resolveToken()
   if (token === undefined) return undefined
   const tokenUrl = `${plain}?token=${token}`
   return (await tokenAccepted(tokenUrl, HTTP_PROBE_TIMEOUT_MS)) ? tokenUrl : undefined
@@ -37,8 +45,9 @@ export async function adoptServer(
   logPath: string,
   legacyLogPath: string,
   hooks: AdoptHooks,
+  resolveToken?: () => Promise<string | undefined>,
 ): Promise<boolean> {
-  const url = await probeUrl(port, logPath, legacyLogPath)
+  const url = await probeUrl(port, logPath, legacyLogPath, resolveToken)
   if (url === undefined) return false
   hooks.setUrl(url)
   hooks.clearError()

@@ -36,6 +36,7 @@ export function panelScript(values: PanelScriptValues): string {
       statusText: document.getElementById('statusText'),
       statusSub: document.getElementById('statusSub'),
       startBtn: document.getElementById('startBtn'),
+      copyObservedInfoBtn: document.getElementById('copyObservedInfoBtn'),
       instanceTabs: document.getElementById('instanceTabs'),
       editInstanceBtn: document.getElementById('editInstanceBtn'),
       deleteInstanceBtn: document.getElementById('deleteInstanceBtn'),
@@ -61,6 +62,7 @@ export function panelScript(values: PanelScriptValues): string {
     let gotUpdate = false
     let instanceList = []
     let currentInstanceId = ''
+    let observedActive = false
     // Last rendered activity: text drives auto-scroll, HTML avoids needless repaints.
     let lastActivityText = ''
     let lastLogHtml = ''
@@ -103,7 +105,46 @@ export function panelScript(values: PanelScriptValues): string {
       const installing = !!status.installing
       const stopping = !!status.stopping
       const updating = !!status.updating
+      const observed = !!status.observed
+      observedActive = observed
       whenRunning.forEach((b) => { b.style.display = (running || starting || installing || stopping) ? '' : 'none' })
+      const mode = status.mode === 'source' ? 'source' : 'pnpm'
+      modeOptions.forEach((b) => {
+        const active = b.dataset.mode === mode
+        b.classList.toggle('active', active)
+        b.setAttribute('aria-pressed', String(active))
+        b.disabled = observed
+      })
+      if (observed) {
+        // Detected instances are read-only: no Start/Stop/Update; only Open when a token is known.
+        el.copyObservedInfoBtn.hidden = false
+        el.updateBtn.style.display = 'none'
+        if (el.stopBtn) el.stopBtn.style.display = 'none'
+        el.startBtn.style.display = 'none'
+        el.startBtn.dataset.cmd = 'start'
+        stopElapsed()
+        if (starting || installing || stopping || updating) {
+          el.statusText.textContent = 'Detected dsh'
+          el.statusSub.textContent = 'Read-only observation — the launcher does not control it'
+        } else if (status.unknown) {
+          el.statusText.textContent = 'Status unknown'
+          el.statusSub.textContent = 'Status refresh failed — retrying…'
+        } else if (running) {
+          el.statusText.textContent = 'Running (detected)'
+          el.statusSub.textContent = status.url || ''
+          if (status.uiAvailable) {
+            el.startBtn.style.display = ''
+            el.startBtn.disabled = false
+            el.startBtn.textContent = '↗ New Tab'
+          }
+        } else {
+          el.statusText.textContent = 'Stopped (detected)'
+          el.statusSub.textContent = 'Start it outside the launcher'
+        }
+        return
+      }
+      el.copyObservedInfoBtn.hidden = true
+      if (el.stopBtn) el.stopBtn.style.display = ''
       if (starting || installing || stopping || updating) {
         if (startElapsed()) el.statusSub.textContent = 'Waited 0s'
         el.statusText.textContent = stopping ? 'Stopping…' : updating ? 'Updating dsh…' : installing ? 'Installing dsh…' : 'Starting DeepSeek Harness…'
@@ -129,12 +170,6 @@ export function panelScript(values: PanelScriptValues): string {
         el.stopBtn.disabled = stopping
         el.stopBtn.textContent = stopping ? 'Stopping…' : '■ Stop'
       }
-      const mode = status.mode === 'source' ? 'source' : 'pnpm'
-      modeOptions.forEach((b) => {
-        const active = b.dataset.mode === mode
-        b.classList.toggle('active', active)
-        b.setAttribute('aria-pressed', String(active))
-      })
     }
 
     function instanceDot(state) {
@@ -176,10 +211,14 @@ export function panelScript(values: PanelScriptValues): string {
       const busy = !!(status.running || status.starting || status.installing || status.stopping)
       const showHome = active && !!status.home
       const home = document.getElementById('instanceHome')
-      home.textContent = showHome ? (status.homeShort || status.home) : '—'
-      home.title = showHome ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home : ''
+      home.textContent = showHome ? (status.homeShort || status.home) : (active && status.observed ? 'not managed' : '—')
+      home.title = showHome
+        ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home
+        : (active && status.observed ? 'Detected dsh — DSH_HOME is not managed by the launcher' : '')
       home.dataset.path = showHome ? status.home : ''
-      el.editInstanceBtn.disabled = el.deleteInstanceBtn.disabled = !active || busy
+      // A detected instance's name is editable even while it runs; home/profile/port are not.
+      el.editInstanceBtn.disabled = !active || (busy && !status.observed)
+      el.deleteInstanceBtn.disabled = !active
       document.getElementById('instanceError').textContent = active && status.error ? status.error : ''
       if (!active) {
         el.startBtn.disabled = true
@@ -234,7 +273,10 @@ export function panelScript(values: PanelScriptValues): string {
       const dshMissingText = status.dsh === 'missing' ? (status.mode === 'pnpm' ? 'pnpm not found' : 'not found') : '—'
       document.getElementById('dshVersion').textContent = status.dshVersion ? 'v' + status.dshVersion : dshMissingText
       const upd = status.update
-      if (upd && upd.hasUpdate) {
+      if (status.observed) {
+        // The update button targets the launcher-managed install, which a detected dsh does not use.
+        el.updateBtn.style.display = 'none'
+      } else if (upd && upd.hasUpdate) {
         el.updateBtn.style.display = ''
         el.updateBtn.textContent = 'Update to ' + (upd.label || 'latest')
         const anyActive = Array.isArray(instanceList) && instanceList.some((i) => i.running || i.starting || i.installing || i.stopping)
@@ -328,6 +370,11 @@ export function panelScript(values: PanelScriptValues): string {
 
     document.querySelectorAll('button[data-cmd]').forEach((b) => {
       b.addEventListener('click', () => {
+        // Detected instances are observed only: the Start slot is an "open Web UI" action.
+        if (b.id === 'startBtn' && observedActive) {
+          vscode.postMessage({ command: 'open', value: currentInstanceId })
+          return
+        }
         // Acknowledge the click instantly: Start and Stop are greyed until the next status
         // update, and Stop also relabels itself because an adopted-server scan takes ~1s.
         if (b.dataset.cmd === 'start') b.disabled = true
@@ -344,7 +391,10 @@ export function panelScript(values: PanelScriptValues): string {
       const tab = e.target.closest('.instance-tab')
       if (tab) vscode.postMessage({ command: 'selectInstance', value: tab.dataset.id })
     })
-    document.getElementById('newInstanceBtn').addEventListener('click', () => vscode.postMessage({ command: 'instanceForm', value: 'new' }))
+    document.getElementById('newInstanceBtn').addEventListener('click', () => vscode.postMessage({ command: 'newInstanceMenu' }))
+    el.copyObservedInfoBtn.addEventListener('click', () => {
+      if (currentInstanceId) vscode.postMessage({ command: 'copyObservedInfo', value: currentInstanceId })
+    })
     el.editInstanceBtn.addEventListener('click', () => {
       if (currentInstanceId) vscode.postMessage({ command: 'instanceForm', value: currentInstanceId })
     })

@@ -78,6 +78,7 @@ export function panelBody(values: PanelBodyValues): string {
     <div class="instance-buttons">
       <button id="startBtn" data-cmd="start" class="primary" title="Start dsh and open the browser (or open a new tab when already running)">▶ Start</button>
       <button data-cmd="stop" class="secondary danger when-running" title="Stop the local dsh server">■ Stop</button>
+      <button id="copyObservedInfoBtn" class="secondary" hidden title="Copy a takeover briefing for an agent">Copy takeover info</button>
     </div>
   </section>
   <section class="section" id="consoleSection">
