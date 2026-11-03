@@ -6,7 +6,7 @@ import { isProcessAlive, sleep } from '../../shared/proc.ts'
 import { STOP_POLL_ATTEMPTS, STOP_POLL_INTERVAL_MS, STOP_POLL_PROBE_MS } from '../../shared/timing.ts'
 import { dshBaseDir, maskPath, resolveDshHome } from '../../dsh/paths.ts'
 import { displayHome, instanceHome, instanceLogPath, isObservedInstance, type DshInstance } from '../model.ts'
-import { resolveObservedToken } from '../observed-token.ts'
+import { resolveObservedToken, clearObservedTokenCache } from '../observed-token.ts'
 import { resolveObservedInstall } from '../observed-info.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
@@ -121,13 +121,22 @@ export class InstanceRuntime {
     this.observedVersion = info.version ?? ''
   }
 
-  private async adopt(): Promise<boolean> {
-    const adopted = await adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
+  private attemptAdopt(): Promise<boolean> {
+    return adoptServer(this.instance.port, this.logPath, this.legacyLogPath, {
       setUrl: (url) => { this.url = url },
       clearError: () => { this.error = '' },
       clearConsoleLog: () => { this.consoleLog = [] },
       adopt: () => this.transition('adopt'),
     }, this.isObserved() ? () => this.adoptionToken() : undefined)
+  }
+
+  private async adopt(): Promise<boolean> {
+    let adopted = await this.attemptAdopt()
+    if (!adopted && this.isObserved()) {
+      // An externally restarted dsh printed a new token; a cached old one keeps failing.
+      clearObservedTokenCache()
+      adopted = await this.attemptAdopt()
+    }
     if (adopted) {
       await this.loadObservedInstall()
       return true
@@ -429,7 +438,10 @@ export class InstanceRuntime {
     if (this.isTransitioning()) return
     if (open) {
       if (this.state === 'running') {
-        this.untrackedPort = false
+        // Observed servers can restart outside the launcher with a new token; re-adopt so the
+        // cached URL is refreshed, while launcher-owned instances just clear the flag.
+        if (this.isObserved()) await this.adopt()
+        else this.untrackedPort = false
         return
       }
       this.untrackedPort = !(await this.adopt())

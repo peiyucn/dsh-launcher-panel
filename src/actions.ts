@@ -2,6 +2,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
+import { dbg } from './shared/activity.ts'
 import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
 import { isObservedInstance } from './instances/model.ts'
 import { detectedName, type DetectedDsh } from './instances/discovery.ts'
@@ -27,6 +28,8 @@ export async function openUrl(url: string, browserOverride?: 'built-in' | 'exter
   } catch {
     // Keep the local URL when the host cannot forward (e.g. non-remote hosts).
   }
+  // Token-free diagnostic: which authority the client will actually open.
+  dbg(`open web ui: remote=${vscode.env.remoteName ?? 'local'} target=${target.scheme}://${target.authority}`)
   if (browser === 'external') {
     await vscode.env.openExternal(target)
     return
@@ -119,6 +122,8 @@ export async function actionOpen(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
+    // A detected dsh may have restarted with a new token since the last refresh.
+    if (manager.statusOf(target)?.observed) await manager.refresh()
     const status = manager.statusOf(target)
     if (status?.observed && !status.uiAvailable) {
       void vscode.window.showInformationMessage('This detected dsh is running, but its launch token could not be resolved — start it outside the launcher or check its logs.')
