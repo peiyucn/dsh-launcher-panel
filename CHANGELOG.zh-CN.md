@@ -4,6 +4,11 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.4.2] - 2026-11-05
+
+- **适配 dsh 0.2.2**：source 模式固定到最新官方 release tag（fresh clone 自动 checkout；托管的旧 checkout 在无实例运行时自动切 tag），更新检查改为 HEAD 是否正好在 tag 上、版本显示不再带 -N-gsha。
+- dsh 0.2.2 起启动前校验 **Node >= 24.9**，过旧时提示升级并停止启动（更早版本线仍允许 Node 22）；README 环境要求已同步为 24.9+。
+
 ## [0.4.1] - 2026-11-03
 
 - **DeepSeek API Status** 区在面板打开时默认展开；仍可用区标题折叠。

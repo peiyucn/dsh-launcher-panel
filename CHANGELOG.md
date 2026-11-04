@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.2] - 2026-11-05
+
+- **dsh 0.2.2 support**: the source checkout is pinned to the latest official release tag (fresh clones check it out automatically; an old launcher-managed checkout switches to the tag automatically when no instance is running), update checks now compare HEAD against the tag, and the version label no longer shows -N-gsha.
+- Since dsh 0.2.2 the launcher verifies **Node >= 24.9** before starting and stops with an upgrade hint when it is older (earlier dsh lines still allow Node 22); the README requirement is updated accordingly.
+
 ## [0.4.1] - 2026-11-03
 
 - The **DeepSeek API Status** section is expanded by default when the panel opens; it can still be collapsed with the section header.
