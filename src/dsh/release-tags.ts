@@ -1,20 +1,10 @@
 import { GIT_OP_TIMEOUT_MS, GIT_REMOTE_TIMEOUT_MS, PORT_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 import { runFile } from '../shared/proc.ts'
 import { parseLocalProxySettings } from './git.ts'
-import { parseRemoteReleaseTags, type RemoteReleaseTag } from './versions.ts'
+import { parseLocalReleaseTags, parseRemoteReleaseTags, type RemoteReleaseTag } from './versions.ts'
 import { isPortOpen } from './probes.ts'
 
 const RELEASE_TAG_PREFIX = 'dsh-v'
-
-type CommitContainment = 'contained' | 'not-contained' | 'probe-failed'
-
-export function classifyContainment(result: { ok: boolean; code?: number }): CommitContainment {
-  if (result.ok) return 'contained'
-  // 128: the tag object is unknown locally because it was never fetched.
-  if (result.code === 1 || result.code === 128) return 'not-contained'
-  // No exit code means the command never ran to completion: a probe failure, not an answer.
-  return 'probe-failed'
-}
 
 export function releaseVersion(tagName: string): string {
   return tagName.startsWith(RELEASE_TAG_PREFIX) ? tagName.slice(RELEASE_TAG_PREFIX.length) : tagName
@@ -40,7 +30,27 @@ export async function listReleaseTags(checkout: string): Promise<{ tags: RemoteR
   return { tags: parseRemoteReleaseTags(r.stdout) }
 }
 
-export async function commitIsContained(checkout: string, commit: string): Promise<CommitContainment> {
-  const r = await runFile('git', ['-C', checkout, 'merge-base', '--is-ancestor', commit, 'HEAD'], GIT_OP_TIMEOUT_MS)
-  return classifyContainment(r)
+/** Full commit at HEAD; undefined when git cannot read the checkout. */
+export async function headCommit(checkout: string): Promise<string | undefined> {
+  const r = await runFile('git', ['-C', checkout, 'rev-parse', 'HEAD'], GIT_OP_TIMEOUT_MS)
+  return r.ok ? r.stdout.trim() || undefined : undefined
+}
+
+/** Commit an annotated or lightweight tag points at. */
+export async function commitOfTag(checkout: string, tag: string): Promise<string | undefined> {
+  const r = await runFile('git', ['-C', checkout, 'rev-parse', `${tag}^{commit}`], GIT_OP_TIMEOUT_MS)
+  return r.ok ? r.stdout.trim() || undefined : undefined
+}
+
+/** Release tags already fetched into the checkout, newest first is computed by the caller. */
+export async function listLocalReleaseTags(checkout: string): Promise<{ tags: string[] } | { error: string }> {
+  const r = await runFile('git', ['-C', checkout, 'tag', '--list', 'dsh-v*'], GIT_OP_TIMEOUT_MS)
+  if (!r.ok) return { error: r.error ?? 'could not list the local release tags' }
+  return { tags: parseLocalReleaseTags(r.stdout) }
+}
+
+/** Detach the checkout at a release tag. Callers must only do this when it is safe to move. */
+export async function pinCheckoutToTag(checkout: string, tag: string): Promise<boolean> {
+  const r = await runFile('git', ['-C', checkout, 'checkout', '--detach', tag], GIT_OP_TIMEOUT_MS)
+  return r.ok
 }

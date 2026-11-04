@@ -10,6 +10,8 @@ import { clearObservedProcessCache } from '../observed-process.ts'
 import { ObservedState } from './observed-state.ts'
 import { holdsHome, nextState, stopPlan, type InstanceEvent, type InstanceState } from '../state.ts'
 import { readConfig, type DshConfig } from '../../dsh/config.ts'
+import { probeNodeVersion } from '../../dsh/node-check.ts'
+import { DSH_NODE_24_9_MIN_VERSION, nodeTooOldForDsh } from '../../dsh/versions.ts'
 import { isUpdating } from '../../dsh/update.ts'
 import { buildSpawnSpec } from '../../dsh/start-spec.ts'
 import { LOG_TAIL_LINES, sanitizeStartupLines } from '../../shared/logs.ts'
@@ -258,6 +260,15 @@ export class InstanceRuntime {
       this.installing = false
     }
     if (prepared === undefined) return this.fail('dsh install or detection failed — see the launcher log')
+    // dsh 0.2.2+ needs Node.js 24.9 or later. Failing here explains the problem up front
+    // instead of letting the server exit silently right after it is spawned.
+    const nodeVersion = await probeNodeVersion(cfg.nodePath).catch(() => '')
+    if (nodeTooOldForDsh(prepared.version, nodeVersion)) {
+      return this.fail(
+        `dsh ${prepared.version} requires Node.js ${DSH_NODE_24_9_MIN_VERSION} or later,`
+        + ` but the configured Node is v${nodeVersion} — install a newer Node.js or point dsh.nodePath at it`,
+      )
+    }
     if (this.state !== 'starting') return false
     this.host.dbg(`[${this.instance.id}] start: prepare done at ${elapsed()}`)
     if (!(await this.ensureProfile(prepared, home))) return false

@@ -31,7 +31,8 @@ export async function detectDshVersion(cfg: DetectConfig, host: DetectHost): Pro
       host.setDshVersion('')
       return
     }
-    // git describe stays honest off a tag (tag-N-gsha); the checkout manifest only changes on release.
+    // Launcher-managed checkouts are pinned to the newest release tag before detection,
+    // so the -N-gsha suffix only shows for user-supplied checkouts that were left off-tag.
     const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
     if (described.ok && described.stdout.trim() !== '') {
       host.setDshVersion(dshVersionFromDescribe(described.stdout))

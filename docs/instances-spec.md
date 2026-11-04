@@ -181,6 +181,7 @@ interface DshInstance {
 - 如果用户删光所有实例，面板显示空状态 + `+`；不要用迁移逻辑自动重新创建 Default。
 - 现有用户升级：`dsh.port` 迁移成 Default；已有 `~/.dsh` / dsh 安装继续可用。
 - pkg 安装方式由 `dsh.packageImportMethod` 决定（默认 `copy`）：`copy` 复制文件（多占一点磁盘，但避免硬链接在有文件过滤驱动的机器上拖慢启动），`hardlink`/`auto` 则相反。改设置后在下一次 Start 时，在原目录执行 `pnpm install --force --package-import-method <method>` 重装同版本：不移动、不改名任何目录（pnpm 的 junction 在 Windows 上按绝对路径创建，移动目录会让入口悬空）；终端跑完前不要关闭。重装失败时提示用户：停止所有实例 → 删除安装目录 → 重新 Start 全新安装。重装前若存在陈旧的 `pnpm-workspace.yaml` 会先移开、成功后丢弃，避免旧配置把跨平台包拉进来；过程中用锁文件避免两个窗口同时重装。有其他实例运行时跳过；命令面板的 `dsh.reinstall` 可立即强制。版本更新时按该方式安装。
+- **source 模式固定精确 release tag**：launcher 管理的 checkout（`~/.dsh-launcher-panel/source` 或 `dsh.srcPath` 指向 launcher 自建目录）必须停在最新官方 `dsh-v<version>` tag 上，而不是默认分支——默认分支的 `git describe` 会带 `-N-gsha` 后缀。fresh clone 后立即 checkout 最新 tag；已存在的托管 checkout 在无实例运行时的 Start 前也会被切到最新 tag。用户自带 checkout（非 launcher 托管路径）不自动移动：更新检查发现 `HEAD` 不在最新 tag 上时提示 Update，用户点击后才 fetch + `checkout --detach <tag>`。版本显示取 tag（如 `v0.2.2-rc.1`），不显示 `-811-g<sha>`。
 
 ### 创建失败
 
@@ -235,18 +236,19 @@ stopped ──start──▶ starting ──port/url ready──▶ running
 2. 同一规范化 home 已有实例在运行：拒绝，提示先停另一个。
 3. 有全局 dsh 更新在进行：拒绝并提示等待。
 4. 创建 home 目录（不存在时），再走共享安装/检测流程（`prepare()`）；dsh 缺失时该实例显示安装态，不并发安装。
-5. 确认 profile 存在；缺失时让 DSH 自己初始化（`web` 用 `dsh web --dump-config`，自定义 profile 用 `--profile <p> --from-default-profile web --dump-config`），不手工复制模板。
-6. 启动子进程：
+5. 版本前置：dsh 0.2.2 起要求 Node.js >= 24.9（更早的版本线仍支持 Node 22）。`prepare()` 拿到目标 dsh 版本后探测 `dsh.nodePath` 的 Node 版本；过旧时以可读错误停止启动（提示升级 Node 或改 `dsh.nodePath`），不再让 dsh 在启动后静默退出。读不到 Node 版本时不拦截。
+6. 确认 profile 存在；缺失时让 DSH 自己初始化（`web` 用 `dsh web --dump-config`，自定义 profile 用 `--profile <p> --from-default-profile web --dump-config`），不手工复制模板。
+7. 启动子进程：
    - 子进程环境加 `DSH_HOME=<实例 home>`；
    - 参数为 `[<profile>, '--port', '<port>']`，dsh 版本足够新时追加 `--no-open`；
    - pkg 模式直接用 Node 运行已安装包的 `lib/bin.js`（pnpm 只负责安装/更新，不承担启动转发），source 模式经 `node --import tsx/esm apps/cli/src/bin.ts` 启动；
    - `hideConsole` → `windowsHide`；source 模式且 `sourceDebug` 时加 `NODE_DEBUG=module`；
    - 子进程在所有平台都 `detached`：VS Code 重载/关闭窗口会结束扩展宿主，Windows 上还会按进程树清理其子进程；不 detach 会让 dsh 跟着窗口一起消失。Stop 仍按 pid 树结束它。
-7. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。每次 Start 的阶段耗时（`start: preflight/prepare/profile/server spawned/settled`）以 dbg 行写入共享的 `~/.dsh-launcher-panel/logs/client.log`，用于区分扩展前置、profile 与 dsh 自身耗时；只记耗时，不记日志内容或 token。
-8. 面板 Console 的「startup output」只收**本次 Start 之后**写入的内容（spawn 前记录日志偏移）：即使 `clearServerLogOnStart=false` 保留了历史日志，旧运行的输出也不会混进本次启动输出。显示前还会过滤周期性 plugin 日志（如 `model listing`）并给 launch token 打码；完整原文始终在 `server.log`。
-9. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
-10. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
-11. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。
+8. 每个实例独立日志：`~/.dsh-launcher-panel/logs/instances/<id>/server.log`（dsh 输出）与 `.../client.log`（该实例的 launcher 活动）；`clearServerLogOnStart` 只清该实例的 server.log。每次 Start 的阶段耗时（`start: preflight/prepare/profile/server spawned/settled`）以 dbg 行写入共享的 `~/.dsh-launcher-panel/logs/client.log`，用于区分扩展前置、profile 与 dsh 自身耗时；只记耗时，不记日志内容或 token。
+9. 面板 Console 的「startup output」只收**本次 Start 之后**写入的内容（spawn 前记录日志偏移）：即使 `clearServerLogOnStart=false` 保留了历史日志，旧运行的输出也不会混进本次启动输出。显示前还会过滤周期性 plugin 日志（如 `model listing`）并给 launch token 打码；完整原文始终在 `server.log`。
+10. 等待端口/URL 就绪；标记 `running`；按实例的浏览器设置打开。
+11. 并发 Start 同一实例：合并/幂等；已在运行则直接打开或提示。
+12. 并发 Start 不同实例：允许，但不能并发跑全局安装/更新。
 
 ### Stop
 

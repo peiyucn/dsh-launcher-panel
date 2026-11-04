@@ -1,26 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { classifyContainment, releaseVersion } from '../src/dsh/release-tags.ts'
-
-test('a successful ancestor check means the commit is contained', () => {
-  assert.equal(classifyContainment({ ok: true }), 'contained')
-})
-
-test('exit code 1 means the commit is not contained', () => {
-  assert.equal(classifyContainment({ ok: false, code: 1 }), 'not-contained')
-})
-
-test('exit code 128 (unknown object, tag not fetched yet) means not contained', () => {
-  assert.equal(classifyContainment({ ok: false, code: 128 }), 'not-contained')
-})
-
-test('a missing exit code means the probe failed, not "not contained"', () => {
-  assert.equal(classifyContainment({ ok: false }), 'probe-failed')
-})
-
-test('an unexpected exit code means the probe failed', () => {
-  assert.equal(classifyContainment({ ok: false, code: 129 }), 'probe-failed')
-})
+import { releaseVersion } from '../src/dsh/release-tags.ts'
 
 test('releaseVersion strips only the official dsh-v prefix', () => {
   assert.equal(releaseVersion('dsh-v0.1.7-alpha.1'), '0.1.7-alpha.1')

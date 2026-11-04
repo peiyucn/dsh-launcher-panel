@@ -1,6 +1,10 @@
 // From this version dsh opens the system browser itself, so the launcher passes --no-open.
 export const DSH_NO_OPEN_MIN_VERSION = '0.1.0-rc.8'
 
+// DSH 0.2.2 raised the runtime floor to Node.js 24.9; older lines still run on Node 22.
+export const DSH_NODE_24_9_FLOOR = '0.2.2-alpha.1'
+export const DSH_NODE_24_9_MIN_VERSION = '24.9.0'
+
 // Orders `x.y.z[-kind[.n]]` shapes; anything else falls back to plain string order.
 export function compareDshVersions(a: string, b: string): number {
   const parse = (v: string): { core: number[]; pre: { kind: string; n: number } | null } | undefined => {
@@ -50,6 +54,36 @@ export function dshVersionFromDescribe(describe: string): string {
   return describe.trim().replace(/^dsh-v/, '')
 }
 
+// Local tag names from `git tag --list 'dsh-v*'`: only the official release tags count.
+export function parseLocalReleaseTags(stdout: string): string[] {
+  const tags: string[] = []
+  for (const raw of stdout.split(/\r?\n/)) {
+    const tag = raw.trim()
+    if (!tag.startsWith('dsh-v')) continue
+    if (!/^\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?$/.test(tag.slice('dsh-v'.length))) continue
+    tags.push(tag)
+  }
+  return tags
+}
+
+// The newest release tag present in the checkout itself (no network probe).
+export function newestLocalReleaseTag(tags: string[]): string | undefined {
+  let best: string | undefined
+  for (const tag of tags) {
+    const version = tag.slice('dsh-v'.length)
+    if (best === undefined || compareDshVersions(version, best.slice('dsh-v'.length)) > 0) best = tag
+  }
+  return best
+}
+
+// True when a dsh release line needs a newer Node.js than the configured one.
+// An unreadable version never blocks a start: the spawn itself will report it.
+export function nodeTooOldForDsh(dshVersion: string, nodeVersion: string): boolean {
+  if (dshVersion === '' || nodeVersion === '') return false
+  return dshVersionAtLeast(dshVersion, DSH_NODE_24_9_FLOOR)
+    && !dshVersionAtLeast(nodeVersion, DSH_NODE_24_9_MIN_VERSION)
+}
+
 export interface RemoteReleaseTag {
   tag: string
   commit: string
@@ -86,12 +120,14 @@ export interface UpdateCheckOutcome {
   failedReason?: string
 }
 
+// Source mode tracks the newest release tag exactly. A checkout that merely contains
+// the tag (for example the master branch after a release merge) still needs pinning.
 // An unrecognized listing is a failed check, never "up to date".
-export function decideSourceUpdate(newest: RemoteReleaseTag | undefined, contained: boolean): UpdateCheckOutcome {
+export function decideSourceUpdate(newest: RemoteReleaseTag | undefined, atRelease: boolean): UpdateCheckOutcome {
   if (newest === undefined) {
     return { hasUpdate: false, label: '', failed: true, failedReason: 'origin lists no official dsh release tag' }
   }
-  if (contained) return { hasUpdate: false, label: '' }
+  if (atRelease) return { hasUpdate: false, label: '' }
   return { hasUpdate: true, label: `v${newest.tag.slice('dsh-v'.length)}` }
 }
 

@@ -9,6 +9,7 @@ import {
   ensurePnpmAvailable,
   ensureSourceCheckout,
   findSourceCheckout,
+  pinSourceToNewestReleaseTag,
   pkgInstallDir,
   preparePkgStart,
   unreachablePkgPath as unreachablePkgPathSetting,
@@ -141,6 +142,12 @@ export class SharedDsh {
     if (cfg.runMode === 'source') {
       const checkout = await ensureSourceCheckout(cfg, this.installHost())
       if (!checkout) return undefined
+      // Launcher-owned checkouts sit on the newest release tag; fresh clones were pinned
+      // while cloning. Only move an older managed checkout when nothing is running, so a
+      // live source instance never sees its files switch under it.
+      if (checkout.managed && !checkout.cloned && this.stopped()) {
+        await pinSourceToNewestReleaseTag(checkout.path, this.installHost())
+      }
       if (!(await ensureCheckoutReady(checkout.path, this.checkoutHost(), checkout.cloned))) {
         this.dshStateValue = 'missing'
         return undefined

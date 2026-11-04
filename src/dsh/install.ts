@@ -6,6 +6,8 @@ import { npmSpecForChannel, type NpmChannel, type PackageImportMethod } from '..
 import { PNPM_PROBE_TIMEOUT_MS, PNPM_VIEW_TIMEOUT_MS } from '../shared/timing.ts'
 import { resolveCommandEntry, runResolved } from '../shared/proc.ts'
 import { findPnpm, pnpmSupportsDangerouslyAllowAllBuilds } from './pnpm.ts'
+import { commitOfTag, headCommit, listLocalReleaseTags, pinCheckoutToTag } from './release-tags.ts'
+import { newestLocalReleaseTag } from './versions.ts'
 import { installLooksHealthy, recoverInterruptedReinstall, reinstallInPlace } from './reinstall.ts'
 import { reportStepFailure } from './terminal.ts'
 
@@ -251,11 +253,46 @@ export function findSourceCheckout(cfg: { srcPath: string }): string | undefined
 interface SourceCheckout {
   path: string
   cloned: boolean
+  /** Launcher-owned checkout: safe to move to the newest release tag on start. */
+  managed: boolean
+}
+
+/**
+ * Source mode tracks the newest official release tag exactly. A fresh clone lands on
+ * the default branch, whose `git describe` carries a `-N-gsha` suffix; pinning to the
+ * tag keeps the shown version and the built source identical to a published release.
+ * Never moves a user-supplied checkout that the launcher does not own.
+ * @returns true when the checkout already sat on the tag or was moved onto it.
+ */
+export async function pinSourceToNewestReleaseTag(checkout: string, host: Pick<InstallHost, 'addActivity' | 'dbg'>): Promise<boolean> {
+  const listed = await listLocalReleaseTags(checkout)
+  if ('error' in listed) {
+    host.dbg(`source pin skipped: ${listed.error}`)
+    return false
+  }
+  const tag = newestLocalReleaseTag(listed.tags)
+  if (tag === undefined) {
+    host.dbg('source pin skipped: the checkout has no official release tag')
+    return false
+  }
+  const [head, target] = await Promise.all([headCommit(checkout), commitOfTag(checkout, tag)])
+  if (head === undefined || target === undefined) {
+    host.dbg(`source pin skipped: could not read HEAD or ${tag}`)
+    return false
+  }
+  if (head === target) return true
+  if (!(await pinCheckoutToTag(checkout, tag))) {
+    // Keep the checkout usable rather than blocking Start; the version display stays honest.
+    host.addActivity(`⚠ could not pin the source checkout to ${tag} — using the current checkout`)
+    return false
+  }
+  host.addActivity(`ℹ Source checkout pinned to ${tag}`)
+  return true
 }
 
 export async function ensureSourceCheckout(cfg: { srcPath: string }, host: InstallHost): Promise<SourceCheckout | undefined> {
   const existing = findSourceCheckout(cfg)
-  if (existing) return { path: existing, cloned: false }
+  if (existing) return { path: existing, cloned: false, managed: existing === managedSourceCheckout() }
   const chosen = await chooseInstallDir('source', managedSourceCheckout())
   if (!chosen) return undefined
   // Persist the default too: an explicit value pins the clone against a future default change.
@@ -264,7 +301,7 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
   }
   if (isDshCheckout(chosen)) {
     host.addActivity('✓ Existing deepseek-harness checkout found — reusing it')
-    return { path: chosen, cloned: false }
+    return { path: chosen, cloned: false, managed: chosen === managedSourceCheckout() }
   }
   try {
     if (fs.readdirSync(chosen).length > 0) {
@@ -291,5 +328,7 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
     return undefined
   }
   host.addActivity('✓ deepseek-harness cloned')
-  return { path: chosen, cloned: true }
+  // A fresh clone lands on the default branch; pin it to the newest release tag before setup.
+  await pinSourceToNewestReleaseTag(chosen, host)
+  return { path: chosen, cloned: true, managed: chosen === managedSourceCheckout() }
 }

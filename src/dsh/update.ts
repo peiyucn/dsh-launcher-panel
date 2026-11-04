@@ -8,7 +8,7 @@ import {
 import { GIT_FETCH_TIMEOUT_MS } from '../shared/timing.ts'
 import { runFile } from '../shared/proc.ts'
 import type { NpmChannel, PackageImportMethod } from '../shared/env.ts'
-import { commitIsContained, explainGitFailure, listReleaseTags, releaseVersion } from './release-tags.ts'
+import { explainGitFailure, headCommit, listReleaseTags, releaseVersion } from './release-tags.ts'
 import { ensureDshInstalled, ensurePnpmAvailable, latestDshVersion, pkgInstallDir, pkgInstalledVersion } from './install.ts'
 import type { InstallHost } from './install.ts'
 import { effectivePackageImportMethod } from './paths.ts'
@@ -37,22 +37,22 @@ export interface UpdateHost {
 }
 
 type SourceInspection =
-  | { kind: 'release'; release: RemoteReleaseTag; contained: boolean }
+  | { kind: 'release'; release: RemoteReleaseTag; atRelease: boolean }
   | { kind: 'failed'; reason: string }
 
-// One probe for both callers: resolve the newest release and whether HEAD contains it.
+// One probe for both callers: resolve the newest release and whether HEAD sits exactly on it.
 async function inspectSource(checkout: string): Promise<SourceInspection> {
   const listed = await listReleaseTags(checkout)
   if ('error' in listed) return { kind: 'failed', reason: listed.error }
   const release = newestReleaseTag(listed.tags)
   if (release === undefined) return { kind: 'failed', reason: 'origin lists no official dsh release tag' }
-  const containment = await commitIsContained(checkout, release.commit)
-  if (containment === 'probe-failed') {
-    // An unanswered probe is not "not contained": it must not offer a downgrade.
+  const head = await headCommit(checkout)
+  if (head === undefined) {
+    // An unanswered probe is not "not at the release": it must not offer a downgrade.
     const cause = await explainGitFailure(checkout)
-    return { kind: 'failed', reason: cause ?? 'git could not compare the newest release tag with the checkout' }
+    return { kind: 'failed', reason: cause ?? 'git could not read the checkout HEAD' }
   }
-  return { kind: 'release', release, contained: containment === 'contained' }
+  return { kind: 'release', release, atRelease: head === release.commit }
 }
 
 function mayProceed(host: UpdateHost): boolean {
@@ -87,7 +87,7 @@ export async function checkDshUpdateStatus(host: UpdateHost): Promise<DshUpdate>
   if (inspected.kind === 'failed') {
     return { hasUpdate: false, label: '', failed: true, failedReason: inspected.reason }
   }
-  return decideSourceUpdate(inspected.release, inspected.contained)
+  return decideSourceUpdate(inspected.release, inspected.atRelease)
 }
 
 export async function runDshUpdate(host: UpdateHost): Promise<void> {
@@ -154,7 +154,7 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
       host.addActivity(`↑ Update failed — ${inspected.reason}`)
       return
     }
-    if (inspected.contained) {
+    if (inspected.atRelease) {
       host.addActivity('↑ dsh is already up to date')
       return
     }
