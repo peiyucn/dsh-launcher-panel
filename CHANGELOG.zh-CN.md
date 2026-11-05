@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.4.3] - 2026-11-05
+
+- 修复：探测接管的只读实例，即使对应的 dsh 进程正在运行，也可以直接从面板删除；删除只移除 launcher 的记录，不会停止或影响该 dsh 进程（此前会要求先停止，但 launcher 并不管理它）。
+
 ## [0.4.2] - 2026-11-05
 
 - **适配 dsh 0.2.2**：source 模式固定到最新官方 release tag（fresh clone 自动 checkout；托管的旧 checkout 在无实例运行时自动切 tag），更新检查改为 HEAD 是否正好在 tag 上、版本显示不再带 -N-gsha。

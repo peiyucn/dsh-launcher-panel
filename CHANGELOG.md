@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.3] - 2026-11-05
+
+- Fixed: a detected (read-only) instance can now be removed from the panel even while its dsh process is running; removal only drops the launcher's record and never stops or touches that process (previously it asked the user to stop an instance the launcher does not manage).
+
 ## [0.4.2] - 2026-11-05
 
 - **dsh 0.2.2 support**: the source checkout is pinned to the latest official release tag (fresh clones check it out automatically; an old launcher-managed checkout switches to the tag automatically when no instance is running), update checks now compare HEAD against the tag, and the version label no longer shows -N-gsha.
