@@ -4,7 +4,7 @@ import * as vscode from 'vscode'
 import { normalizeBrowser, shouldOpenBrowser } from './shared/env.ts'
 import { dbg } from './shared/activity.ts'
 import { getInstanceManager, type InstanceManager } from './instances/manager.ts'
-import { isObservedInstance } from './instances/model.ts'
+import { isObservedInstance, isRemovableWhileRunning } from './instances/model.ts'
 import { detectedName, type DetectedDsh } from './instances/discovery.ts'
 import type { InstanceIssue } from './instances/model.ts'
 import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
@@ -292,7 +292,7 @@ export async function actionDeleteInstance(id?: string): Promise<void> {
     if (!target) return
     const current = manager.instance(target)
     if (!current) return
-    if (instanceBusy(manager.statusOf(target))) {
+    if (instanceBusy(manager.statusOf(target)) && !isRemovableWhileRunning(current)) {
       const stop = await vscode.window.showWarningMessage('Stop the instance before deleting it.', 'Stop')
       if (stop === 'Stop') await manager.stop(target)
       return

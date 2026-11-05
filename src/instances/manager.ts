@@ -7,6 +7,7 @@ import {
   displayHome,
   instanceHome,
   isObservedInstance,
+  isRemovableWhileRunning,
   nextPort,
   resolveActiveId,
   sameHome,
@@ -328,8 +329,11 @@ export class InstanceManager {
 
   async remove(id: string): Promise<boolean> {
     await this.ready()
-    if (this.isBusy(id)) return false
-    if (!this.settings.instances.some((instance) => instance.id === id)) return false
+    const current = this.settings.instances.find((instance) => instance.id === id)
+    if (current === undefined) return false
+    // A detected instance is only the launcher's read-only view: removing it never stops the
+    // external process, so its running state must not block deletion.
+    if (this.isBusy(id) && !isRemovableWhileRunning(current)) return false
     const next = this.settings.instances.filter((instance) => instance.id !== id)
     const nextActiveId = this.settings.activeId === id ? (next[0]?.id ?? '') : this.settings.activeId
     const saveError = await this.writeList(next)

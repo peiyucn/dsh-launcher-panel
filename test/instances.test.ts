@@ -6,6 +6,7 @@ import {
   instanceHome,
   instanceLogPath,
   isNestedHome,
+  isRemovableWhileRunning,
   migrateLegacyInstance,
   nextPort,
   normalizeHome,
@@ -254,6 +255,12 @@ test('observed instances may omit home and profile', () => {
   assert.equal(result.activeId, 'ecs')
 })
 
+test('detected instances can be removed while their process runs', () => {
+  assert.equal(isRemovableWhileRunning({ observed: true }), true,
+    'a detected instance is only the launcher record; deleting it must not require stopping the external dsh')
+  assert.equal(isRemovableWhileRunning({}), false, 'a managed instance must still be stopped before removal')
+  assert.equal(isRemovableWhileRunning({ observed: undefined }), false)
+})
 test('observed must be exactly true when present', () => {
   for (const observed of [false, 'yes', 1]) {
     const result = normalizeInstances([{ id: 'x', name: 'X', home: '', profile: 'web', port: 3080, observed }], undefined, options)

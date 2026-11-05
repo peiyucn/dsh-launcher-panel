@@ -457,6 +457,15 @@ export function isObservedInstance(instance: Pick<DshInstance, 'observed'>): boo
   return instance.observed === true
 }
 
+/**
+ * Whether removing this instance only drops the launcher's record instead of a process the
+ * launcher owns. A detected instance is a read-only view of an externally started dsh: the
+ * launcher never starts or stops it, so deleting it must not ask the user to stop it first.
+ */
+export function isRemovableWhileRunning(instance: Pick<DshInstance, 'observed'>): boolean {
+  return isObservedInstance(instance)
+}
+
 /** What the UI should show as the instance home; observed instances may have none. */
 export function displayHome(instance: DshInstance, options: InstanceModelOptions): string {
   if (isObservedInstance(instance) && instance.home === '') return ''
