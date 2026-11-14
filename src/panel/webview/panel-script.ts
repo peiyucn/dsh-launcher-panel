@@ -46,8 +46,6 @@ export function panelScript(values: PanelScriptValues): string {
       log: document.getElementById('log'),
       balanceValue: document.getElementById('balanceValue'),
       balanceBtn: document.getElementById('balanceBtn'),
-      dsServices: document.getElementById('dsServices'),
-      dsChatBtn: document.getElementById('dsChatBtn'),
       instanceFormName: document.getElementById('instanceFormName'),
       instanceFormHome: document.getElementById('instanceFormHome'),
       instanceFormAuto: document.getElementById('instanceFormAuto'),
@@ -83,14 +81,6 @@ export function panelScript(values: PanelScriptValues): string {
     }
     function incidentLabel(st) {
       return { investigating: 'Investigating', identified: 'Identified', monitoring: 'Monitoring', resolved: 'Resolved' }[st] || st || ''
-    }
-    // Service states are spelled out in the pill tooltip; the pills rely on color only.
-    const COMPONENT_STATE_LABELS = {
-      operational: 'Operational',
-      degraded: 'Degraded',
-      partial_outage: 'Partial outage',
-      full_outage: 'Full outage',
-      maintenance: 'Maintenance',
     }
     function fmtSize(bytes) {
       if (!bytes || bytes <= 0) return ''
@@ -329,21 +319,10 @@ export function panelScript(values: PanelScriptValues): string {
       ds = ds || {}
       const comps = ds.components || []
       const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
-      const renderGroup = (list, items, empty) => {
-        list.innerHTML = items.map((c) => {
-          const stCls = compStateClass(c.status || 'operational')
-          return '<div class="ds-comp"><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>'
-        }).join('') || '<div class="ds-empty">' + empty + '</div>'
-      }
-      renderGroup(document.getElementById('dsComponents'), comps.filter((c) => /^deepseek-/i.test(String(c.name || ''))), emptyText)
-      renderGroup(document.getElementById('dsComponentsOther'), comps.filter((c) => !/^deepseek-/i.test(String(c.name || ''))), '—')
-      const services = ds.services || []
-      el.dsServices.innerHTML = services.map((s) => {
-        const st = s.status || 'operational'
-        return '<div class="ds-comp" title="' + esc(s.name + ' · ' + (COMPONENT_STATE_LABELS[st] || st)) + '">'
-          + '<span class="cdot ' + compStateClass(st) + '"></span>'
-          + '<span class="ds-comp-name">' + esc(s.name) + '</span></div>'
-      }).join('') || '<div class="ds-empty">—</div>'
+      document.getElementById('dsComponents').innerHTML = comps.map((c) => {
+        const stCls = compStateClass(c.status || 'operational')
+        return '<div class="ds-comp"><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>'
+      }).join('') || '<div class="ds-empty">' + emptyText + '</div>'
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')
@@ -426,7 +405,6 @@ export function panelScript(values: PanelScriptValues): string {
       vscode.postMessage({ command: 'updateDsh' })
     })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
-    el.dsChatBtn.addEventListener('click', () => vscode.postMessage({ command: 'openChat' }))
     const dsToggle = document.getElementById('dsToggle')
     const dsBody = document.getElementById('dsBody')
     const dsChevron = document.getElementById('dsChevron')

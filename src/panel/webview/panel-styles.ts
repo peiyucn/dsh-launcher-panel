@@ -145,14 +145,11 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; margin-left: auto; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-columns { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 6px; align-items: start; }
-  .ds-columns::after { content: ''; position: absolute; left: 50%; top: 2px; bottom: 2px; width: 0.5px; background: var(--lap-border-soft); }
-  .ds-column { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+  .ds-model-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .ds-column-title { font-size: 10px; color: var(--lap-fg2); }
   .ds-components { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
   .ds-comp { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: 10px; color: var(--lap-fg); background: var(--lap-surface); border-radius: 999px; padding: 2px 7px; }
-  .ds-comp-name { max-width: 140px; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ds-column .ds-comp-name { max-width: 100%; }
+  .ds-comp-name { max-width: 100%; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cdot { width: 6px; height: 6px; margin: 0; border-radius: 50%; background: #888; flex: none; }
   .cdot.ok { background: var(--lap-success); }
   .cdot.degraded { background: var(--lap-warning); }
@@ -164,10 +161,6 @@ export const PANEL_CSS = `
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
   .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
-  .ds-service-block { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; flex-direction: column; gap: 4px; }
-  .ds-service-head { display: flex; align-items: center; gap: 8px; }
-  .ds-service-head .ds-open { margin-left: auto; }
-  .ds-service-items { display: flex; flex-wrap: wrap; gap: 4px; }
   .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }

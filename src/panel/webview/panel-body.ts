@@ -111,22 +111,9 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="section-chevron" id="dsChevron" aria-hidden="true" title="Expand or collapse DeepSeek status">▸</span>
     </div>
     <div class="ds-body" id="dsBody">
-      <div class="ds-columns">
-        <div class="ds-column">
-          <div class="ds-column-title">Model APIs</div>
-          <div class="ds-components" id="dsComponents"></div>
-        </div>
-        <div class="ds-column">
-          <div class="ds-column-title">Other APIs</div>
-          <div class="ds-components" id="dsComponentsOther"></div>
-        </div>
-      </div>
-      <div class="ds-service-block">
-        <div class="ds-service-head">
-          <span class="ds-column-title">chat-service</span>
-          <button class="ds-open ds-chat-link" id="dsChatBtn" title="Open chat.deepseek.com in the configured browser" aria-label="Open chat.deepseek.com"><svg class="ds-link-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H8.7l-3 2.5V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" fill="currentColor"/></svg><span>Open chat</span></button>
-        </div>
-        <div class="ds-service-items" id="dsServices"></div>
+      <div class="ds-model-group">
+        <div class="ds-column-title">Model APIs</div>
+        <div class="ds-components" id="dsComponents"></div>
       </div>
       <div class="ds-incidents" id="dsIncidents"></div>
       <div class="ds-balance-row">
