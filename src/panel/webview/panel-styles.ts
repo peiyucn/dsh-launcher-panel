@@ -145,11 +145,11 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; margin-left: auto; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-model-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .ds-column-title { font-size: 10px; color: var(--lap-fg2); }
-  .ds-components { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-  .ds-comp { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: 10px; color: var(--lap-fg); background: var(--lap-surface); border-radius: 999px; padding: 2px 7px; }
-  .ds-comp-name { max-width: 100%; color: var(--lap-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ds-components { display: flex; flex-direction: column; min-width: 0; }
+  .ds-model-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; border-bottom: 0.5px solid var(--lap-border-soft); }
+  .ds-model-row:last-child { border-bottom: none; }
+  .ds-model-name { min-width: 0; color: var(--lap-fg); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ds-check-time { margin-left: auto; flex: none; color: var(--lap-fg2); font-size: 10px; font-variant-numeric: tabular-nums; }
   .cdot { width: 6px; height: 6px; margin: 0; border-radius: 50%; background: #888; flex: none; }
   .cdot.ok { background: var(--lap-success); }
   .cdot.degraded { background: var(--lap-warning); }

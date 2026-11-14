@@ -22,7 +22,7 @@
 
 * **启动 / 停止** — 首次运行把 dsh 装进 launcher 自管目录，之后运行它并在就绪后打开 Web UI。
 * **源码运行** — 把 deepseek-harness clone 到自管目录并运行（`dsh.srcPath` 可指定别处；该路径下已有检出则直接复用）。依赖缺失/过期、或检出切过了上次构建时会先装依赖并构建；构建前跑 `pnpm run clean` 清理旧产物，并使用 dsh 官方 profile，使 Web UI 品牌与 pkg 模式一致。
-* **仪表盘面板** — 服务状态、实时控制台（日志文件可点击）、带峰谷标志的 DeepSeek 官方模型 API 状态（周末与法定节假日全天按低谷计费），以及账户余额。
+* **仪表盘面板** — 服务状态、实时控制台（日志文件可点击）、带峰谷标志的 DeepSeek 官方模型 API 状态（每个模型一行，显示该状态最后一次读取时间；周末与法定节假日全天按低谷计费），以及账户余额。
 * **多实例** — 每个实例有自己的 DSH home（`DSH_HOME`）和其中的 profile；端口由 launcher 分配（`Default` 保持 3080，新实例用五位端口）。面板顶部每个实例一个 tab，最右 `+` 新建；每个 tab 可启动/停止/打开该实例、编辑名称、home、自动打开与浏览器覆盖、删除（先停止；不删除 DSH 数据）。所有实例共用一份 dsh 安装和全局 `dsh.runMode`。
 * **探测实例** — `+` → **Detect running dsh…** 会在用户点击时扫描一次（不后台轮询）本机非 launcher 启动的 dsh Web 服务，例如 systemd/docker/手动安装。选中的服务会加为**只读实例**：launcher 只观察并在新标签页打开其 Web UI，不会启动、停止或更新它。启动 token 自动从进程读取（systemd journal、docker logs 或被重定向的日志文件），无需任何配置。允许改名和删除；面板会显示该实例自己的 package 路径与 dsh 版本。在 Remote-SSH 窗口中，Web UI 通过 VS Code 端口转发打开，标签页访问的是远端主机。**Copy takeover info** 按钮会打开一段不含 token 的信息卡 Markdown 预览（并同时复制），交给 agent 把该实例转成 launcher 托管。
 * **DSH 更新** — 点 ⟳ 检查，有新版本时显示 Update（pkg 重装该通道最新版；source 检出最新的官方 `dsh-v…` tag，不拉 upstream master）。检查只列 tag 并比对 commit，不下载任何东西；源码模式真正更新时会先拉取该 tag，检出落后较多时可能耗时较长。更新要求所有实例都停止。
@@ -67,7 +67,7 @@
 * 实例只描述运行坐标：一个 `DSH_HOME`、其中的 profile、一个自动分配的端口。模型/provider/preset/凭据都在该 home 的 profile 里，launcher 不管理。两个实例可以指向同一个 home，但同一时间只能跑一个（DSH 的 sessions/workspaces/credentials 是共享的）；面板会显示警告。
 * Delete 只从 `dsh.instances` 移除实例，绝不删除 home、sessions 或 workspaces；要清理由你自己处理。
 * Start 先探测该实例端口，端口已开就接管（例如 VS Code 重载后），然后打开它的 Web UI。Stop 会直接停止启动器启动的服务；接管的实例按命令行（`--port` 加 dsh 入口）确认是本实例的 DSH 服务器后同样直接停止，不再弹确认框。端口被无法识别为本实例 DSH 服务器的进程占用时，Stop 不杀，只在面板与活动流里说明。
-* **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API Status 区默认展开（标题、紧随标题的状态页图标和 Peak/Off-peak），可折叠；展开后只列出模型 API 状态及其相关告警，以及账户余额。底部 **Settings** 不设边框。
+* **Runtime** 在页面最上方，显示共享的 `deepseek harness` 版本、`pkg`/`src` 模式和 Update。**Instances** 区显示 `home` 和共享的 package/source 路径，并包含 Start / New Tab / Stop。DeepSeek API Status 区默认展开（标题、紧随标题的状态页图标和 Peak/Off-peak），可折叠；展开后每个模型 API 一行并显示该状态最后一次读取时间，下方是影响这些模型的告警与账户余额。底部 **Settings** 不设边框。
 * Update 检查和更新的是这一份共享 dsh，要求所有实例停止。
 * 关闭 VS Code 不会停止服务：dsh 与扩展宿主分离，窗口重载或关闭后仍会继续运行；需要停止时用面板或命令面板的 Stop。
 * pkg 模式用 pnpm 的 `package-import-method` 安装 dsh。默认 `copy` 会为每个文件保留独立副本：多占一点磁盘、安装稍慢，但在有安全软件过滤文件访问的机器上避免硬链接的打开开销；`hardlink`/`auto` 则相反。改设置会在下一次 Start 时生效：dsh 会在原目录重装为新方式；终端跑完前不要关闭，失败时删除安装目录再 Start 即可恢复。有其他实例在运行时跳过。**Reinstall dsh (apply install method)** 命令可立即强制重装。

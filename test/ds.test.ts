@@ -222,6 +222,14 @@ test('parseDsStatus tolerates malformed input without throwing', () => {
   assert.equal(st.incidents.length, 0)
 })
 
+test('parseDsStatus stamps when the snapshot was read', () => {
+  const before = Date.now()
+  const ok = parseDsStatus({ data: { page: { components: [] }, active_changes: [] } })
+  assert.ok(ok.checkedAt >= before && ok.checkedAt <= Date.now(), 'a good read carries its read time')
+  const failed = parseDsStatus(null)
+  assert.ok(failed.checkedAt >= before && failed.checkedAt <= Date.now(), 'a bad read still reports when it happened')
+})
+
 test('readDefaultModel parses the agent-default-model section of settings.yaml', () => {
   const prev = process.env.DSH_HOME
   const dir = mkdtempSync(join(tmpdir(), 'dsh-home-'))

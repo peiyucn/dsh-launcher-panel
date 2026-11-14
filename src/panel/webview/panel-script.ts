@@ -82,6 +82,13 @@ export function panelScript(values: PanelScriptValues): string {
     function incidentLabel(st) {
       return { investigating: 'Investigating', identified: 'Identified', monitoring: 'Monitoring', resolved: 'Resolved' }[st] || st || ''
     }
+    // The status snapshot carries one timestamp for every row (one status-page read).
+    function clockLabel(ms) {
+      const t = Number(ms)
+      if (!Number.isFinite(t) || t <= 0) return '—'
+      const d = new Date(t)
+      return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':')
+    }
     function fmtSize(bytes) {
       if (!bytes || bytes <= 0) return ''
       if (bytes < 1024) return bytes + ' B'
@@ -318,10 +325,15 @@ export function panelScript(values: PanelScriptValues): string {
     function renderDs(ds) {
       ds = ds || {}
       const comps = ds.components || []
+      const checked = clockLabel(ds.checkedAt)
       const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
       document.getElementById('dsComponents').innerHTML = comps.map((c) => {
         const stCls = compStateClass(c.status || 'operational')
-        return '<div class="ds-comp"><span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span><span class="ds-comp-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>'
+        return '<div class="ds-model-row">'
+          + '<span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span>'
+          + '<span class="ds-model-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span>'
+          + '<span class="ds-check-time" title="Last checked against status.deepseek.com at ' + esc(checked) + '">' + esc(checked) + '</span>'
+          + '</div>'
       }).join('') || '<div class="ds-empty">' + emptyText + '</div>'
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []

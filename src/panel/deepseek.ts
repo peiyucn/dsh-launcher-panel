@@ -19,6 +19,8 @@ export interface DsStatus {
   components: DsComponentStatus[]
   /** Active incidents that affect a monitored model. */
   incidents: DsIncident[]
+  /** Epoch ms of the status-page read that produced this snapshot. */
+  checkedAt: number
 }
 
 export interface DshBalance {
@@ -88,7 +90,7 @@ async function fetchDsStatus(): Promise<DsStatus> {
       // Try the next host.
     }
   }
-  return { state: 'unknown', components: [], incidents: [] }
+  return { state: 'unknown', components: [], incidents: [], checkedAt: Date.now() }
 }
 
 /**
@@ -151,9 +153,9 @@ export function parseDsStatus(json: any): DsStatus {
         ? 'degraded'
         : worst === 'maintenance' ? 'maintenance' : 'ok'
 
-    return { state, components, incidents }
+    return { state, components, incidents, checkedAt: Date.now() }
   } catch {
-    return { state: 'unknown', components: [], incidents: [] }
+    return { state: 'unknown', components: [], incidents: [], checkedAt: Date.now() }
   }
 }
 
