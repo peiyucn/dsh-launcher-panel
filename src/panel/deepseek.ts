@@ -15,9 +15,11 @@ export interface DsIncident {
 
 export interface DsStatus {
   state: 'ok' | 'degraded' | 'down' | 'maintenance' | 'unknown'
-  /** Model API components only; the status page's other services are not monitored. */
+  /** Model API components only, in status-page order. */
   components: DsComponentStatus[]
-  /** Active incidents that affect a monitored model. */
+  /** The official chat service component, when the status page reports it. */
+  chat?: DsComponentStatus
+  /** Active incidents that affect a monitored model or the chat service. */
   incidents: DsIncident[]
   /** Epoch ms of the status-page read that produced this snapshot. */
   checkedAt: number
@@ -114,21 +116,29 @@ export function parseDsStatus(json: any): DsStatus {
     const page = json?.data?.page ?? {}
     const statusById = new Map<string, string>()
     const monitored: Array<{ id: string; name: string; order: number }> = []
+    let chatId = ''
     for (const c of page.components ?? []) {
       const id = String(c?.component_id ?? '')
       if (!id) continue
-      const name = dsModelLabel(String(c?.name ?? ''))
-      if (name === undefined) continue
-      statusById.set(id, 'operational')
-      monitored.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
+      const rawName = String(c?.name ?? '')
+      const name = dsModelLabel(rawName)
+      if (name !== undefined) {
+        statusById.set(id, 'operational')
+        monitored.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
+      } else if (chatId === '' && /chat/i.test(rawName)) {
+        // The chat service is named in the Chinese half ("对话服务(Chatservice)"), so
+        // match the raw label instead of the stripped English half.
+        chatId = id
+        statusById.set(id, 'operational')
+      }
     }
     monitored.sort((a, b) => a.order - b.order)
 
     const incidents: DsIncident[] = []
     for (const ch of json?.data?.active_changes ?? []) {
       const affected = ch?.affected_components ?? []
-      // The page also reports chat/search outages; keep only incidents that touch
-      // a monitored model.
+      // The page also reports search/file-upload outages; keep only incidents that
+      // touch a monitored model or the chat service.
       if (!affected.some((ac: any) => statusById.has(String(ac?.component_id ?? '')))) continue
       incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
       for (const ac of affected) {
@@ -142,9 +152,13 @@ export function parseDsStatus(json: any): DsStatus {
       name: c.name,
       status: (statusById.get(c.id) ?? 'operational') as DsComponentStatus['status'],
     }))
+    const chat: DsComponentStatus | undefined = chatId === ''
+      ? undefined
+      : { name: 'chat-service', status: (statusById.get(chatId) ?? 'operational') as DsComponentStatus['status'] }
 
+    const all: DsComponentStatus[] = chat ? [...components, chat] : components
     let worst = 'operational'
-    for (const c of components) {
+    for (const c of all) {
       if ((DS_SEVERITY[c.status] ?? 0) > (DS_SEVERITY[worst] ?? 0)) worst = c.status
     }
     const state: DsStatus['state'] = worst === 'full_outage' || worst === 'partial_outage'
@@ -153,7 +167,7 @@ export function parseDsStatus(json: any): DsStatus {
         ? 'degraded'
         : worst === 'maintenance' ? 'maintenance' : 'ok'
 
-    return { state, components, incidents, checkedAt: Date.now() }
+    return { state, components, chat, incidents, checkedAt: Date.now() }
   } catch {
     return { state: 'unknown', components: [], incidents: [], checkedAt: Date.now() }
   }

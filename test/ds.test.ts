@@ -87,7 +87,7 @@ test('dsModelLabel maps DeepSeek model names and ignores every other component',
   assert.equal(dsModelLabel(''), undefined)
 })
 
-test('parseDsStatus keeps only the model APIs', () => {
+test('parseDsStatus keeps the model APIs and the chat service', () => {
   const json = {
     data: {
       page: {
@@ -106,6 +106,7 @@ test('parseDsStatus keeps only the model APIs', () => {
   }
   const st = parseDsStatus(json)
   assert.deepEqual(st.components.map((c) => c.name), ['deepseek-v4-pro', 'deepseek-v4.1-flash'])
+  assert.deepEqual(st.chat, { name: 'chat-service', status: 'operational' })
   assert.deepEqual(st.incidents, [])
   assert.equal(st.state, 'ok')
 })
@@ -135,6 +136,7 @@ test('parseDsStatus maps components, incidents and worst severity', () => {
   assert.equal(st.components[0].name, 'deepseek-v3-chat')
   assert.equal(st.components[0].status, 'partial_outage')
   assert.equal(st.components[1].status, 'operational')
+  assert.equal(st.chat, undefined, 'a page without a chat component has no chat row')
   assert.equal(st.incidents.length, 1)
   assert.equal(st.incidents[0].status, 'investigating')
 })
@@ -157,11 +159,12 @@ test('parseDsStatus skips components that are not model APIs', () => {
   }
   const st = parseDsStatus(json)
   assert.equal(st.components.length, 0)
+  assert.equal(st.chat, undefined)
   assert.equal(st.incidents.length, 0)
   assert.equal(st.state, 'ok')
 })
 
-test('parseDsStatus ignores incidents that touch only non-model components', () => {
+test('parseDsStatus ignores incidents that touch only unmonitored services', () => {
   const json = {
     data: {
       page: {
@@ -175,17 +178,46 @@ test('parseDsStatus ignores incidents that touch only non-model components', () 
       active_changes: [
         {
           change_id: 'c3',
-          title: 'Chat slower than usual',
+          title: 'Uploads slower than usual',
           status: 'identified',
-          affected_components: [{ component_id: '3', name: '对话服务(Chatservice)', status: 'degraded' }],
+          affected_components: [{ component_id: '4', name: '上传文件服务(File Upload Service)', status: 'degraded' }],
         },
       ],
     },
   }
   const st = parseDsStatus(json)
   assert.deepEqual(st.components, [{ name: 'deepseek-v4-pro', status: 'operational' }])
+  assert.deepEqual(st.chat, { name: 'chat-service', status: 'operational' })
   assert.deepEqual(st.incidents, [])
-  assert.equal(st.state, 'ok', 'a non-model outage must not degrade the model monitor')
+  assert.equal(st.state, 'ok', 'an unmonitored service must not degrade the card')
+})
+
+test('parseDsStatus monitors the chat service and includes its incidents', () => {
+  const json = {
+    data: {
+      page: {
+        components: [
+          { component_id: '1', name: 'DeepSeek V4 Pro API服务(API Service)', order_id: 1 },
+          { component_id: '3', name: '对话服务(Chatservice)', order_id: 1 },
+          { component_id: '4', name: '上传文件服务(File Upload Service)', order_id: 2 },
+        ],
+      },
+      active_changes: [
+        {
+          change_id: 'c5',
+          title: 'Chat slower than usual',
+          status: 'monitoring',
+          affected_components: [{ component_id: '3', name: '对话服务(Chatservice)', status: 'degraded' }],
+        },
+      ],
+    },
+  }
+  const st = parseDsStatus(json)
+  assert.deepEqual(st.chat, { name: 'chat-service', status: 'degraded' })
+  assert.deepEqual(st.components, [{ name: 'deepseek-v4-pro', status: 'operational' }])
+  assert.equal(st.incidents.length, 1)
+  assert.equal(st.incidents[0].title, 'Chat slower than usual')
+  assert.equal(st.state, 'degraded')
 })
 
 test('parseDsStatus marks the model a mixed incident touches and ignores the rest', () => {

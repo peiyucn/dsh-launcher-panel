@@ -326,17 +326,27 @@ export function panelScript(values: PanelScriptValues): string {
 
     function renderDs(ds) {
       ds = ds || {}
-      const comps = ds.components || []
       const checked = clockLabel(ds.checkedAt)
       const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
-      document.getElementById('dsComponents').innerHTML = comps.map((c) => {
+      const rows = (ds.components || []).map((c) => {
         const stCls = compStateClass(c.status || 'operational')
         return '<div class="ds-model-row">'
           + '<span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span>'
           + '<span class="ds-model-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span>'
           + '<span class="ds-check-time" title="Last checked against status.deepseek.com at ' + esc(checked) + '">' + esc(checked) + '</span>'
           + '</div>'
-      }).join('') || '<div class="ds-empty">' + emptyText + '</div>'
+      })
+      if (ds.chat) {
+        const stCls = compStateClass(ds.chat.status || 'operational')
+        // Monitoring and the one-click entry share one control: the whole row opens chat.
+        rows.push('<button type="button" class="ds-chat-row" title="Open chat.deepseek.com in the configured browser" aria-label="DeepSeek Chat — open chat.deepseek.com">'
+          + '<span class="cdot' + (stCls ? ' ' + stCls : '') + '"></span>'
+          + '<span class="ds-model-name">DeepSeek Chat</span>'
+          + '<svg class="ds-link-icon ds-chat-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          + '<span class="ds-check-time" title="Last checked against status.deepseek.com at ' + esc(checked) + '">' + esc(checked) + '</span>'
+          + '</button>')
+      }
+      document.getElementById('dsComponents').innerHTML = rows.join('') || '<div class="ds-empty">' + emptyText + '</div>'
       const inc = document.getElementById('dsIncidents')
       const incs = ds.incidents || []
       inc.innerHTML = incs.map((i) => '<div class="ds-incident">⚠ ' + esc(i.title) + (i.status ? ' · ' + esc(incidentLabel(i.status)) : '') + '</div>').join('')
@@ -419,6 +429,10 @@ export function panelScript(values: PanelScriptValues): string {
       vscode.postMessage({ command: 'updateDsh' })
     })
     document.getElementById('dsOpenBtn').addEventListener('click', () => vscode.postMessage({ command: 'openStatus' }))
+    // The chat row is re-rendered with each status snapshot, so listen on the container.
+    document.getElementById('dsComponents').addEventListener('click', (e) => {
+      if (e.target.closest('.ds-chat-row')) vscode.postMessage({ command: 'openChat' })
+    })
     const dsToggle = document.getElementById('dsToggle')
     const dsBody = document.getElementById('dsBody')
     const dsChevron = document.getElementById('dsChevron')

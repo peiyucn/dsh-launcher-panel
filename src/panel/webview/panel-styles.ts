@@ -148,6 +148,10 @@ export const PANEL_CSS = `
   .ds-components { display: flex; flex-direction: column; min-width: 0; }
   .ds-model-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; border-bottom: 0.5px solid var(--lap-border-soft); }
   .ds-model-row:last-child { border-bottom: none; }
+  .ds-chat-row { display: flex; align-items: center; gap: 6px; width: 100%; height: auto; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 11px; font-weight: 400; text-align: left; cursor: pointer; }
+  .ds-chat-row:hover .ds-model-name { color: var(--lap-accent); text-decoration: underline; }
+  .ds-chat-row:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: -2px; }
+  .ds-chat-arrow { color: var(--lap-fg2); }
   .ds-model-name { min-width: 0; color: var(--lap-fg); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ds-check-time { margin-left: auto; flex: none; color: var(--lap-fg2); font-size: 10px; font-variant-numeric: tabular-nums; }
   .cdot { width: 6px; height: 6px; margin: 0; border-radius: 50%; background: #888; flex: none; }
