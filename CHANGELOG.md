@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.5] - 2026-11-14
+
+- The **DeepSeek API Status** card monitors the official **chat service** again: a `DeepSeek Chat` row shows its status and last-read time, incidents that affect it are listed with the model incidents, and clicking the row opens chat.deepseek.com in the configured browser. The chat section's file-upload and search services stay out of the card.
+
 ## [0.4.4] - 2026-11-14
 
 - The **DeepSeek API Status** card now monitors only the model APIs: the search/fetch API rows and the chat-service section (with its `Open chat` link) are gone, and only incidents that affect a model API are reported. Each model gets its own row with the time its status was last read.

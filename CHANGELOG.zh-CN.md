@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.4.5] - 2026-11-14
+
+- **DeepSeek API Status** 卡片重新纳入官方**聊天服务**监控：`DeepSeek Chat` 行显示其状态与最后读取时间，相关告警与模型告警一并列出；点击该行用当前浏览器设置打开 chat.deepseek.com。聊天分区下的上传与搜索服务仍不在卡片内。
+
 ## [0.4.4] - 2026-11-14
 
 - **DeepSeek API Status** 卡片现在只监控模型 API：移除 search / fetch（其他 API）与 chat-service 分区（含 `Open chat` 入口），告警只显示影响模型 API 的条目；每个模型独立一行，并显示该状态最后一次读取时间。
