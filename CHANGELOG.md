@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.4] - 2026-11-14
+
+- The **DeepSeek API Status** card now monitors only the model APIs: the search/fetch API rows and the chat-service section (with its `Open chat` link) are gone, and only incidents that affect a model API are reported. Each model gets its own row with the time its status was last read.
+- The delete button is disabled while a launcher-managed instance is running, matching the edit button; detected read-only instances can still be removed while their process runs.
+
 ## [0.4.3] - 2026-11-05
 
 - Fixed: a detected (read-only) instance can now be removed from the panel even while its dsh process is running; removal only drops the launcher's record and never stops or touches that process (previously it asked the user to stop an instance the launcher does not manage).
