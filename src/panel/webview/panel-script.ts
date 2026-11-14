@@ -213,9 +213,11 @@ export function panelScript(values: PanelScriptValues): string {
         ? 'DSH_HOME (data root: sessions, credentials, profiles): ' + status.home
         : (active && status.observed ? 'Detected dsh — DSH_HOME is not managed by the launcher' : '')
       home.dataset.path = showHome ? status.home : ''
-      // A detected instance's name is editable even while it runs; home/profile/port are not.
-      el.editInstanceBtn.disabled = !active || (busy && !status.observed)
-      el.deleteInstanceBtn.disabled = !active
+      // A detected instance's name is editable and removable even while it runs;
+      // a launcher-managed instance must be stopped before either action.
+      const locked = busy && !status.observed
+      el.editInstanceBtn.disabled = !active || locked
+      el.deleteInstanceBtn.disabled = !active || locked
       // No selected instance: hide the empty meta rows and the Stop action.
       const meta = document.querySelector('.instance-meta')
       if (meta) meta.style.display = active ? '' : 'none'

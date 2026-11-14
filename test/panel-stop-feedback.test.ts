@@ -17,3 +17,13 @@ test('the next status update owns the Stop button state again', () => {
   assert.match(script, /el\.stopBtn\.disabled = stopping/u, 'a stopping status must keep the button disabled')
   assert.match(script, /el\.stopBtn\.textContent = stopping \? 'Stopping…' : '■ Stop'/u, 'any settled update must restore the label')
 })
+
+// Delete must not be offered on a running launcher-managed instance (the host would
+// only bounce it), while a detected instance stays removable while it runs.
+test('Edit and Delete are disabled together, except for detected instances', () => {
+  assert.match(
+    script,
+    /el\.editInstanceBtn\.disabled = !active \|\| locked[\s\S]{0,120}el\.deleteInstanceBtn\.disabled = !active \|\| locked/u,
+    'both actions must share the running-instance lock',
+  )
+})
