@@ -150,9 +150,9 @@ export const PANEL_CSS = `
   .ds-checked[hidden] { display: none; }
   .ds-checked-label { color: var(--lap-fg2); font-size: 9px; }
   .ds-checked-time { color: var(--lap-fg); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .ds-components { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-width: 0; }
-  .ds-model-row { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; }
-  .ds-chat-row { display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto; min-width: 0; max-width: 100%; padding: 4px 8px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 11px; font-weight: 400; text-align: left; cursor: pointer; }
+  .ds-components { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-content: flex-start; gap: 4px; min-width: 0; }
+  .ds-model-row { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 2px 7px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; line-height: 14px; }
+  .ds-chat-row { display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; min-width: 0; max-width: 100%; padding: 2px 7px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 11px; font-weight: 400; line-height: 14px; text-align: left; cursor: pointer; }
   .ds-chat-row:hover .ds-model-name { color: var(--lap-accent); text-decoration: underline; }
   .ds-chat-row:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 2px; }
   .ds-chat-arrow { color: var(--lap-fg2); }

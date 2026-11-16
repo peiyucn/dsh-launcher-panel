@@ -116,6 +116,8 @@ test('the DeepSeek APIs use pills instead of underlined rows', () => {
   assert.match(PANEL_CSS, /\.ds-components\s*\{[^}]*flex-wrap:\s*wrap/u, 'API pills must wrap in the left column')
   assert.match(PANEL_CSS, /\.ds-model-row\s*\{[^}]*border-radius:\s*999px/u, 'model rows must be pills')
   assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*border-radius:\s*999px/u, 'chat row must share the pill shape')
+  assert.match(PANEL_CSS, /\.ds-model-row\s*\{[^}]*padding:\s*2px 7px/u, 'pills must stay compact')
+  assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*padding:\s*2px 7px/u, 'the chat pill must stay compact')
 })
 
 // Regression: adding the checked time as a sibling once squeezed `.balance-value`
