@@ -16,6 +16,7 @@
 | M6 | final | 修改 AGENTS/策略文件/required checks 必须 owner 审阅；Agent 不能自己合并 |
 | M7 | final | Agent 使用独立 GitHub 身份；隔离由运行环境保证，不靠 wrapper |
 | M8 | final | 能用自动检查判定的规则，必须落到检查；重复错误不能只加文字 |
+| M14 | final | 运行中发现规则、流程或设计不合理，应告知 owner 并给出可执行的修改提案，不得默默绕过或长期将就 |
 
 ## 1. 项目事实源
 
