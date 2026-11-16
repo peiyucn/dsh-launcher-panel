@@ -186,7 +186,7 @@ ID        稳定编号，不因章节移动而重编
 
 | 项 | 状态 | 证据 |
 |---|---|---|
-| 薄 AGENTS | 已完成（当前分支 / PR #5） | `dsh-launcher-panel/AGENTS.md` 105 行，只保留边界、授权与判断规则 |
+| 薄 AGENTS | 已完成（当前分支 / PR #5） | `dsh-launcher-panel/AGENTS.md` 106 行，只保留边界、授权与判断规则 |
 | 自动检查 | 已完成（PR #5，CI 全绿） | ESLint + `QG001–QG010` + 负例测试；`npm run verify` 通过 298 tests |
 | 本地验证入口 | 已完成（PR #5） | `npm run verify` = lint → typecheck → test → compile → package |
 | CI lint | 已完成（PR #5） | `typecheck` job 先跑 `npm run lint` |
@@ -436,7 +436,8 @@ Agent 不应使用 owner 的 gh 凭据；否则平台看到的是 owner，所有
 - require code owner review；
 - require last push approval；
 - 禁删除、禁强推、禁重写历史；
-- bypass 只给 owner 的 PR 合并；直推仍然禁止。
+- bypass 只给 owner 的 PR 合并；直推仍然禁止；
+- `v*` tag 单独保护：只有 owner 能创建、移动、删除，Agent 不能推送发布 tag。
 
 ### 12.3 策略文件
 

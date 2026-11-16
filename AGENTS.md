@@ -47,6 +47,7 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 - 日常改动在 `dev`；`main` 只接受发布 PR（squash）。
 - 一个 commit 只做一件事；描述用中文，保留英文类型前缀。
 - 发版流程见 [docs/release.md](docs/release.md)；打 tag 和市场发布前必须取得 owner **当次**明确确认。
+- `v*` tag 只能由 owner 创建、移动、删除；Agent 不得推送发布 tag。
 - 不可逆动作（删除用户数据、发布、改已发布版本、强制改历史）执行前必须取得 owner 同意；能无损回滚的普通改动直接做。
 - 已发布版本与 tag 不覆盖、不移动；出错只能发新版本并重新确认。
 

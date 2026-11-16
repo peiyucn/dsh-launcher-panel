@@ -14,7 +14,7 @@
 1. 确认 `dev` 的 CI 全绿，`git diff --check` 干净。
 2. 创建 `dev` → `main` 的 PR，等待四个 required checks 通过后 squash 合并；**不得直接 push main**。
 3. 执行 E17：打 tag / 发布市场前，向 owner 明确报出「要发什么、版本号、目标通道、影响范围」，获得当次确认；上一次批准不适用于本次。
-4. 在 `main` 上创建 annotated tag 并推送：
+4. 在 `main` 上创建 annotated tag 并推送。`v*` tag 受保护，只有 owner 能创建/移动/删除；Agent 不得推送 tag：
 
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"

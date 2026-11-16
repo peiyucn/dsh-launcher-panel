@@ -87,6 +87,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 - required checks：`typecheck` / `test` / `build` / `package`，必须是 GitHub Actions（app id 15368）产生，且分支必须与最新目标分支同步；
 - `AGENTS.md`、质量门禁、发布文档、ESLint / policy 脚本、CI workflow 和依赖清单由 `.github/CODEOWNERS` 指定 owner 审阅；
 - Agent 的 PR 需要 owner 批准；`require_last_push_approval` 防止批准后又推入新改动；
+- `v*` tag 单独保护：只有 owner 能创建、移动或删除；Agent 不能推送发布 tag；
 - 禁删除、禁强推、禁重写历史；
 - 直接 push 到 `dev` 会被 GitHub 拒绝（`Changes must be made through a pull request`）。
 
