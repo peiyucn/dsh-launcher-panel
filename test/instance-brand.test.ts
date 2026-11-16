@@ -22,8 +22,12 @@ function makeProfile(): string {
   return home
 }
 
-function readManifest(home: string): any {
-  return JSON.parse(fs.readFileSync(path.join(home, 'profiles', 'web', 'package.json'), 'utf8'))
+interface ProfileManifest {
+  dsh: { profile: { bundles: string[] } }
+}
+
+function readManifest(home: string): ProfileManifest {
+  return JSON.parse(fs.readFileSync(path.join(home, 'profiles', 'web', 'package.json'), 'utf8')) as ProfileManifest
 }
 
 function readManifestRaw(home: string): string {

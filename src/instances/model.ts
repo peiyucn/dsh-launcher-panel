@@ -104,6 +104,8 @@ function nonEmptyString(value: unknown): string | undefined {
 }
 
 function hasControlCharacters(value: string): boolean {
+  // Matching control characters is the point of this guard, not an accident.
+  // eslint-disable-next-line no-control-regex
   return /[\u0000-\u001f\u007f]/.test(value)
 }
 
