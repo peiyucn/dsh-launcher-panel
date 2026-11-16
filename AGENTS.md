@@ -37,7 +37,7 @@
 
 | ID | 级别 | 值 |
 |---|---|---|
-| P1 | overridable | 日常开发分支：`dev`；默认分支：`main` |
+| P1 | overridable | 集成分支：`dev`；工作分支从 `dev` 切出后 PR 回 `dev`；默认分支：`main` |
 | P2 | overridable | `main` 只接受发布 PR，使用 squash 合并 |
 | P3 | overridable | 可分发产物输出到 `releases/`，不进入 Git/VSIX |
 | P4 | overridable | 用户文档与 CHANGELOG 保持中英双份并互链 |
@@ -50,6 +50,9 @@
 | I2 | interface | CI required checks：`typecheck` / `test` / `build` / `package`；`typecheck` job 先跑 lint |
 | I3 | interface | `main` / `dev` 只能 PR 更新；策略文件由 CODEOWNERS 指定 owner 审阅；Agent 不能自己合并 |
 | I4 | interface | `v*` tag 只能由 owner 创建、移动、删除；Agent 不得推送发布 tag |
+| I5 | interface | 功能/修复从 `dev` 切短生命周期工作分支（`feat/*`、`fix/*`），经 PR 合回 `dev`；`pilot/*` 只用于跨多步的试点，合并后不再常驻 |
+
+> `dev` 是集成分支，不是直接提交分支。由于 `dev` 禁止直推，任何改动都必须先切工作分支，再由 PR 合并；PR 合并后删除工作分支。
 
 ## 4. 项目规则（R）
 
