@@ -111,11 +111,16 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="section-chevron" id="dsChevron" aria-hidden="true" title="Expand or collapse DeepSeek status">▸</span>
     </div>
     <div class="ds-body" id="dsBody">
-      <div class="ds-components" id="dsComponents"></div>
+      <div class="ds-status-grid">
+        <div class="ds-components" id="dsComponents"></div>
+        <div class="ds-checked" id="dsChecked" hidden>
+          <span class="ds-checked-label">Last checked</span>
+          <span class="ds-checked-time" id="dsCheckedTime"></span>
+        </div>
+      </div>
       <div class="ds-incidents" id="dsIncidents"></div>
       <div class="ds-balance-row">
         <span class="ds-balance-label">Account</span>
-        <span class="ds-checked" id="dsChecked"></span>
         <span class="balance-value" id="balanceValue"></span>
         <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
       </div>

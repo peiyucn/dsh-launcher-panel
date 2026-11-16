@@ -98,26 +98,35 @@ test('every element id the client script looks up exists in the body', () => {
   assert.deepEqual(missing, [], `ids missing from panelBody: ${missing.join(', ')}`)
 })
 
-test('the DeepSeek check time is rendered once, not once per row', () => {
-  assert.equal((body.match(/id="dsChecked"/g) || []).length, 1, 'the card must have one checked-time element')
-  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'the shared time belongs in the footer row')
-  assert.match(script, /getElementById\('dsChecked'\)/, 'the client must look up the shared checked-time element')
-  assert.match(script, /Last checked /, 'the shared element must render a visible label')
+test('the DeepSeek status grid has one checked-time block beside the API pills', () => {
+  assert.equal((body.match(/id="dsChecked"/g) || []).length, 1, 'the card must have one checked-time block')
+  assert.equal((body.match(/id="dsCheckedTime"/g) || []).length, 1, 'the checked time needs its own value node')
+  assert.match(body, /<div class="ds-status-grid">[\s\S]*id="dsComponents"[\s\S]*id="dsChecked"/, 'APIs and checked time must share the grid')
+  assert.match(body, /id="dsChecked"[\s\S]*ds-checked-label[\s\S]*ds-checked-time/, 'the checked time must label and value on separate lines')
+  assert.doesNotMatch(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'checked time must stay out of the balance row')
+  assert.match(script, /getElementById\('dsChecked'\)/, 'the client must look up the checked-time block')
+  assert.match(script, /getElementById\('dsCheckedTime'\)/, 'the client must look up the checked-time value')
   assert.doesNotMatch(script, /ds-check-time/, 'per-row check-time spans must stay removed')
-  assert.match(PANEL_CSS, /\.ds-checked\s*\{/, 'the shared checked time needs its own style')
-  assert.doesNotMatch(PANEL_CSS, /\.ds-check-row\s*\{/, 'the old row wrapper style must stay removed')
-  assert.doesNotMatch(PANEL_CSS, /\.ds-check-time\s*\{/, 'the per-row check-time style must stay removed')
+  assert.match(PANEL_CSS, /\.ds-status-grid\s*\{[^}]*display:\s*flex/u, 'the status area must be a two-column grid')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*border-left:/u, 'the checked-time column must have a divider')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*align-self:\s*stretch/u, 'the divider must span the full grid height')
+})
+
+test('the DeepSeek APIs use pills instead of underlined rows', () => {
+  assert.match(PANEL_CSS, /\.ds-components\s*\{[^}]*flex-wrap:\s*wrap/u, 'API pills must wrap in the left column')
+  assert.match(PANEL_CSS, /\.ds-model-row\s*\{[^}]*border-radius:\s*999px/u, 'model rows must be pills')
+  assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*border-radius:\s*999px/u, 'chat row must share the pill shape')
 })
 
 // Regression: adding the checked time as a sibling once squeezed `.balance-value`
 // to one character per line (`word-break: break-all`). Keep the value non-wrapping
-// and let the timestamp shrink instead.
-test('the DeepSeek footer keeps a real balance on one line beside the checked time', () => {
-  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"[\s\S]*id="balanceValue"/, 'balance and checked time share the footer row')
-  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*flex:\s*none/u, 'the balance must not be squeezed by its sibling')
+// and let other columns shrink instead.
+test('the DeepSeek status grid keeps a real balance on one line', () => {
+  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="balanceValue"/, 'balance row must keep its value node')
+  assert.doesNotMatch(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'checked time must not squeeze the balance')
+  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*flex:\s*none/u, 'the balance must not be squeezed')
   assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*white-space:\s*nowrap/u, 'the balance must stay on one line')
   assert.doesNotMatch(PANEL_CSS, /\.balance-value\s*\{[^}]*word-break:\s*break-all/u, 'character-by-character balance wrapping must not return')
-  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*text-overflow:\s*ellipsis/u, 'the timestamp may shrink, the balance may not')
 })
 
 test('the client command set, the host switch and PANEL_COMMANDS are the same set', () => {

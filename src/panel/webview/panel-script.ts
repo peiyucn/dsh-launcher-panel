@@ -45,6 +45,7 @@ export function panelScript(values: PanelScriptValues): string {
       debugToggle: document.getElementById('debugToggle'),
       log: document.getElementById('log'),
       dsChecked: document.getElementById('dsChecked'),
+      dsCheckedTime: document.getElementById('dsCheckedTime'),
       balanceValue: document.getElementById('balanceValue'),
       balanceBtn: document.getElementById('balanceBtn'),
       instanceFormName: document.getElementById('instanceFormName'),
@@ -330,7 +331,7 @@ export function panelScript(values: PanelScriptValues): string {
       const checked = clockLabel(ds.checkedAt)
       const hasChecked = checked !== '—'
       el.dsChecked.hidden = !hasChecked
-      el.dsChecked.textContent = hasChecked ? 'Last checked ' + checked : ''
+      el.dsCheckedTime.textContent = hasChecked ? checked : ''
       el.dsChecked.title = hasChecked ? 'Last read from status.deepseek.com at ' + checked : ''
       const emptyText = ds.state === 'unknown' ? 'Status unavailable — check your network' : 'No component data'
       const rows = (ds.components || []).map((c) => {
