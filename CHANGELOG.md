@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [Unreleased]
+
+- The **DeepSeek API Status** card now shows one `Last checked` time for the whole card instead of repeating the time on every model row.
+
 ## [0.4.5] - 2026-11-14
 
 - The **DeepSeek API Status** card monitors the official **chat service** again: a `DeepSeek Chat` row shows its status and last-read time, incidents that affect it are listed with the model incidents, and clicking the row opens chat.deepseek.com in the configured browser. The chat section's file-upload and search services stay out of the card.

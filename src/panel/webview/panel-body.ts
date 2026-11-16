@@ -111,6 +111,7 @@ export function panelBody(values: PanelBodyValues): string {
       <span class="section-chevron" id="dsChevron" aria-hidden="true" title="Expand or collapse DeepSeek status">▸</span>
     </div>
     <div class="ds-body" id="dsBody">
+      <div class="ds-check-row" id="dsChecked"></div>
       <div class="ds-components" id="dsComponents"></div>
       <div class="ds-incidents" id="dsIncidents"></div>
       <div class="ds-balance-row">

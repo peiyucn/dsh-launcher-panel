@@ -98,6 +98,15 @@ test('every element id the client script looks up exists in the body', () => {
   assert.deepEqual(missing, [], `ids missing from panelBody: ${missing.join(', ')}`)
 })
 
+test('the DeepSeek check time is rendered once, not once per row', () => {
+  assert.equal((body.match(/id="dsChecked"/g) || []).length, 1, 'the card must have one checked-time element')
+  assert.match(script, /getElementById\('dsChecked'\)/, 'the client must look up the shared checked-time element')
+  assert.match(script, /Last checked /, 'the shared element must render a visible label')
+  assert.doesNotMatch(script, /ds-check-time/, 'per-row check-time spans must stay removed')
+  assert.match(PANEL_CSS, /\.ds-check-row\s*\{/, 'the shared checked time needs its own row style')
+  assert.doesNotMatch(PANEL_CSS, /\.ds-check-time\s*\{/, 'the per-row check-time style must stay removed')
+})
+
 test('the client command set, the host switch and PANEL_COMMANDS are the same set', () => {
   const clientCommands = new Set([
     ...uniqueMatches(/command:\s*'([^']+)'/g, script),
