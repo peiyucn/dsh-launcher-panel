@@ -31,6 +31,7 @@ const REQUIRED_DOCS = [
   'docs/positioning-and-retirement.md',
   'docs/quality-gates.md',
   'docs/release.md',
+  'docs/engineering-upgrade.md',
 ]
 
 const GITIGNORE_ENTRIES = ['node_modules/', 'out/', 'releases/', '*.vsix']

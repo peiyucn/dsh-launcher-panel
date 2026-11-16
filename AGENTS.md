@@ -13,6 +13,7 @@
 - 定位、退役判据：[docs/positioning-and-retirement.md](docs/positioning-and-retirement.md)
 - 可执行规则、错误编号与加检查流程：[docs/quality-gates.md](docs/quality-gates.md)
 - 发版步骤、凭据与红线：[docs/release.md](docs/release.md)
+- 从零实施与团队推广说明：[docs/engineering-upgrade.md](docs/engineering-upgrade.md)
 
 ## 命令与门禁
 

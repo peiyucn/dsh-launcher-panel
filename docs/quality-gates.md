@@ -37,7 +37,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 | ID | 检查内容 | 来源 / 防止的错误 |
 |---|---|---|
-| QG001 | 必读文档存在：AGENTS、双语 README / CHANGELOG、SECURITY、架构 / 规格 / 定位 / 质量门禁 / 发布文档 | 文档遗漏、仓库不可独立维护 |
+| QG001 | 必读文档存在：AGENTS、双语 README / CHANGELOG、SECURITY、架构 / 规格 / 定位 / 质量门禁 / 发布 / 升级说明 | 文档遗漏、仓库不可独立维护 |
 | QG002 | 双语 README 的 Settings 表键名与顺序 = `package.json` `contributes.configuration.properties` | 面板配置与用户文档漂移 |
 | QG003 | `engines.vscode` 为 caret，`@types/vscode` 为精确版本，二者同版 | 类型面漂移到运行时不支持的 API |
 | QG004 | 中英 README、中英 CHANGELOG 互相链接 | 双语文档失去入口 |
