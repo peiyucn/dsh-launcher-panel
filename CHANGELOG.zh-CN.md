@@ -4,6 +4,10 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [Unreleased]
+
+- **DeepSeek API Status** 卡片改为整张卡片显示一次 `Last checked` 时间，不再在每个模型行重复显示检查时间。
+
 ## [0.4.5] - 2026-11-14
 
 - **DeepSeek API Status** 卡片重新纳入官方**聊天服务**监控：`DeepSeek Chat` 行显示其状态与最后读取时间，相关告警与模型告警一并列出；点击该行用当前浏览器设置打开 chat.deepseek.com。聊天分区下的上传与搜索服务仍不在卡片内。

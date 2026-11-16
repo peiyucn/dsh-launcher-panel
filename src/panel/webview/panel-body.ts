@@ -115,6 +115,7 @@ export function panelBody(values: PanelBodyValues): string {
       <div class="ds-incidents" id="dsIncidents"></div>
       <div class="ds-balance-row">
         <span class="ds-balance-label">Account</span>
+        <span class="ds-checked" id="dsChecked"></span>
         <span class="balance-value" id="balanceValue"></span>
         <button class="balance-btn" id="balanceBtn" title="Query this instance's DeepSeek account balance">Balance</button>
       </div>

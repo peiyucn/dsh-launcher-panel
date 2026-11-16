@@ -98,6 +98,28 @@ test('every element id the client script looks up exists in the body', () => {
   assert.deepEqual(missing, [], `ids missing from panelBody: ${missing.join(', ')}`)
 })
 
+test('the DeepSeek check time is rendered once, not once per row', () => {
+  assert.equal((body.match(/id="dsChecked"/g) || []).length, 1, 'the card must have one checked-time element')
+  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'the shared time belongs in the footer row')
+  assert.match(script, /getElementById\('dsChecked'\)/, 'the client must look up the shared checked-time element')
+  assert.match(script, /Last checked /, 'the shared element must render a visible label')
+  assert.doesNotMatch(script, /ds-check-time/, 'per-row check-time spans must stay removed')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{/, 'the shared checked time needs its own style')
+  assert.doesNotMatch(PANEL_CSS, /\.ds-check-row\s*\{/, 'the old row wrapper style must stay removed')
+  assert.doesNotMatch(PANEL_CSS, /\.ds-check-time\s*\{/, 'the per-row check-time style must stay removed')
+})
+
+// Regression: adding the checked time as a sibling once squeezed `.balance-value`
+// to one character per line (`word-break: break-all`). Keep the value non-wrapping
+// and let the timestamp shrink instead.
+test('the DeepSeek footer keeps a real balance on one line beside the checked time', () => {
+  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"[\s\S]*id="balanceValue"/, 'balance and checked time share the footer row')
+  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*flex:\s*none/u, 'the balance must not be squeezed by its sibling')
+  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*white-space:\s*nowrap/u, 'the balance must stay on one line')
+  assert.doesNotMatch(PANEL_CSS, /\.balance-value\s*\{[^}]*word-break:\s*break-all/u, 'character-by-character balance wrapping must not return')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*text-overflow:\s*ellipsis/u, 'the timestamp may shrink, the balance may not')
+})
+
 test('the client command set, the host switch and PANEL_COMMANDS are the same set', () => {
   const clientCommands = new Set([
     ...uniqueMatches(/command:\s*'([^']+)'/g, script),
