@@ -1,4 +1,6 @@
 .vscode/**
+.githooks/**
+.gitattributes
 .gitignore
 .github/**
 AGENTS.md
