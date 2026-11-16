@@ -2,6 +2,7 @@
 /AGENTS.md @peiyucn
 /docs/quality-gates.md @peiyucn
 /docs/release.md @peiyucn
+/docs/engineering-upgrade.md @peiyucn
 /eslint.config.mjs @peiyucn
 /scripts/check-policy.mjs @peiyucn
 /scripts/check-security-alerts.sh @peiyucn

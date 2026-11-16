@@ -242,3 +242,250 @@ ID        稳定编号，不因章节移动而重编
 6. 最后复制模板到其他项目，不复制具体规则值。
 
 完成标志不是“文档写完了”，而是：**新 Agent 违规改动会被 CI 或 review 拦住，且 owner 能用一条命令复现全部门禁。**
+
+## 9. meta-repo 与项目 AGENTS 的继承
+
+### 9.1 先明确：Git 没有真正的“继承”
+
+多个仓库之间没有运行时的父类/子类关系。所谓继承，实际是三件事：
+
+1. **复制**共享规则的受控副本到项目；
+2. **锁定**它来自哪个 meta-repo 版本；
+3. 用 **CI 检查 + CODEOWNERS** 保证副本没有被静默修改。
+
+不要依赖“Agent 会去读另一个仓库”；单独 clone 项目时，它读不到 meta-repo。项目必须有本地策略副本或本地检查。
+
+### 9.2 meta-repo 的 AGENTS 写什么
+
+meta-repo 的 `AGENTS.md` 只负责全局约定，不复制项目实现：
+
+```text
+# 工作区总规范
+
+## 0 阅读顺序
+AGENTS → PROJECTS → POLICY → 项目 AGENTS
+
+## 1 项目清单
+见 PROJECTS.md（目录、仓库、可见性、档位、开发分支）
+
+## 2 全局硬规则（final）
+M1 未知须明示
+M2 结论须有依据
+M3 不可逆操作先经 owner 同意
+M4 策略文件变更须 owner 审批
+M5 Agent 使用独立身份，不得用 owner 凭据
+...
+
+## 3 规则级别与继承
+final / overridable / interface / constructor 的定义
+
+## 4 策略分发与版本锁
+policy_source、policy.lock、同步和校验方式
+
+## 5 变更权限
+谁能改 meta policy、项目和规则文件
+
+## 6 文档索引
+```
+
+以下内容不放 meta AGENTS：
+
+- 各项目的架构、功能契约、测试矩阵；
+- 完整的 Lint 规则和命令；
+- 低频发布步骤、恢复步骤、环境安装步骤；
+- 项目专属的取值和例外。
+
+### 9.3 项目 AGENTS 写什么
+
+```text
+# 项目指令
+
+> policy_source: pyai-meta-repo@<commit>
+> policy_hash: <hash>
+> 本文只写项目差异；共享规则见 docs/policy/global.md
+
+## 1 事实源
+spec / architecture / release / quality-gates
+
+## 2 命令与门禁
+verify / lint / test / required checks
+
+## 3 项目规则
+R1...（人工判断）、P1...（项目填写值）
+
+## 4 final 规则副本（只读）
+从 meta policy 生成，不许在项目内改
+
+## 5 错误沉淀
+复现 → 负例 → 检查 → 登记
+```
+
+项目 AGENTS 的目标长度应保持在百行左右；超过时先问：**这条内容能否变成检查、能否移到事实源文档、是否只是项目值。**
+
+### 9.4 继承与权限标签的硬控制
+
+| 标签 | 项目里怎么落 | 怎么硬控制 |
+|---|---|---|
+| `final` | 只读副本；不能项目内覆盖 | meta 侧 owner 审批；项目 CODEOWNERS 保护副本；`policy_hash` 不一致 CI 失败；Agent 无合并权 |
+| `overridable` | 项目配置/AGENTS 中声明值 | 允许列表 + schema；策略检查拒绝未知键或越权值 |
+| `interface` | 项目必须实现 `verify` / required check | 分支保护要求对应 checks；缺失即不能合并 |
+| `constructor` | 只在 setup 文档/脚本 | 低频，不进 AGENTS；不参与运行时继承 |
+
+“硬控制”的关键不是标签本身，而是：
+
+1. `final` 规则有执行检查或明确人审点；
+2. 规则副本和门禁文件在 CODEOWNERS 保护路径中；
+3. Agent 使用独立身份，不能自己合并；
+4. meta 侧 owner 才能改 `final`，项目侧只能消费；
+5. `policy_hash` 不一致时 CI 失败（检测漂移，不替代权限控制）。
+
+## 10. 哪些内容单独拆出 md，为什么
+
+| 内容 | 位置 | 为什么 |
+|---|---|---|
+| 全局行为契约 | meta `AGENTS.md` | 每个会话都需要；保持短小 |
+| 项目清单 | meta `PROJECTS.md` | 变化频率高，不是 agent 行为规则 |
+| 共享规则目录（带 ID/级别） | meta `POLICY.md` | 可审计、可版本锁，不需要每次加载全文 |
+| 规则同步/发布说明 | meta `docs/` | 低频、面向维护者 |
+| 项目专属判断规则 | 项目 `AGENTS.md` | 离开项目就没有意义 |
+| 自动检查规则 | 项目 `docs/quality-gates.md` + 代码 | 高频变化，必须和检查/负例同步 |
+| 发布流程 | 项目 `docs/release.md` | 低频、高风险，只在发版时读 |
+| 架构/边界 | 项目 `docs/architecture.md` | 面向开发者，内容长且随代码变化 |
+| 功能契约/验收矩阵 | 项目 `docs/spec.md` | 面向产品行为，不是 agent 规则 |
+| 用户文档/安全策略 | 项目 README / CHANGELOG / SECURITY.md | 面向用户/平台，不是 agent 行为 |
+| 一次性接入/恢复 | setup 文档或脚本 | 低频；没有独有知识时直接删除 |
+
+判断标准：
+
+- **每次会话都要看** → AGENTS；
+- **机器能判定** → 检查代码/脚本；
+- **低频、面向操作** → 独立 runbook；
+- **只描述项目事实** → 项目 docs；
+- **只是项目值** → 配置，不复制规则正文。
+
+## 11. 哪些规则做成 lint，为什么
+
+### 11.1 适合自动检查
+
+| 特征 | 原因 |
+|---|---|
+| 结果确定 | 同样输入每次结果相同，不依赖理解 |
+| 错误可定位 | 能给文件/行/规则 ID |
+| 高频或高风险 | 值得长期维护一条检查 |
+| 有稳定反例 | 能证明检查有效 |
+| 不依赖业务判断 | 不需要 owner 解释取舍 |
+
+当前参考实现的检查：
+
+**代码级（ESLint）**
+
+| ID | 规则 | 原因 |
+|---|---|---|
+| E001 | 禁止 `exec` / `execSync` | 防止命令拼接和注入 |
+| E002 | 禁止 `shell: true` | 防止参数被 shell 重新解析 |
+| E003 | `src/shared/` 禁止 import `vscode` | 保持纯逻辑可单测 |
+| E004 | 禁止显式 `any` | 外部数据必须显式解析 |
+| E005 | ESLint / typescript-eslint recommended | 未使用变量、无用赋值等通用错误 |
+
+**仓库级（`check-policy.mjs`）**
+
+| ID | 检查 | 原因 |
+|---|---|---|
+| QG001 | 必读文档存在 | 防止仓库不可独立维护 |
+| QG002 | README Settings 与 package.json 一致 | 防止用户文档漂移 |
+| QG003 | `engines.vscode` 与 `@types/vscode` 对齐 | 防止类型面高于运行时 |
+| QG004 | 双语 README / CHANGELOG 互链 | 防止入口丢失 |
+| QG005 | CHANGELOG 版本 = package.json | 防止发布内容不完整 |
+| QG006 | `verify` 必须先跑 lint | 防止检查链被绕过 |
+| QG007 | CI 环节名称/顺序 | 防止自创环节和发布链漂移 |
+| QG008 | 发布环境/安全门禁/tag 在 main | 防止绕过发布门禁 |
+| QG009 | 发布产物不进仓库/VSIX | 防止产物污染 |
+| QG010 | 测试不得提交 `.only` | 防止假全绿 |
+
+### 11.2 不适合自动检查
+
+- 需求是否清晰、架构是否合理；
+- 安全威胁模型、业务取舍；
+- 是否允许一次不可逆操作；
+- 发布时机和发布范围；
+- 命名是否有语义、测试是否真正有意义。
+
+这些留在 AGENTS，由 owner 或人审负责；测试可以覆盖行为，但不能替代判断。
+
+## 12. 仓库权限怎么设置，为什么
+
+### 12.1 角色
+
+| 角色/对象 | 权限 | 为什么 |
+|---|---|---|
+| owner（`peiyucn`） | admin；最终合并与发布审批 | 保留最终责任；直推仍被规则集禁止 |
+| Agent（`peiyucn-agent`） | **write**，不给 admin | 能开分支/PR，不能改仓库设置、不能改规则集 |
+| 其他协作者 | 只读或按需 write，不给 admin | 最小权限 |
+| 外部贡献者 | 通过 fork/PR；不直接给写权限 | 代码审查边界清晰 |
+
+Agent 不应使用 owner 的 gh 凭据；否则平台看到的是 owner，所有身份分离失效。
+
+### 12.2 分支规则
+
+`main` / `dev`：
+
+- 只能通过 PR；
+- 仅 squash；
+- required checks：`typecheck`、`test`、`build`、`package`；
+- required approvals ≥ 1；
+- require code owner review；
+- require last push approval；
+- 禁删除、禁强推、禁重写历史；
+- bypass 只给 owner 的 PR 合并；直推仍然禁止。
+
+### 12.3 策略文件
+
+`.github/CODEOWNERS` 保护：
+
+```text
+AGENTS.md
+docs/quality-gates.md
+docs/release.md
+docs/engineering-upgrade.md
+eslint.config.mjs
+scripts/check-policy.mjs
+scripts/check-security-alerts.sh
+test/policy-lint.test.ts
+package.json
+package-lock.json
+.github/
+```
+
+为什么：Agent 可以改业务代码，但不能靠改检查、改规则、改 workflow 让自己变绿。策略文件必须由 owner 审阅。
+
+### 12.4 Actions 与凭据
+
+- CI 默认 `contents: read`；
+- 发布 job 才给 `contents: write` / `security-events: read`；
+- `VSCE_PAT`、`SECURITY_ALERTS_TOKEN` 放 `marketplace-publish` 环境级 secret；
+- 仓库级 secret 不保留；
+- 不在日志、README、聊天中输出 token。
+
+### 12.5 当前状态说明
+
+- `peiyucn-agent` 已收到 write 邀请，尚未接受；接受后才真正具备独立身份；
+- `.github/CODEOWNERS` 已在 PR #5 中，尚未合并到默认分支，因此还不能视为已生效；
+- ruleset 已要求 code owner review / 最后推送审批；
+- owner 的 PR 合并保留 bypass，直推仍被拒绝；
+- 私有仓库在 GitHub Free 下无法使用同等保护，需要 Pro/Team 或明确接受降级。
+
+## 13. meta-repo 替换的迁移顺序
+
+不要先改根 AGENTS，再补项目：
+
+1. 在一个项目验证 AGENTS / quality-gates / CODEOWNERS / Agent 身份；
+2. 生成 `POLICY.md` 和 `PROJECTS.md`，只迁移已验证的全局规则；
+3. 项目保留 `policy_source` + `policy.lock`，接入同步检查；
+4. 用 CODEOWNERS 和分支保护保护策略文件；
+5. 逐个接入项目，先跑“CI 全绿 + 直推拒绝 + Agent PR 需审阅”三项；
+6. 最后替换 meta-repo AGENTS，删除已由自动检查覆盖的共享段落；
+7. 保留旧规则 ID 到新 ID 的迁移表，避免文档和 commit 引用断链。
+
+## 14. 一句话总结
+
+**meta-repo 负责定义和分发规则，项目负责本地执行；继承不是读取父文件，而是受控复制 + 版本锁 + CI 校验；final 不是标签，而是检查、CODEOWNERS、独立身份和 owner 审批四件事的组合。**
