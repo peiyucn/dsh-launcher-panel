@@ -1,6 +1,6 @@
 # 项目指令 — dsh-launcher-panel
 
-> policy_source: `pyai-meta-repo/POLICY.md@252be0bd38379f4f2a588ef1e81ed7a88886f1fd`
+> policy_source: `pyai-meta-repo/POLICY.md@ddcb6b03264914ddc646e9f0699ee316369846ff`
 > 本文件只写项目事实、项目值、接口和项目判断规则；全局 `M` 规则来自 meta policy，项目不能放松。
 > 可执行检查以 [docs/quality-gates.md](docs/quality-gates.md) 为准；低频发布步骤见 [docs/release.md](docs/release.md)。
 
@@ -8,6 +8,7 @@
 
 | ID | 级别 | 规则 |
 |---|---|---|
+| M0 | final | 规则/流程/设计不追求一次写完美；运行中发现不合理，应告知 owner 并给出可执行的修改提案，不得默默绕过或长期将就 |
 | M1 | final | 未查到写“未查到”，未验证写“未验证”，禁止编造 |
 | M2 | final | 结论来自命令输出或文件内容；推断只能作为假设 |
 | M3 | final | 不用取巧写法让检查变绿；不隐瞒错误和失败 |
@@ -16,7 +17,6 @@
 | M6 | final | 修改 AGENTS/策略文件/required checks 必须 owner 审阅；Agent 不能自己合并 |
 | M7 | final | Agent 使用独立 GitHub 身份；隔离由运行环境保证，不靠 wrapper |
 | M8 | final | 能用自动检查判定的规则，必须落到检查；重复错误不能只加文字 |
-| M14 | final | 运行中发现规则、流程或设计不合理，应告知 owner 并给出可执行的修改提案，不得默默绕过或长期将就 |
 
 > M9/M10 是 meta-repo 工作区规则；M11–M13 分别落到本项目的项目值、接口和 playbook。
 
