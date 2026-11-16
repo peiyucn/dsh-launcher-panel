@@ -2,7 +2,7 @@
 
 > 面向团队的实施说明。目标不是“多写一些规范”，而是把 Agent 的行为约束落到自动检查、分支保护和可审计的变更流程里。
 >
-> 参考实现：`dsh-launcher-panel`。当前状态以第 5 节为准；未合并、未接受邀请、未实测的事项不得标为完成。
+> 参考实现：`dsh-launcher-panel`。当前状态以第 5 节为准；未合并、未实测的事项不得标为完成。
 
 ## 1. 一句话方案
 
@@ -191,16 +191,16 @@ ID        稳定编号，不因章节移动而重编
 | 本地验证入口 | 已完成（PR #5） | `npm run verify` = lint → typecheck → test → compile → package |
 | CI lint | 已完成（PR #5） | `typecheck` job 先跑 `npm run lint` |
 | 仓库策略检查 | 已完成（PR #5） | `scripts/check-policy.mjs` + `test/policy-lint.test.ts` |
-| 严格分支保护 | 已配置 | `main` / `dev` 禁止直推，required checks 四个，禁强推/删除；实测 owner 直推被拒 |
+| 严格分支保护 | 已配置 | `main` / `dev` 禁止直推，required checks 四个，required approval 1，禁强推/删除；实测 owner 直推被拒 |
+| 发布 tag 保护 | 已配置 | `v*` tag 只能由 owner 创建/移动/删除；Agent 不能推发布 tag |
 | 策略文件保护 | 已写入 PR #5，待合并生效 | `.github/CODEOWNERS`；ruleset 已要求 code owner review |
-| Agent 账号邀请 | 已发出邀请，待接受 | `peiyucn-agent` 以 write 权限受邀，尚未出现在 collaborators 列表 |
+| Agent 账号邀请 | 已接受并验证 | `peiyucn-agent` 协作者权限为 write，不是 admin |
 
 ### 5.2 待办
 
 | 项 | 待办内容 | 完成标准 |
 |---|---|---|
 | 合并参考实现 | 合并 PR #5 到 `dev`，让 CODEOWNERS 在默认分支生效 | `dev` 上存在 CODEOWNERS，后续策略 PR 需要 owner review |
-| 接受 Agent 邀请 | 用 `peiyucn-agent` 接受 GitHub 邀请 | `collaborators` 中出现 `peiyucn-agent`，write 权限 |
 | 实测 Agent 拦截 | Agent 修改 `AGENTS.md` 开 PR，尝试自己合并 | PR 被 owner review 要求拦住，Agent 无法合并 |
 | 规则编号与级别 | 给人工规则分配 `R1…`、给项目值分配 `P1…`，在 quality-gates 增加级别/执行/负例字段 | 规则可被稳定引用，`final` 有执行和变更控制 |
 | final 完整性测试 | 测试断言必需的 `final` 规则仍在配置中、未被禁用 | 删除或改弱规则时 CI 失败 |
