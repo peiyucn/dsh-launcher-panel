@@ -1,6 +1,6 @@
 # 项目指令 — dsh-launcher-panel
 
-> 机器可判定的规则由可执行检查保证：代码规则、仓库策略、发布门禁、文档与版本一致性统一登记在 [docs/quality-gates.md](docs/quality-gates.md)，以 `npm run verify` 的退出码为准。本文件只保留机器无法判断的取舍、边界、授权与协作约定。
+> 可由工具判定的规则由可执行检查保证：代码规则、仓库策略、发布门禁、文档与版本一致性统一登记在 [docs/quality-gates.md](docs/quality-gates.md)，以 `npm run verify` 的退出码为准。本文件只保留工具无法判断的取舍、边界、授权与协作约定。
 
 ## 项目与事实源
 
