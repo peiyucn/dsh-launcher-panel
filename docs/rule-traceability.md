@@ -47,6 +47,8 @@
 
 ## 维护
 
+本文件已纳入 QG001 必读文档检查：[quality-gates.md](quality-gates.md)。
+
 - 修改 `AGENTS.md` 的 P/I/R 时，必须同步 `来源` 和本表；
 - 新增 `R` 但无法归到 M/S 时，来源写 `local`，并在本文件说明为什么是项目特有；
 - meta 规则重编号或拆分时，同步更新本表，并更新 `policy_source`；
