@@ -59,7 +59,7 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 ### 代码与架构
 
 - 单一职责；状态经函数封装；命名达意；同类对称；不写超长函数与重复逻辑。
-- `shared/` 保持无 VS Code 依赖、可单测；模块边界以 `architecture.md` 为准。
+- `shared/` 保持可单测；模块边界以 `architecture.md` 为准。
 - 不导入 VS Code 内部模块；dsh 版本差异只按公开契约读取，不认的输出走降级路径。
 - 活动流 busy 必须用 `withBusy` 成对收尾，不手写 `addActivity(..., true)` / `finishBusy`。
 - 资源 / 内存有界：timer、watcher、AbortController、子进程在成功与失败路径都释放；缓存与活动流有上限。
@@ -75,8 +75,8 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 ### 安全
 
 - API key、launch token 不进日志、面板、HTML 或提交内容；发往 webview 的 payload 不带 token URL。
-- 子进程使用参数数组，不拼命令行；外部请求带超时；外部 URL 走白名单。
-- Webview 保持 CSP 与转义；用户配置的路径先规范化、再校验、展示时遮蔽。
+- 外部请求带超时；外部 URL 走白名单；Webview 保持 CSP 与转义。
+- 用户配置的路径先规范化、再校验、展示时遮蔽。
 - 安全基线按 F4 逐项核验；配置变更后重新核验，不能只凭“应该没变”。
 
 ## 重复错误怎么沉淀
