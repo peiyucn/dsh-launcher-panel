@@ -79,7 +79,19 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 - 需要业务判断、授权或不可逆操作：留在 AGENTS + 人审；
 - 规则本身还在快速变化：先写测试，稳定后再提升为强制检查。
 
-## 5. 维护边界
+## 5. 分支保护（试点实测）
+
+`main` / `dev` 上启用仓库规则集 `严格 PR 门禁（试点）`：
+
+- 只能通过 PR 更新，合并方式仅 squash；
+- required checks：`typecheck` / `test` / `build` / `package`，必须是 GitHub Actions（app id 15368）产生，且分支必须与最新目标分支同步；
+- bypass 名单为空，管理员同样不能绕过；
+- 禁删除、禁强推、禁重写历史；
+- 实测：owner 在本地直接 push 到 `dev` 被 GitHub 拒绝（`Changes must be made through a pull request`）。
+
+边界：仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界，不能靠仓库自身防止 owner 改规则。要让规则本身受约束，需要组织/企业级治理或自托管 Git 的服务端 hook。
+
+## 6. 维护边界
 
 - 规则可以加严；放宽必须说明为什么、并保留历史误报的负例。
 - 修改 `eslint.config.mjs`、`scripts/check-policy.mjs` 或保护分支规则，都属于改变“门禁”，应由 owner 审阅。

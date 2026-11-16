@@ -128,7 +128,8 @@ tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验
 
 ### 本项目取值与动作
 
-* **开发分支**：`dev`；`main` 只接受发布合并（fast-forward）。本项目不是单分支项目
+* **开发分支**：`dev`；`main` 只接受发布 PR（squash）。本项目不是单分支项目
+* **分支保护（试点）**：`main` / `dev` 只能通过 PR 更新；required checks 为 `typecheck` / `test` / `build` / `package`，branches 必须与最新 main/dev 同步，bypass 名单为空——owner 也不能直推。F6 的 owner 直推例外在本项目不适用
 * **验证**：`npm run verify`（lint + typecheck + test + compile + package）全绿；push 前必须通过
 * **可执行质量门禁**：`docs/quality-gates.md` 登记全部 lint / 仓库策略检查及纠错沉淀流程；重复错误先补失败样例和检查，再考虑改本文件
 * **E18 告警门禁（interface 验收）**：`publish.yml` 的 `publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`，查询 Dependabot / CodeQL / secret scanning 未处理告警数；任一非 0、查询失败或凭据缺失即中止发布（fail-closed），不得只靠人工核对。Dependabot / CodeQL 用 `GITHUB_TOKEN` 读，secret scanning 用 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，`marketplace-publish` 环境级 secret）
@@ -136,7 +137,7 @@ tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验
   1. 按 G 段与《项目专属章节 · 发布前检查》审计
   2. 两份 CHANGELOG 加新版本条目（置顶）→ `package.json` 版本号 → README 有功能变更则同步
   3. `npm run verify` 全绿 + `git diff --check` 干净
-  4. `dev` → `main`（fast-forward）并 push
+  4. `dev` → `main` 通过 PR 合并（squash，required checks 全绿）；不得直接 push
   5. E17 门禁：执行 `git tag` / 市场发布等不可逆动作前，须 owner 当次明确确认；停在该动作之前，一句话报出「要发什么、版本号、目标通道、影响范围」，未回话即视为未批准；此前的批准不适用于本次
   6. `git tag -a vX.Y.Z -m "vX.Y.Z: <简述>"` 并 push → workflow 先跑 E18 告警门禁（失败即止）→ 打包 VSIX、发布市场、建 GitHub Release（说明拼两份 CHANGELOG 当版条目）
   7. 发布完成后切回 `dev`
