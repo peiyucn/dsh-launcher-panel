@@ -1,7 +1,8 @@
 # 项目指令 — dsh-launcher-panel
 
-> policy_source: `pyai-meta-repo/POLICY.md@4d0a5bbabf7246a38d29fe00b2ed85756178e3d4`
-> agents_source: `pyai-meta-repo/AGENTS.md@4d0a5bbabf7246a38d29fe00b2ed85756178e3d4`
+> policy_source: `pyai-meta-repo/POLICY.md@0a207006e83112ebf46463d555afa157ad5642ee`
+> agents_source: `pyai-meta-repo/AGENTS.md@0a207006e83112ebf46463d555afa157ad5642ee`
+> contract_source: `pyai-meta-repo/PROJECT-CONTRACT.md@0a207006e83112ebf46463d555afa157ad5642ee`
 > 本文件包含可独立运行的全局规则副本和项目专属内容；meta 版本是权威来源。
 > 每条 `P/I/R` 的 `来源` 标明继承的 meta 规则或 `local`；完整映射见 [docs/rule-traceability.md](docs/rule-traceability.md)。
 > 可执行检查以 [docs/quality-gates.md](docs/quality-gates.md) 为准；低频发布步骤见 [docs/release.md](docs/release.md)。
@@ -23,6 +24,7 @@
 | M8 | final | 能用自动检查判定的规则，必须落到检查；重复错误不能只加文字 |
 | M14 | final | 用户可见改动必须实际运行并留下可核对证据；工具不可用时明确标注未验证，不得用“应该可以”代替 |
 | M15 | final | 项目 AGENTS 必须可独立运转：保留适用的 M/S 本地副本或本地检查，逐条标来源；项目专属 R 标 local；不得引用低频构造/迁移文档 |
+| M16 | final | 新项目必须按 PROJECT-CONTRACT 的模板生成；缺少规定文件、章节、脚本或检查的项目不得开始；项目只能在规定扩展点增加内容 |
 
 > M9/M10 是 meta-repo 工作区规则；M11–M13 分别落到本项目的项目值、接口和 meta constructor。测试验收按 meta `TESTING.md` 执行。
 
