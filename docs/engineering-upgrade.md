@@ -468,30 +468,44 @@ package-lock.json
 
 ### 12.5 当前状态说明
 
-- `peiyucn-agent` 已收到 write 邀请，尚未接受；接受后才真正具备独立身份；
+- `peiyucn-agent` 已接受 write 邀请，协作者列表已确认 write；
 - `.github/CODEOWNERS` 已在 PR #5 中，尚未合并到默认分支，因此还不能视为已生效；
 - ruleset 已要求 code owner review / 最后推送审批；
 - owner 的 PR 合并保留 bypass，直推仍被拒绝；
 - 私有仓库在 GitHub Free 下无法使用同等保护，需要 Pro/Team 或明确接受降级。
 
-### 12.6 贡献图与身份分离的取舍
+### 12.6 权限身份、作者身份与贡献归属
 
-GitHub 的 contribution graph 主要按**提交作者邮箱**归属，而不是仓库 owner。因此：
+这是三个不同的概念，不能混在一起：
 
-- Agent 用自己的账号提交，绿格记在 Agent 账号上；
-- owner 只合并 PR，不会自动获得这些提交的贡献；
-- owner 自己提交、提交 review、创建 issue/PR 才会记入自己的贡献图。
-
-这是身份分离的代价，不是配置错误。可选的处理方式：
-
-| 方式 | 结果 | 建议 |
+| 概念 | 例子 | 作用 |
 |---|---|---|
-| 接受贡献图减少 | 审计清晰，Agent 行为可区分 | **推荐**，尤其团队仓库 |
-| owner 实际参与 review / 修复 / 文档提交 | owner 仍有真实贡献记录 | 推荐 |
-| 对确有共同创作的提交加 `Co-authored-by` | 双方都获得贡献归属 | 仅在 owner 真正参与时使用 |
-| 把所有 Agent 提交伪造成 owner 作者 | 点阵好看，但审计身份失效 | **不推荐** |
+| 权限身份 | Agent 用 `peiyucn-agent` 推分支、开 PR | 谁在操作仓库，可撤销、可审计 |
+| 作者身份 | 提交的 `Author` 姓名/邮箱 | 谁对这次提交负责，GitHub 贡献图按它计数 |
+| 贡献归属 | owner 是否亲自参与 design/review/修复/文档 | 个人贡献记录 |
 
-GitHub 的官方规则：提交作者邮箱必须关联账号；共同作者提交也按同样条件计入贡献图（[Profile contributions reference](https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference)）。不要为了绿格伪造 co-author；安全审计比贡献图重要。
+在 **1 人 + 多 Agent** 的个人工作区里，推荐的拆法是：
+
+```text
+Git Author      = peiyucn（owner 的 GitHub 关联邮箱）
+Git Committer   = peiyucn-agent（agent 的邮箱）
+PR Actor        = peiyucn-agent
+Reviewer/Merger = peiyucn
+Commit trailer  = Assisted-by: peiyucn-agent
+```
+
+这样：
+
+- GitHub 点阵图记在 owner 名下（因为 author 邮箱是 owner）；
+- PR 和 commit 的 committer/trailer 保留 Agent 痕迹，审计仍可区分；
+- Agent 仍然没有 owner 权限，不能自己合并策略 PR；
+- 这不是“伪造作者”，而是**owner 对 Agent 产出承担责任**；团队仓库若要区分每个执行者，应使用 bot 作者或明确的人类作者策略。
+
+如果选择 Agent 作为 author，则绿格会记在 Agent 账号上；owner 只 merge 不等于 owner 成为 author。两种都可行，但必须在仓库政策里明确，不能一半一半。
+
+`Co-authored-by` 只在 owner 确实参与共同创作时使用；不要为了绿格给纯 Agent 提交挂名。GitHub 官方规则：提交作者/共同作者邮箱必须关联账号，且提交要满足贡献图条件（[Profile contributions reference](https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference)）。
+
+**团队项目与个人项目的区别**：团队里每个执行者的作者身份应按组织规范区分；1 人 + 多 Agent 属于个人工作区，owner 作为 author、Agent 作为执行者是可以接受的归属模型。
 
 ## 13. meta-repo 替换的迁移顺序
 
