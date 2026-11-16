@@ -1,6 +1,6 @@
 # 项目指令 — dsh-launcher-panel
 
-> policy_source: `pyai-meta-repo/POLICY.md@main`
+> policy_source: `pyai-meta-repo/POLICY.md@252be0bd38379f4f2a588ef1e81ed7a88886f1fd`
 > 本文件只写项目事实、项目值、接口和项目判断规则；全局 `M` 规则来自 meta policy，项目不能放松。
 > 可执行检查以 [docs/quality-gates.md](docs/quality-gates.md) 为准；低频发布步骤见 [docs/release.md](docs/release.md)。
 
