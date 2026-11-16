@@ -30,6 +30,7 @@ const REQUIRED_DOCS = [
   'docs/instances-spec.md',
   'docs/positioning-and-retirement.md',
   'docs/quality-gates.md',
+  'docs/release.md',
 ]
 
 const GITIGNORE_ENTRIES = ['node_modules/', 'out/', 'releases/', '*.vsix']
