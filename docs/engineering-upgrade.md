@@ -229,6 +229,8 @@ ID        稳定编号，不因章节移动而重编
 - CODEOWNERS 只在默认分支存在时生效；
 - owner 可以修改规则集；`final` 约束的是 Agent / 协作者 / 误操作，不是绝对约束 owner；
 - Agent 与 owner 共用凭据时，平台无法区分操作者；必须使用独立账号；
+- **独立账号也不是天然硬隔离**：如果 Agent 运行在同一个 OS 用户下，并且能读到 owner 的 gh/keyring 凭据，它可以直接运行默认 `gh`，绕过 wrapper；
+- 真正的隔离是让 Agent 运行在独立 OS 用户、容器或 ECS 账号中，并且 owner 凭据不进入该环境；`GH_CONFIG_DIR` / `gh-agent` 只提供便利和归属，不是安全边界；
 - 私有仓库的分支保护/ruleset 取决于 GitHub 计划；
 - 没有负例的检查不可信；没有 owner 审阅的策略文件不可信。
 
