@@ -28,7 +28,7 @@
 
 ### 本项目实际文档
 
-`README.md` + `README.zh-CN.md`、`CHANGELOG.md` + `CHANGELOG.zh-CN.md`、`SECURITY.md`、`docs/architecture.md`（架构与模块边界）、`docs/instances-spec.md`（功能契约与验收矩阵）、`docs/positioning-and-retirement.md`（定位与退役判据）。`AGENTS.md` 是唯一 agent 指令文件（不留 `CLAUDE.md` 等其它厂商指令文件）；无 CONTRIBUTING。功能行为以 `docs/instances-spec.md` 为准，AGENTS 只写规则与流程；`docs/` 属开发文档，不进 VSIX。
+`README.md` + `README.zh-CN.md`、`CHANGELOG.md` + `CHANGELOG.zh-CN.md`、`SECURITY.md`、`docs/architecture.md`（架构与模块边界）、`docs/instances-spec.md`（功能契约与验收矩阵）、`docs/positioning-and-retirement.md`（定位与退役判据）、`docs/quality-gates.md`（可执行规则与纠错沉淀流程）。`AGENTS.md` 是唯一 agent 指令文件（不留 `CLAUDE.md` 等其它厂商指令文件）；无 CONTRIBUTING。功能行为以 `docs/instances-spec.md` 为准，AGENTS 只写规则与流程；`docs/` 属开发文档，不进 VSIX。
 
 ## 工程管线
 
@@ -129,7 +129,8 @@ tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验
 ### 本项目取值与动作
 
 * **开发分支**：`dev`；`main` 只接受发布合并（fast-forward）。本项目不是单分支项目
-* **验证**：`npm run verify`（typecheck + test + compile + package）全绿；push 前必须通过
+* **验证**：`npm run verify`（lint + typecheck + test + compile + package）全绿；push 前必须通过
+* **可执行质量门禁**：`docs/quality-gates.md` 登记全部 lint / 仓库策略检查及纠错沉淀流程；重复错误先补失败样例和检查，再考虑改本文件
 * **E18 告警门禁（interface 验收）**：`publish.yml` 的 `publish` job 在 checkout 后、构建前执行 `scripts/check-security-alerts.sh`，查询 Dependabot / CodeQL / secret scanning 未处理告警数；任一非 0、查询失败或凭据缺失即中止发布（fail-closed），不得只靠人工核对。Dependabot / CodeQL 用 `GITHUB_TOKEN` 读，secret scanning 用 `SECURITY_ALERTS_TOKEN`（只读 fine-grained PAT，`marketplace-publish` 环境级 secret）
 * **发布（tag 触发）**：
   1. 按 G 段与《项目专属章节 · 发布前检查》审计
@@ -274,7 +275,7 @@ owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一�
 
 | Workflow | 触发 | 作用 |
 | :--- | :--- | :--- |
-| `ci.yml` | push / PR 到 main、dev | `typecheck` → `test`（node:test + JUnit artifact）→ `build` → `package`（VSIX 出 `releases/`） |
+| `ci.yml` | push / PR 到 main、dev | `typecheck`（lint + tsc）→ `test`（node:test + JUnit artifact）→ `build` → `package`（VSIX 出 `releases/`） |
 | `publish.yml` | push `v*.*.*` tag | E18 告警门禁（Dependabot / CodeQL / secret scanning 任一未处理即中止）→ 打包（VSIX 出 `releases/`）+ 发布市场 + GitHub Release（说明拼两份 CHANGELOG 当版条目） |
 
 * publish job 挂 `environment: marketplace-publish`（Deployments 留记录）；**不设审批门禁**（tag 即发布）；**无 release-control**（通道变更一律发新版本号）
