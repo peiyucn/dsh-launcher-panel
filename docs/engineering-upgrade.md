@@ -186,7 +186,7 @@ ID        稳定编号，不因章节移动而重编
 
 | 项 | 状态 | 证据 |
 |---|---|---|
-| 薄 AGENTS | 已完成（当前分支 / PR #5） | `dsh-launcher-panel/AGENTS.md` 104 行，只保留边界、授权与判断规则 |
+| 薄 AGENTS | 已完成（当前分支 / PR #5） | `dsh-launcher-panel/AGENTS.md` 105 行，只保留边界、授权与判断规则 |
 | 自动检查 | 已完成（PR #5，CI 全绿） | ESLint + `QG001–QG010` + 负例测试；`npm run verify` 通过 298 tests |
 | 本地验证入口 | 已完成（PR #5） | `npm run verify` = lint → typecheck → test → compile → package |
 | CI lint | 已完成（PR #5） | `typecheck` job 先跑 `npm run lint` |
