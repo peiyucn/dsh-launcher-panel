@@ -145,7 +145,7 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; margin-left: auto; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-checked { color: var(--lap-fg2); font-size: 10px; font-variant-numeric: tabular-nums; margin-left: 8px; white-space: nowrap; }
+  .ds-checked { color: var(--lap-fg2); font-size: 10px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ds-components { display: flex; flex-direction: column; min-width: 0; }
   .ds-model-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; border-bottom: 0.5px solid var(--lap-border-soft); }
   .ds-model-row:last-child { border-bottom: none; }
@@ -164,7 +164,7 @@ export const PANEL_CSS = `
   .ds-empty { font-size: 10px; color: var(--lap-fg2); }
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
-  .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
+  .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; flex: none; white-space: nowrap; }
   .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }
