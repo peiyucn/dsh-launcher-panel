@@ -1,8 +1,6 @@
 # 项目指令 — dsh-launcher-panel
 
-> **薄契约试点（2026-11-16）**：本文件暂不遵循根 `pyai-meta-repo/AGENTS.md` 的 I1–I3；试点确认后将反向替换根 AGENTS，并推广到其他项目。
->
-> 原则：**能由机器判定的规则不写进本文件。** 代码规则、仓库策略、发布门禁、文档与版本一致性统一登记在 [docs/quality-gates.md](docs/quality-gates.md)，以 `npm run verify` 的退出码为准。本文件只保留机器无法判断的取舍、边界、授权与协作约定。
+> 机器可判定的规则由可执行检查保证：代码规则、仓库策略、发布门禁、文档与版本一致性统一登记在 [docs/quality-gates.md](docs/quality-gates.md)，以 `npm run verify` 的退出码为准。本文件只保留机器无法判断的取舍、边界、授权与协作约定。
 
 ## 项目与事实源
 
@@ -28,9 +26,9 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 - `main` / `dev` 只能通过 PR 更新，squash only；required checks 为 `typecheck` / `test` / `build` / `package`，bypass 名单为空，**owner 也不能直推**。
 - CI 的 `typecheck` job 在 tsc 前执行 lint；任何一条 lint 失败都视为门禁失败。
 
-## 机器规则不重复写
+## 自动化质量门禁
 
-以下内容已由检查覆盖，不在本文件展开：
+以下由可执行检查保证：
 
 - 源码禁用模式、子进程安全、`src/shared/` 依赖方向、显式 `any`，以及 ESLint 基础规则；
 - README Settings 表与 `package.json` 配置一致性；
@@ -39,7 +37,7 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 - CI 环节名称与顺序、E18 发布门禁位置、tag 必须在 main；
 - 发布产物忽略、测试 `.only`、必读文档存在性。
 
-需要知道具体规则或增加规则时，只读 [docs/quality-gates.md](docs/quality-gates.md)；不要在本文件复制规则正文。
+规则正文与登记表在 [docs/quality-gates.md](docs/quality-gates.md)。
 
 ## 分支、提交与发布
 

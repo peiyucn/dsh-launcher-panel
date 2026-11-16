@@ -1,7 +1,7 @@
 # 质量门禁与纠错沉淀
 
-> 本文件是 `dsh-launcher-panel` 的可执行规则目录。规则能否生效，以 `npm run verify` 的退出码为准，不以 AGENTS.md 写没写为准。
-> 维护原则：**先有失败样例，再有一条检查，最后才考虑写一句说明。** 规则变更必须同步本文件、负例测试和 CI。
+> 本文件是 `dsh-launcher-panel` 的可执行规则目录。规则是否生效以 `npm run verify` 的退出码为准。
+> 维护原则：**先有失败样例，再有一条检查，最后才考虑写说明。** 规则变更必须同步本文件、负例测试和 CI。
 
 ## 1. 入口
 
@@ -60,7 +60,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 ## 4. 出错后怎么加检查
 
-任何重复错误、或一次代价足够高的错误，按下列顺序处理。**不要先往 AGENTS.md 加一段话。**
+任何重复错误、或一次代价足够高的错误，按下列顺序沉淀：
 
 1. **留下失败证据**：把出错输入/输出写成最小复现，说明期望行为。
 2. **选最高可行层**：能否改类型/API 让错误写不出来？不能，再写检查。
@@ -79,15 +79,15 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 - 需要业务判断、授权或不可逆操作：留在 AGENTS + 人审；
 - 规则本身还在快速变化：先写测试，稳定后再提升为强制检查。
 
-## 5. 分支保护（试点实测）
+## 5. 分支保护
 
-`main` / `dev` 上启用仓库规则集 `严格 PR 门禁（试点）`：
+`main` / `dev` 上启用仓库规则集 `严格 PR 门禁`：
 
 - 只能通过 PR 更新，合并方式仅 squash；
 - required checks：`typecheck` / `test` / `build` / `package`，必须是 GitHub Actions（app id 15368）产生，且分支必须与最新目标分支同步；
 - bypass 名单为空，管理员同样不能绕过；
 - 禁删除、禁强推、禁重写历史；
-- 实测：owner 在本地直接 push 到 `dev` 被 GitHub 拒绝（`Changes must be made through a pull request`）。
+- 直接 push 到 `dev` 会被 GitHub 拒绝（`Changes must be made through a pull request`）。
 
 边界：仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界，不能靠仓库自身防止 owner 改规则。要让规则本身受约束，需要组织/企业级治理或自托管 Git 的服务端 hook。
 
@@ -95,5 +95,5 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 - 规则可以加严；放宽必须说明为什么、并保留历史误报的负例。
 - 修改 `eslint.config.mjs`、`scripts/check-policy.mjs` 或保护分支规则，都属于改变“门禁”，应由 owner 审阅。
-- 本目录只记录本项目实际执行的检查；不要在这里复制根规范全文。
-- `AGENTS.md` 仍是本项目对 agent 的行为契约；本文件负责“机器已经能判定什么”，不取代行为约定。
+- 本文件只记录本项目实际执行的检查；通用规则不在本文件复制。
+- `AGENTS.md` 负责本项目对 agent 的行为契约；本文件负责机器可判定的质量门禁，不取代行为约定。
