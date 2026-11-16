@@ -26,7 +26,7 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
     try { fs.writeFileSync(hooks.logPath(), '') } catch { /* best effort */ }
   }
   let logFd: number
-  let startOffset = 0
+  let startOffset: number
   try {
     logFd = fs.openSync(hooks.logPath(), 'a')
     // Capture the offset before spawn: with clearServerLogOnStart off the file keeps earlier

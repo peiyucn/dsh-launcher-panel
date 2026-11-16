@@ -111,20 +111,37 @@ export function dsModelLabel(componentName: string): string | undefined {
     .replace(/^-+|-+$/g, '')
 }
 
-export function parseDsStatus(json: any): DsStatus {
+function asObject(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function asString(value: unknown): string {
+  return value === undefined || value === null ? '' : String(value)
+}
+
+export function parseDsStatus(json: unknown): DsStatus {
   try {
-    const page = json?.data?.page ?? {}
+    const root = asObject(json)
+    const data = asObject(root.data)
+    const page = asObject(data.page)
     const statusById = new Map<string, string>()
     const monitored: Array<{ id: string; name: string; order: number }> = []
     let chatId = ''
-    for (const c of page.components ?? []) {
-      const id = String(c?.component_id ?? '')
+    for (const rawComponent of asArray(page.components)) {
+      const c = asObject(rawComponent)
+      const id = asString(c.component_id)
       if (!id) continue
-      const rawName = String(c?.name ?? '')
+      const rawName = asString(c.name)
       const name = dsModelLabel(rawName)
       if (name !== undefined) {
         statusById.set(id, 'operational')
-        monitored.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
+        monitored.push({ id, name, order: Number(c.order_id ?? 0) || 0 })
       } else if (chatId === '' && /chat/i.test(rawName)) {
         // The chat service is named in the Chinese half ("对话服务(Chatservice)"), so
         // match the raw label instead of the stripped English half.
@@ -135,15 +152,17 @@ export function parseDsStatus(json: any): DsStatus {
     monitored.sort((a, b) => a.order - b.order)
 
     const incidents: DsIncident[] = []
-    for (const ch of json?.data?.active_changes ?? []) {
-      const affected = ch?.affected_components ?? []
+    for (const rawChange of asArray(data.active_changes)) {
+      const ch = asObject(rawChange)
+      const affected = asArray(ch.affected_components)
       // The page also reports search/file-upload outages; keep only incidents that
       // touch a monitored model or the chat service.
-      if (!affected.some((ac: any) => statusById.has(String(ac?.component_id ?? '')))) continue
-      incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
-      for (const ac of affected) {
-        const id = String(ac?.component_id ?? '')
-        const st = String(ac?.status ?? '').trim()
+      if (!affected.some((rawAffected) => statusById.has(asString(asObject(rawAffected).component_id)))) continue
+      incidents.push({ title: toEnglish(asString(ch.title)), status: asString(ch.status).trim() })
+      for (const rawAffected of affected) {
+        const ac = asObject(rawAffected)
+        const id = asString(ac.component_id)
+        const st = asString(ac.status).trim()
         if (id !== '' && statusById.has(id) && DS_SEVERITY[st] !== undefined) statusById.set(id, st)
       }
     }
@@ -258,10 +277,11 @@ export async function fetchDshBalance(home = resolveDshHome()): Promise<void> {
     return
   }
   try {
-    const json = (await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` })) as any
-    const info = json?.balance_infos?.[0]
+    const json = asObject(await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` }))
+    const rawInfo = asArray(json.balance_infos)[0]
+    const info = rawInfo === undefined ? undefined : asObject(rawInfo)
     setBalance(home, info
-      ? { balance: { currency: String(info.currency ?? ''), total: String(info.total_balance ?? '') } }
+      ? { balance: { currency: asString(info.currency), total: asString(info.total_balance) } }
       : { balance: null, error: 'No balance data returned' })
   } catch (e) {
     // fetch() hides the real cause (DNS / refused / TLS) in e.cause; surface it.
