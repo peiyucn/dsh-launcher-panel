@@ -474,6 +474,25 @@ package-lock.json
 - owner 的 PR 合并保留 bypass，直推仍被拒绝；
 - 私有仓库在 GitHub Free 下无法使用同等保护，需要 Pro/Team 或明确接受降级。
 
+### 12.6 贡献图与身份分离的取舍
+
+GitHub 的 contribution graph 主要按**提交作者邮箱**归属，而不是仓库 owner。因此：
+
+- Agent 用自己的账号提交，绿格记在 Agent 账号上；
+- owner 只合并 PR，不会自动获得这些提交的贡献；
+- owner 自己提交、提交 review、创建 issue/PR 才会记入自己的贡献图。
+
+这是身份分离的代价，不是配置错误。可选的处理方式：
+
+| 方式 | 结果 | 建议 |
+|---|---|---|
+| 接受贡献图减少 | 审计清晰，Agent 行为可区分 | **推荐**，尤其团队仓库 |
+| owner 实际参与 review / 修复 / 文档提交 | owner 仍有真实贡献记录 | 推荐 |
+| 对确有共同创作的提交加 `Co-authored-by` | 双方都获得贡献归属 | 仅在 owner 真正参与时使用 |
+| 把所有 Agent 提交伪造成 owner 作者 | 点阵好看，但审计身份失效 | **不推荐** |
+
+GitHub 的官方规则：提交作者邮箱必须关联账号；共同作者提交也按同样条件计入贡献图（[Profile contributions reference](https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference)）。不要为了绿格伪造 co-author；安全审计比贡献图重要。
+
 ## 13. meta-repo 替换的迁移顺序
 
 不要先改根 AGENTS，再补项目：
