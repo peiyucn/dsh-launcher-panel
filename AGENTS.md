@@ -9,6 +9,7 @@
 本仓库是 VS Code 扩展「DSH Launcher Panel」的源码仓库。源码在 `src/`，`out/`、`releases/` 与 `*.vsix` 不入库。
 
 - `resources/dsh-icon.woff` 是生成物但随版本入库；`src/holidays.ts` 是手工静态数据，不用脚本抓取。
+- README 面向用户写安装 / 使用 / 配置；CHANGELOG 面向用户写可感知变化；行为变化要同步，不只改代码。
 - 功能契约与验收矩阵：[docs/instances-spec.md](docs/instances-spec.md)
 - 模块边界与依赖方向：[docs/architecture.md](docs/architecture.md)
 - 定位、退役判据：[docs/positioning-and-retirement.md](docs/positioning-and-retirement.md)
@@ -59,6 +60,7 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 ### 代码与架构
 
 - 单一职责；状态经函数封装；命名达意；同类对称；不写超长函数与重复逻辑。
+- 清理未使用的导出、import、变量与类型；死代码不留在仓库里。
 - `shared/` 保持可单测；模块边界以 `architecture.md` 为准。
 - 不导入 VS Code 内部模块；dsh 版本差异只按公开契约读取，不认的输出走降级路径。
 - 活动流 busy 必须用 `withBusy` 成对收尾，不手写 `addActivity(..., true)` / `finishBusy`。
@@ -96,6 +98,7 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 - 结论必须来自命令输出或文件内容；推断只能用于提出假设。
 - 不用取巧写法让检查变绿；检查失败时如实说明，不隐瞒。
 - 进度区分已实现、已提交、已推送、已发布、已上线验证；不笼统说“完成”。
+- 完成后自检：旧位置确实移除、差异与预期一致、验证结果来自实际执行。
 - 改 `AGENTS.md` 或放宽任何门禁须经 owner 明确许可。
 - 新功能跑通后先讨论重构方案，确认后执行；重构与功能分开提交。
 - GitHub 操作统一用 `gh`；代理与宿主环境配置不写入仓库。
