@@ -1,0 +1,11 @@
+# Policy files: changes require an owner review.
+/AGENTS.md @peiyucn
+/docs/quality-gates.md @peiyucn
+/docs/release.md @peiyucn
+/eslint.config.mjs @peiyucn
+/scripts/check-policy.mjs @peiyucn
+/scripts/check-security-alerts.sh @peiyucn
+/test/policy-lint.test.ts @peiyucn
+/package.json @peiyucn
+/package-lock.json @peiyucn
+/.github/ @peiyucn

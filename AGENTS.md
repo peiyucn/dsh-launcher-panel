@@ -23,7 +23,9 @@ npm test         # node:test，不依赖 VS Code 的纯逻辑用例
 ```
 
 - 任何 push / PR 前必须 `npm run verify` 全绿；工作区保持干净。
-- `main` / `dev` 只能通过 PR 更新，squash only；required checks 为 `typecheck` / `test` / `build` / `package`，bypass 名单为空，**owner 也不能直推**。
+- `main` / `dev` 只能通过 PR 更新，squash only；required checks 为 `typecheck` / `test` / `build` / `package`，**owner 也不能直推**。
+- `AGENTS.md`、`docs/quality-gates.md`、`docs/release.md`、ESLint / policy 脚本、CI workflow 和依赖清单属于策略文件，必须由 owner 审阅；Agent 只能开 PR，不能自己合并。
+- Agent 的 GitHub 身份使用 `peiyucn-agent`；不要用 owner 的 gh 凭据运行自动化。
 - CI 的 `typecheck` job 在 tsc 前执行 lint；任何一条 lint 失败都视为门禁失败。
 
 ## 自动化质量门禁

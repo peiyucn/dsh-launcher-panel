@@ -85,11 +85,12 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 - 只能通过 PR 更新，合并方式仅 squash；
 - required checks：`typecheck` / `test` / `build` / `package`，必须是 GitHub Actions（app id 15368）产生，且分支必须与最新目标分支同步；
-- bypass 名单为空，管理员同样不能绕过；
+- `AGENTS.md`、质量门禁、发布文档、ESLint / policy 脚本、CI workflow 和依赖清单由 `.github/CODEOWNERS` 指定 owner 审阅；
+- Agent 的 PR 需要 owner 批准；`require_last_push_approval` 防止批准后又推入新改动；
 - 禁删除、禁强推、禁重写历史；
 - 直接 push 到 `dev` 会被 GitHub 拒绝（`Changes must be made through a pull request`）。
 
-边界：仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界，不能靠仓库自身防止 owner 改规则。要让规则本身受约束，需要组织/企业级治理或自托管 Git 的服务端 hook。
+边界：owner 对自己的 PR 保留合并绕过；直推仍被禁止。仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界。要让 owner 也完全不能改规则，需要独立管理员、组织/企业级治理或自托管 Git 的服务端 hook。
 
 ## 6. 维护边界
 
