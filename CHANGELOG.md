@@ -6,7 +6,7 @@ English | [简体中文](CHANGELOG.zh-CN.md)
 
 ## [Unreleased]
 
-- The **DeepSeek API Status** card now shows one `Last checked` time for the whole card instead of repeating the time on every model row.
+- The **DeepSeek API Status** card now lays the API entries out as pills in a left column and keeps a single `Last checked` block in a right column, separated by a divider; the label and time are on separate lines.
 
 ## [0.4.5] - 2026-11-14
 

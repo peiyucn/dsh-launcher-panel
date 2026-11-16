@@ -6,7 +6,7 @@
 
 ## [Unreleased]
 
-- **DeepSeek API Status** 卡片改为整张卡片显示一次 `Last checked` 时间，不再在每个模型行重复显示检查时间。
+- **DeepSeek API Status** 卡片改为左右两列：左侧 API 以胶囊排列，右侧单列显示 `Last checked` 标签与时间（分两行），中间用竖线分隔。
 
 ## [0.4.5] - 2026-11-14
 
