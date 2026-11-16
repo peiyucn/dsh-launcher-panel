@@ -37,14 +37,14 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 | ID | 检查内容 | 来源 / 防止的错误 |
 |---|---|---|
-| QG001 | 必读文档存在：AGENTS、双语 README / CHANGELOG、SECURITY、架构 / 规格 / 定位 / 质量门禁 / 发布 / 升级说明 | 文档遗漏、仓库不可独立维护 |
+| QG001 | 必读文档存在：AGENTS、双语 README / CHANGELOG、SECURITY、架构 / 规格 / 定位 / 质量门禁 / 发布 | 文档遗漏、仓库不可独立维护 |
 | QG002 | 双语 README 的 Settings 表键名与顺序 = `package.json` `contributes.configuration.properties` | 面板配置与用户文档漂移 |
 | QG003 | `engines.vscode` 为 caret，`@types/vscode` 为精确版本，二者同版 | 类型面漂移到运行时不支持的 API |
 | QG004 | 中英 README、中英 CHANGELOG 互相链接 | 双语文档失去入口 |
 | QG005 | 两份 CHANGELOG 的最新版本 = `package.json` 版本 | 发布内容不完整 |
 | QG006 | `verify` 必须先跑 lint | 检查链被绕过 |
-| QG007 | CI job 只使用 E24 名称，顺序为 typecheck → test → build → package | 自创环节、发布链重排 |
-| QG008 | publish 使用发布 environment；E18 告警门禁在打包前；tag 提交必须在 main | 绕过安全门禁或从未合并提交发版 |
+| QG007 | CI job 只使用规定的环节名称，顺序为 typecheck → test → build → package | 自创环节、发布链重排 |
+| QG008 | publish 使用发布 environment；发布安全门禁在打包前；tag 提交必须在 main | 绕过安全门禁或从未合并提交发版 |
 | QG009 | `releases/`、`*.vsix` 等产物不进 git / VSIX | 产物污染仓库或发布包 |
 | QG010 | 测试中不得提交 `.only()` | 只跑一个用例却显示全绿 |
 
@@ -52,10 +52,10 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 | ID | 规则 | 来源 / 防止的错误 |
 |---|---|---|
-| E001 | 禁止从 `node:child_process` 导入 `exec` / `execSync` | 拼接命令导致用户路径变成第二条命令（G4） |
-| E002 | 禁止 `shell: true` | 参数经 shell 重新解析（G4） |
+| E001 | 禁止从 `node:child_process` 导入 `exec` / `execSync` | 拼接命令导致用户路径变成第二条命令 |
+| E002 | 禁止 `shell: true` | 参数经 shell 重新解析 |
 | E003 | `src/shared/` 不得导入 `vscode` | 纯逻辑层失去可单测性（architecture.md） |
-| E004 | 禁止显式 `any` | 外部数据未解析就穿过类型边界（G5） |
+| E004 | 禁止显式 `any` | 外部数据未解析就穿过类型边界 |
 | E005 | ESLint recommended + typescript-eslint recommended | 未使用变量、无用赋值、明显错误 |
 
 ## 4. 出错后怎么加检查

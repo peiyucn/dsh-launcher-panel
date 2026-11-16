@@ -31,7 +31,6 @@ const REQUIRED_DOCS = [
   'docs/positioning-and-retirement.md',
   'docs/quality-gates.md',
   'docs/release.md',
-  'docs/engineering-upgrade.md',
 ]
 
 const GITIGNORE_ENTRIES = ['node_modules/', 'out/', 'releases/', '*.vsix']
@@ -143,7 +142,7 @@ export function checkRepository(root) {
   } else {
     const jobs = parseJobs(read(root, ciPath))
     const unknown = jobs.filter((job) => !ALLOWED_WORKFLOW_JOBS.has(job))
-    if (unknown.length > 0) fail('QG007', `${ciPath} has unknown E24 job name(s): ${unknown.join(', ')}`)
+    if (unknown.length > 0) fail('QG007', `${ciPath} has unknown CI job name(s): ${unknown.join(', ')}`)
     if (new Set(jobs).size !== jobs.length) fail('QG007', `${ciPath} has duplicate job names`)
     if (jobs.join(',') !== 'typecheck,test,build,package') {
       fail('QG007', `${ciPath} pipeline must stay typecheck → test → build → package (found ${jobs.join(' → ')})`)
@@ -159,7 +158,7 @@ export function checkRepository(root) {
     const gate = publish.indexOf('bash scripts/check-security-alerts.sh')
     const packageAt = publish.search(/\b(?:vsce package|npm run package)\b/)
     if (gate === -1 || packageAt === -1 || gate > packageAt) {
-      fail('QG008', 'E18 security-alert gate must run before packaging/publishing')
+      fail('QG008', 'security-alert gate must run before packaging/publishing')
     }
     if (!/git merge-base --is-ancestor.*origin\/main/s.test(publish)) {
       fail('QG008', 'publish must fail closed when the tag commit is not on main')

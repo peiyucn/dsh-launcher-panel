@@ -32,7 +32,6 @@ const BASE_FILES: Record<string, string> = {
   'docs/positioning-and-retirement.md': '# positioning\n',
   'docs/quality-gates.md': '# quality gates\n',
   'docs/release.md': '# release\n',
-  'docs/engineering-upgrade.md': '# engineering upgrade\n',
   'README.md': [
     '# fixture',
     '中文见 [README.zh-CN.md](README.zh-CN.md)',

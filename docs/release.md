@@ -13,7 +13,7 @@
 
 1. 确认 `dev` 的 CI 全绿，`git diff --check` 干净。
 2. 创建 `dev` → `main` 的 PR，等待四个 required checks 通过后 squash 合并；**不得直接 push main**。
-3. 执行 E17：打 tag / 发布市场前，向 owner 明确报出「要发什么、版本号、目标通道、影响范围」，获得当次确认；上一次批准不适用于本次。
+3. 执行 M5：打 tag / 发布市场前，向 owner 明确报出「要发什么、版本号、目标通道、影响范围」，获得当次确认；上一次批准不适用于本次。
 4. 在 `main` 上创建 annotated tag 并推送。`v*` tag 受保护，只有 owner 能创建/移动/删除；Agent 不得推送 tag：
 
    ```bash
@@ -26,7 +26,7 @@
 5. `publish.yml` 依次执行：
 
    - 校验 tag 提交在 `main` 上（不在则中止）；
-   - E18 告警门禁：Dependabot / CodeQL / secret scanning 任一未处理、查询失败或凭据缺失即中止；
+   - 发布安全门禁（S6）：Dependabot / CodeQL / secret scanning 任一未处理、查询失败或凭据缺失即中止；
    - 打包 VSIX → 发布 VS Code Marketplace → 创建 GitHub Release（说明由两份 CHANGELOG 当版条目拼接）。
 
 6. 发布完成后切回 `dev`，继续开发。
@@ -44,6 +44,6 @@
 
 ## 红线
 
-- 已发布版本与 tag 不覆盖、不移动；出错只能发新版本修正，并重新走 E17 确认；
-- 已发布版本不能用 unpublish 撤回；npm 相关处置按根规范 E23，由 owner 手动执行；
+- 已发布版本与 tag 不覆盖、不移动；出错只能发新版本修正，并重新走 M5 确认；
+- 已发布版本不能用 unpublish 撤回；npm 相关处置按发布红线，由 owner 手动执行；
 - 依赖升级一律手动；Dependabot 自动升级与 security updates 保持关闭。
