@@ -85,7 +85,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 - 只能通过 PR 更新，合并方式仅 squash；
 - required checks：`typecheck` / `test` / `build` / `package`，必须是 GitHub Actions（app id 15368）产生，且分支必须与最新目标分支同步；
-- `AGENTS.md`、质量门禁、发布文档、ESLint / policy 脚本、CI workflow 和依赖清单由 `.github/CODEOWNERS` 指定 owner 审阅；
+- `AGENTS.md`、`meta/`、质量门禁、发布文档、ESLint / policy 脚本、CI workflow 和依赖清单由 `.github/CODEOWNERS` 指定 owner 审阅；
 - Agent 的 PR 需要 owner 批准；`require_last_push_approval` 防止批准后又推入新改动；
 - `v*` tag 单独保护：只有 owner 能创建、移动或删除；Agent 不能推送发布 tag；
 - 禁删除、禁强推、禁重写历史；
@@ -97,5 +97,6 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 
 - 规则可以加严；放宽必须说明为什么、并保留历史误报的负例。
 - 修改 `eslint.config.mjs`、`scripts/check-policy.mjs` 或保护分支规则，都属于改变“门禁”，应由 owner 审阅。
+- `meta/` 是 `pyai-meta-repo` 的共享规则快照；改规则先改 meta，再整体覆盖本目录，不单独改快照。
 - 本文件只记录本项目实际执行的检查；通用规则不在本文件复制。
 - `AGENTS.md` 负责本项目对 agent 的行为契约；本文件负责自动检查可判定的质量门禁，不取代行为约定。

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "owner": "peiyucn",
+  "ownerActorId": 1487561,
+  "projects": {
+    "dsh-launcher-panel": {
+      "repo": "peiyucn/dsh-launcher-panel",
+      "defaultBranch": "main",
+      "integrationBranch": "dev",
+      "branchRuleset": "严格 PR 门禁",
+      "lightBranchRulesets": [
+        {
+          "name": "默认分支轻保护",
+          "ref": "refs/heads/main"
+        },
+        {
+          "name": "dev 分支轻保护",
+          "ref": "refs/heads/dev"
+        }
+      ],
+      "requiredChecks": [
+        "typecheck",
+        "test",
+        "build",
+        "package"
+      ],
+      "checksIntegrationId": 15368,
+      "requiredApprovals": 1,
+      "codeOwnerReview": true,
+      "lastPushApproval": true,
+      "reviewThreadResolution": true,
+      "strictStatusChecks": true,
+      "squashOnly": true,
+      "deleteBranchOnMerge": true,
+      "tagRuleset": "发布 tag 保护",
+      "tagPattern": "refs/tags/v*",
+      "tagOwnerBypassMode": "always",
+      "codeowners": ".github/CODEOWNERS",
+      "publishWorkflow": ".github/workflows/publish.yml"
+    }
+  }
+}

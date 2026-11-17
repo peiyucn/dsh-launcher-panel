@@ -1,0 +1,179 @@
+# 交付与发布规范
+
+> 规范层。被 `AGENTS.md`、`playbooks/`、`skills/` 引用；不反向依赖它们。
+> 来源：原 `AGENTS.md` 的 E、F 段；项目相关值（分支、checks、发布通道）见 [PROJECTS.md](../PROJECTS.md)。
+> 本地验证规则 E8 在 [verification.md](verification.md)；项目管线清单在 [PROJECTS.md](../PROJECTS.md)。
+
+## E 工程管线
+
+[PROJECTS.md](../PROJECTS.md) 中档位为全量或精简的仓库共用的流程标准。各步骤的具体动作见各项目自己的 AGENTS。
+
+E8 本地一键验证已移到 [verification.md](verification.md)。
+
+### E1｜建仓库〔constructor〕
+
+用 `gh` 创建，按用途选公开或私有。
+
+### E2｜配置安全基线〔constructor〕
+
+按 F 段配置安全开关与分支保护，再按 F4 逐项核验。
+
+### E3｜放置工作流〔constructor〕
+
+`ci.yml` 承接 push/PR，`publish.yml` 承接发布。环节按 E24 命名，只放该项目真实存在的。触发方式按发布形态定。
+
+### E4｜创建部署环境〔constructor〕
+
+用 `gh` 创建环境级 environment，名称按发布通道命名。publish job 须挂该 environment，不设审批门禁，Deployments 页面据此留存发布记录。
+
+托管方提供的内置环境不需要手动创建。
+
+### E5｜放置文档骨架〔constructor〕
+
+`AGENTS.md` 按 I1 编写，同时提供中英双份 README 与 CHANGELOG。无版本语义的仓库可按该项目 AGENTS 声明豁免。
+
+### E6｜登记〔constructor〕
+
+在 [PROJECTS.md](../PROJECTS.md) 的项目清单增加一行。有 CI 或发布流程的，另在项目管线增加管线行。owner 发起新增项目即视为许可修改上述登记。
+
+### E7｜分支约定〔overridable〕
+
+日常改动在 `dev` 分支，默认分支统一为 `main`。例外：[PROJECTS.md](../PROJECTS.md) 项目清单的「开发分支」列为 `main` 的单分支项目直接在 `main` 开发；GitLab 仓库沿用现有分支名。
+
+### E9｜打包产物〔overridable〕
+
+可分发的产物统一放仓库根的 `releases/`，写入 `.gitignore`，确认不进发布包。
+
+输出目录不存在时，打包工具会把目录名当文件名。干净 clone 的仓库没有该目录，须先创建。
+
+不产出可分发包的项目不受本条约束。
+
+### E10｜提交粒度〔final〕
+
+一个 commit 只做一件事。描述用中文，保留英文类型前缀。
+
+### E11｜推送前置条件〔final〕
+
+push 前须 `verify` 通过，推送到开发分支（见 E7）。
+
+### E12｜push 后核查安全告警〔final〕
+
+push 后立即查询一次未处理的 Dependabot 告警，确认清零才继续。存在告警的，先修复再进入发版流程。
+
+### E13｜代码扫描须按扫描周期核查〔final〕
+
+`verify` 通过、CI 全绿，不代表安全扫描无问题。CodeQL 依赖扫描周期，未出结果不得视为通过，须等本轮扫描完成后再查。
+
+依赖类告警按 E22 处理；代码类告警修复后，须等下一轮扫描确认状态变为已修复再发版。
+
+tag 前须确认 CodeQL default setup 已扫过本轮 main 提交（查 `code-scanning/analyses` 的 `commit_sha`），未扫过则等扫描完成再发；不得用上一次 main 的扫描代替本轮。
+
+### E14｜发布前审计〔final〕
+
+按 G 段逐条过一遍。
+
+### E15｜准备发布内容〔final〕
+
+两份 CHANGELOG 加新版本条目，改版本号文件，README 有功能变更则同步。多包仓库按包各自维护。
+
+### E16｜合并并推送〔final〕
+
+把开发分支合并到默认分支；单分支项目无需合并。
+
+**tag 触发的项目**：合并后直接推送，进入 E17。
+
+**push 默认分支即部署的项目**：暂不推送，等 E17 批准后再推。
+
+### E17｜发布前须征得 owner 同意〔final〕
+
+发布不可逆，每次执行前都须 owner 明确同意。此前的批准不适用于本次。
+
+### E18｜有告警不得发版（发布硬门禁）〔interface〕
+
+只要存在任一未处理告警（Dependabot / CodeQL / secret scanning），一律不得发版。不得以「告警不在本次改动里」「在测试代码里」「不进发布产物」「与本版无关」为由豁免。
+
+该门禁须由发布工作流 fail-closed 执行（查询告警数，非 0 即中止发布），不得只靠人工核对。告警修复后须等下一轮扫描确认关闭，才算清零。依赖类告警按 E22 处理。
+
+门禁凭据一律用环境级只读 secret（至少能读 Dependabot / Code scanning / Secret scanning 告警）；`GITHUB_TOKEN` 读不到 secret scanning 告警，不得用它当门禁凭据。查询本身失败同样中止发布。
+
+### E19｜打 tag 并推送〔interface〕
+
+一律用 annotated tag 并附说明。push 默认分支即部署、不使用版本号的站点不适用本条。
+
+tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验（不在默认分支即中止），不靠人工核对。
+
+单次推送不超过 3 个 tag，超过时 GitHub 不生成 push 事件。多包仓库逐个推送，推送后确认 workflow 真的启动。
+
+### E20｜发布凭据〔final〕
+
+发布凭据一律放环境级 secret，仓库级不保留。
+
+### E21｜发布后收尾〔final〕
+
+已发布的版本与 tag 不得覆盖、不得移动。出错只能发新版本修正，且须重新执行 E17 的确认。
+
+发布完成后切回 `dev` 继续开发。单分支项目不适用。
+
+### E22｜依赖维护〔final〕
+
+依赖升级一律手动执行，自动升级按 F3 保持关闭。
+
+运行时依赖或产物依赖单独发补丁版，不与其他改动合并；纯 devDependencies 可并入下个版本。依赖不进产物时 CHANGELOG 写明「无用户可感知的变化」。
+
+### E23｜坏版本处理〔final〕
+
+坏版本一律用 deprecate，不得 unpublish，由 owner 在本机手动执行。无 deprecate 能力的市场只在 README 与 Release 说明里标注已知问题，指向修复版本。
+
+退役包另有处置：发布后 24 小时内的 unpublish 窗口内可从 npm 移除；超出窗口的用 deprecate，并在 README 如实描述（不得笼统声称「npm 包已删除」）。以上 npm 处置均由 owner 执行。
+
+### E24｜CI 环节名称〔overridable〕
+
+以下名称是规定，不得自创：
+
+| 环节 | 职责 |
+|---|---|
+| `typecheck` | 类型检查 |
+| `test` | 单元测试 |
+| `build` | 构建可运行产物 |
+| `package` | 打成发布形态 |
+| `publish` | 发布到市场或 registry（不可逆，须 owner 当次确认） |
+| `deploy` | 部署上线（对外可见，须 owner 当次确认） |
+| `sync` | 数据同步 |
+
+每个项目只放真实存在的环节，同型项目顺序保持一致。
+
+## F 安全基线
+
+所有 GitHub 仓库共用。新建仓库照此配置，修改基线须同步至所有仓库。非 GitHub 托管仓库不适用本段。
+
+### F1｜公开仓库全部开启〔final〕
+
+Dependabot alerts（仅报警）、CodeQL default setup、secret scanning 与 push protection、private vulnerability reporting、根目录 `SECURITY.md`。
+
+### F2｜私有仓库仅开启 Dependabot alerts〔final〕
+
+免费计划下其余开关、分支保护与 ruleset 均不可用，记「不可用」不算违规。
+
+### F3｜统一保持关闭〔final〕
+
+secret scanning 的非提供商模式、validity checks、Dependabot 自动升级。
+
+### F4｜逐项核验〔final〕
+
+配置完成与每次变更后逐项核验，结果记录在案；套用 I1 的项目记入其 AGENTS 的安全基线章。
+
+核验项：安全开关各项状态、未处理告警数、CodeQL 状态、私有漏洞报告、`SECURITY.md`、ruleset 清单与规则、合并设置、默认分支的经典保护。私有仓库的分支保护相关项按 F2 记「不可用」。
+
+### F5｜分支保护三层〔final〕
+
+三层指：经典分支保护、ruleset 轻量保护、仓库合并设置。
+
+- **经典保护**：只在此层设「要求对话解决」与「不允许绕过」。不设 required status checks，因会挡住 owner 直推。
+- **ruleset**：固定为禁删除、禁强推、禁重建，绕过名单留空。公开仓库的默认分支与 `dev`（如有）各一条。
+- **合并设置**：仅开 squash，关闭 merge commit 与 rebase。该项不在 ruleset 也不在安全开关里，最易漏查。
+
+### F6｜直推权限与外部交互〔final〕
+
+owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一律开放，不设交互限制；不接受的直接关闭。
+
+单仓库可按其 AGENTS 登记例外。

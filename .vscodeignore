@@ -3,6 +3,7 @@
 .gitignore
 .github/**
 AGENTS.md
+meta/**
 docs/**
 src/**
 tsconfig.json

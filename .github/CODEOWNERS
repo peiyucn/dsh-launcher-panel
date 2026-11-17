@@ -1,6 +1,7 @@
 # Policy files: changes require an owner review.
 /AGENTS.md @peiyucn
 /.gitattributes @peiyucn
+/meta/ @peiyucn
 /docs/quality-gates.md @peiyucn
 /docs/release.md @peiyucn
 /eslint.config.mjs @peiyucn
