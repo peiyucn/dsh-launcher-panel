@@ -7,7 +7,7 @@
 
 | 文件 | 范围 |
 |---|---|
-| [behavior.md](behavior.md) | A 仓库约定、B2 目录命名、C 工作约定、D 工具、H 文档规范、I 章节标准 |
+| [behavior.md](behavior.md) | A 仓库约定、B2 目录命名、C 工作约定、D 工具、H 文档规范、I 项目 AGENTS 结构 |
 | [delivery.md](delivery.md) | E 工程管线、F 安全基线、GitHub 控制映射 |
 | [verification.md](verification.md) | E8 本地验证、G 代码审计 |
 
@@ -52,7 +52,7 @@
 | 控制 | 规则 | 执行方式 | 证据 |
 |---|---|---|---|
 | 本地验证 | E8、G8 | 项目 `verify` | `verify` 退出码 |
-| 项目检查登记 | E8、G | [checks.md](../checks.md) 复制到项目 `docs/checks.md` + `verify` | 负例/退出码 |
+| 项目检查登记 | E8、G | `docs/checks.md` + `node meta/scripts/check-project-contract.mjs` | 校验输出 |
 | 提交粒度 | E10 | review | 提交记录 |
 | 分支只能 PR | E7、F5 | GitHub ruleset | ruleset 查询 |
 | required checks | E24、F5 | 分支保护 / ruleset | checks 列表 |

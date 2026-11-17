@@ -26,7 +26,7 @@
 
 每个软件项目必须在 `docs/checks.md` 维护检查登记表。路径和表头固定；项目只填检查条目，不能改文件名或另起一份。
 
-标准模板：[checks.md](../checks.md)。复制到项目后保留表头和列名。
+meta 校验脚本：`node meta/scripts/check-project-contract.mjs`。它按 `PROJECTS.md` 扫描项目，报告缺失的 `AGENTS.md`、`docs/checks.md` 或表头；脚本失败就是项目还没继承完整。
 
 固定表头：
 

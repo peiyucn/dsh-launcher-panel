@@ -1,6 +1,6 @@
 # 项目检查登记
 
-> 这是 `dsh-launcher-panel` **项目专属**的可执行检查表。格式来自 [meta/checks.md](../meta/checks.md)（meta `0e0a5dc`），保留表头和列名。
+> 这是 `dsh-launcher-panel` **项目专属**的可执行检查表。格式来自 [meta/rules/verification.md](../meta/rules/verification.md)（meta `ded482a`），保留表头和列名。
 > 通用分层、登记要求、加检查顺序见 [local meta/rules/verification.md](../meta/rules/verification.md)；重复错误升级见 [local meta/skills/correct/SKILL.md](../meta/skills/correct/SKILL.md)。
 
 ## 1. 入口

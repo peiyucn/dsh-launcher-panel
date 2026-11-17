@@ -1,6 +1,6 @@
 # 本地 meta 快照
 
-来源：`pyai-meta-repo` 的 `meta/` 目录，快照提交 `0e0a5dc`。
+来源：`pyai-meta-repo` 的 `meta/` 目录，快照提交 `ded482a`。
 
 用途：让本项目在单独 clone 时也能读到共享规则、原则、技能和 playbook；默认不进入上下文，由 [AGENTS.md](../AGENTS.md) 按任务路由。
 
