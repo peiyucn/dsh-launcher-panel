@@ -12,7 +12,6 @@ export const PANEL_REFRESH_INTERVAL_MS = 4_000
 export const STATUS_BAR_REFRESH_INTERVAL_MS = 15_000
 export const UPDATE_CHECK_TTL_MS = 5 * 60_000
 
-// Remote round trips and history transfers are latency/payload bound, so the git bounds stay generous.
 export const GIT_REMOTE_TIMEOUT_MS = 60_000
 export const PNPM_VIEW_TIMEOUT_MS = 60_000
 export const GIT_FETCH_TIMEOUT_MS = 15 * 60_000
@@ -21,7 +20,7 @@ export const GIT_OP_TIMEOUT_MS = 10_000
 
 export const ACTIVITY_MAX_LINES = 200
 export const LOG_RELOAD_LINES = 50
-// One activity line can be an entire tool output, so cap characters too or it bypasses the line cap.
+
 export const ACTIVITY_LINE_MAX_CHARS = 8 * 1024
 export const ACTIVITY_LOG_MAX_BYTES = 5 * 1024 * 1024
 export const ACTIVITY_LOG_KEEP_BYTES = 256 * 1024

@@ -174,8 +174,6 @@ test('isDshInstallDirUsable accepts absent, empty and launcher-owned dirs only',
   }
 })
 
-// A folder can be a usable install target while its package.json belongs to the user: "usable"
-// must not imply "writable", which is what the writer's ownership guard has to prevent.
 test('a usable install dir can still have a package.json the launcher must not touch', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-ownership-'))
   try {
@@ -268,7 +266,7 @@ test('writeInstallManifest records and preserves the package import method', () 
     assert.equal(installedPackageImportMethod(dir), undefined, 'no manifest yet')
     assert.equal(writeInstallManifest('0.3.7', dir, 'copy'), true)
     assert.equal(installedPackageImportMethod(dir), 'copy')
-    // A plain Start rewrites the manifest without a method: the recorded one must survive.
+
     assert.equal(writeInstallManifest('0.3.7', dir), true)
     assert.equal(installedPackageImportMethod(dir), 'copy')
     assert.equal(writeInstallManifest('0.3.8', dir, 'hardlink'), true)
@@ -301,7 +299,7 @@ test('installUsesHardlinks samples the installed dsh package instead of trusting
     linkSync(join(lib, 'bin.js'), join(lib, 'linked.js'))
     assert.equal(installUsesHardlinks(root), true)
     assert.equal(effectivePackageImportMethod(root), 'hardlink')
-    // A recorded method wins over what the sample shows.
+
     assert.equal(writeInstallManifest('0.3.8', root, 'copy'), true)
     assert.equal(effectivePackageImportMethod(root), 'copy')
   } finally {

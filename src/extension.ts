@@ -23,9 +23,6 @@ export function activate(context: vscode.ExtensionContext): void {
     dbg(`manager initialization failed: ${errorText(error)}`)
   })
 
-  // Other windows share the user settings file, so a list change must reload.
-  // `dsh.activeInstance` is deliberately ignored: it only seeds a new window,
-  // and each window keeps its own active instance while open.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('dsh.instances')) return

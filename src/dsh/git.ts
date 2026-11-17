@@ -6,7 +6,6 @@ interface ProxySetting {
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
-// Only loopback proxies are reported: a remote proxy being unreachable from here is not ours to judge.
 export function parseLocalProxySettings(stdout: string): ProxySetting[] {
   const settings: ProxySetting[] = []
   for (const line of stdout.split(/\r?\n/)) {

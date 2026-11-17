@@ -6,12 +6,10 @@ export const INSTANCE_BRAND_PACKAGE = '@dsh-launcher/instance-brand'
 
 const INSTANCE_BRAND_ID = 'launcher-instance-brand'
 
-/** Prefix DSH gives a profile manifest's `name` (`dsh-profile-<profile>`). */
 const DSH_PROFILE_NAME_PREFIX = 'dsh-profile-'
 
 const loggedSkipReasons = new Set<string>()
 
-/** Runs before every Start, so log each distinct skip reason once instead of spamming client.log. */
 function reportSkip(reason: string): void {
   if (loggedSkipReasons.has(reason)) return
   loggedSkipReasons.add(reason)
@@ -39,7 +37,6 @@ function readJsonObject(file: string): Record<string, unknown> | undefined {
   }
 }
 
-/** Both markers are DSH-written; anything else at that path is not ours to edit. */
 function isDshProfile(manifest: unknown): manifest is Record<string, unknown> {
   if (!isRecord(manifest)) return false
   if (typeof manifest.name === 'string' && manifest.name.startsWith(DSH_PROFILE_NAME_PREFIX)) return true
@@ -53,7 +50,6 @@ function readDshProfileManifest(manifestFile: string): Record<string, unknown> |
   return undefined
 }
 
-/** Only a directory whose package name is ours may be rewritten or removed. */
 function isOwnedBundleDir(dir: string): boolean {
   return readJsonObject(path.join(dir, 'package.json'))?.name === INSTANCE_BRAND_PACKAGE
 }
@@ -97,14 +93,13 @@ export function removeInstanceBrand(home: string, profile: string): void {
 
 let tempFileSeq = 0
 
-/** Rename over the destination: a crash never leaves a truncated profile manifest. */
 function writeFileAtomic(file: string, content: string): void {
   const temp = `${file}.${process.pid}.${++tempFileSeq}.tmp`
   fs.writeFileSync(temp, content, 'utf8')
   try {
     fs.renameSync(temp, file)
   } catch (error) {
-    try { fs.rmSync(temp, { force: true }) } catch { /* best effort */ }
+    try { fs.rmSync(temp, { force: true }) } catch {  }
     throw error
   }
 }
@@ -142,7 +137,6 @@ function writeBundle(dir: string, name: string): void {
   writeFileAtomic(path.join(lib, 'client.js'), clientSource(name))
 }
 
-/** Re-reads and re-checks ownership: this is the write that can damage a user profile. */
 function updateProfileBundles(manifestFile: string, enabled: boolean): void {
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as unknown
   if (!isDshProfile(manifest)) {
@@ -160,7 +154,6 @@ function updateProfileBundles(manifestFile: string, enabled: boolean): void {
   writeFileAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-/** Generated client overlay: name under the wordmark in the 60px logo row, following locale/change. */
 function clientSource(name: string): string {
   const instanceName = JSON.stringify(name)
   const css = JSON.stringify([

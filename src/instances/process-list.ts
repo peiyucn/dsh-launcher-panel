@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import { decodeChildOutput } from '../shared/proc.ts'
 import { NODE_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 
-/** One process as reported by the platform's process list. */
 export interface ProcessEntry {
   pid: number
   command: string
@@ -11,19 +10,16 @@ export interface ProcessEntry {
 const WINDOWS_PROCESS_SCRIPT = 'Get-CimInstance Win32_Process '
   + '| ForEach-Object { [string]$_.ProcessId + [char]9 + [string]$_.CommandLine }'
 
-// Command lines can be long (source mode debug flags, deep checkout paths); keep headroom.
 const PROCESS_LIST_MAX_BUFFER = 16 * 1024 * 1024
 
-/** True when the argv token is a dsh CLI entry (global shim, installed bin.js or source entry). */
 export function isDshEntryToken(token: string): boolean {
   const trimmed = token.replace(/^["']|["']$/g, '')
-  // Require a path separator: a bare `dsh` argument (e.g. `pnpm exec dsh ...`) is not the entry.
+
   if (/[\\/]dsh$/i.test(trimmed) || /[\\/]dsh\.(?:js|cjs|mjs|cmd)$/i.test(trimmed)) return true
   if (/@deepseek-ai[\\/]dsh[\\/]lib[\\/]bin(?:\.js)?$/i.test(trimmed)) return true
   return /apps[\\/]cli[\\/](?:src|dist)[\\/]bin\.(?:ts|js)$/i.test(trimmed)
 }
 
-/** The dsh CLI entry token (a path) from a command line. */
 export function dshEntryToken(command: string): string | undefined {
   const tokens = command.replace(/["']/g, '').split(/\s+/).filter((token) => token !== '')
   return tokens.find(isDshEntryToken)
@@ -35,11 +31,6 @@ function parsePort(value: string | undefined): number | undefined {
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : undefined
 }
 
-/**
- * Parse a dsh web-server command line into its profile and port.
- * Supports `node /usr/local/bin/dsh <profile> --port N`, the installed
- * `@deepseek-ai/dsh/lib/bin.js` entry and the source `apps/cli/src/bin.ts` entry.
- */
 export function parseDshServerCommand(command: string): { port: number; profile: string } | undefined {
   const tokens = command.replace(/["']/g, '').split(/\s+/).filter((token) => token !== '')
   const entryIndex = tokens.findIndex(isDshEntryToken)
@@ -57,7 +48,6 @@ export function parseDshServerCommand(command: string): { port: number; profile:
   return { port, profile }
 }
 
-/** True when `command` starts a dsh web server for exactly this port. */
 export function isDshServerCommand(command: string, port: number): boolean {
   return parseDshServerCommand(command)?.port === port
 }
@@ -67,7 +57,6 @@ function parsePid(text: string): number | undefined {
   return Number.isInteger(pid) && pid > 0 ? pid : undefined
 }
 
-/** Windows CIM probe output: one `<pid>\t<command line>` row per process. */
 export function parseWindowsProcessList(output: string): ProcessEntry[] {
   const entries: ProcessEntry[] = []
   for (const line of output.split(/\r?\n/)) {
@@ -80,7 +69,6 @@ export function parseWindowsProcessList(output: string): ProcessEntry[] {
   return entries
 }
 
-/** `ps -eo pid=,args=` output: leading padding, the pid, then the command line. */
 export function parsePosixProcessList(output: string): ProcessEntry[] {
   const entries: ProcessEntry[] = []
   for (const line of output.split(/\r?\n/)) {
@@ -104,7 +92,6 @@ function execText(command: string, args: string[], timeoutMs: number): Promise<s
 
 export type ProcessLister = () => Promise<ProcessEntry[] | undefined>
 
-/** Platform process list; undefined when the platform cannot provide one. */
 export const listProcessEntries: ProcessLister = async () => {
   if (process.platform === 'win32') {
     const output = await execText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_SCRIPT], NODE_PROBE_TIMEOUT_MS)
@@ -117,12 +104,10 @@ export const listProcessEntries: ProcessLister = async () => {
   return undefined
 }
 
-/** The process entry serving `port`, if the process list shows a dsh server there. */
 export function findDshServerEntry(entries: readonly ProcessEntry[], port: number): ProcessEntry | undefined {
   return entries.find((entry) => isDshServerCommand(entry.command, port))
 }
 
-/** PIDs of the dsh servers that serve `port`, deduplicated. */
 export function findDshServerPids(entries: readonly ProcessEntry[], port: number): number[] {
   const pids = new Set<number>()
   for (const entry of entries) {
@@ -131,7 +116,6 @@ export function findDshServerPids(entries: readonly ProcessEntry[], port: number
   return [...pids]
 }
 
-/** PIDs of the DSH servers serving `port`; empty when the platform cannot tell. */
 export async function findDshServerPidsByPort(port: number): Promise<number[]> {
   const entries = await listProcessEntries()
   return entries === undefined ? [] : findDshServerPids(entries, port)

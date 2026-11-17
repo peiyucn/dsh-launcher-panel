@@ -1,12 +1,7 @@
-#!/usr/bin/env node
-// Repository policy checks that do not need a JavaScript parser.
-// Every check has an ID in docs/checks.md. When this command fails, the
-// error is the specification: fix the repository or update the check together
-// with its registry entry. Keep this file dependency-free so `npm run lint`
-// stays usable in a clean clone.
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { checkNoComments } from '../meta/lint/check-comments.mjs'
 
 const ALLOWED_WORKFLOW_JOBS = new Set([
   'typecheck',
@@ -29,12 +24,11 @@ const REQUIRED_DOCS = [
   'docs/architecture.md',
   'docs/instances-spec.md',
   'docs/positioning-and-retirement.md',
-  'docs/checks.md',
   'docs/release.md',
 ]
 
 const GITIGNORE_ENTRIES = ['node_modules/', 'out/', 'releases/', '*.vsix']
-const VSCODEIGNORE_ENTRIES = ['src/**', 'docs/**', 'scripts/**', 'eslint.config.mjs', 'test/**', 'AGENTS.md', 'releases/**', '*.vsix']
+const VSCODEIGNORE_ENTRIES = ['src/**', 'docs/**', 'scripts/**', 'meta/**', 'test/**', 'AGENTS.md', 'releases/**', '*.vsix']
 
 function read(root, file) {
   return readFileSync(join(root, file), 'utf8').replace(/\r\n/g, '\n')
@@ -51,7 +45,7 @@ function parseJobs(workflow) {
   const body = workflow.slice(jobsAt).split('\n').slice(1)
   for (const line of body) {
     if (/^\S/.test(line) && !line.startsWith('  ')) break
-    const match = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line)
+    const match = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line)
     if (match) jobs.push(match[1])
   }
   return jobs
@@ -182,6 +176,8 @@ export function checkRepository(root) {
       if (/\.only\s*\(/.test(source)) fail('QG010', `test/${file} contains .only(); focused tests must not be committed`)
     }
   }
+
+  violations.push(...checkNoComments(root))
 
   return violations
 }

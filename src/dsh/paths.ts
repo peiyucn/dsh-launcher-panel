@@ -9,14 +9,12 @@ export const CLIENT_BUILD_RECORD_REL = path.join('.dsh-build', 'client-build-env
 
 const DSH_CLI_BIN = path.join('apps', 'cli', 'src', 'bin.ts')
 
-// Must match dsh-home-paths precedence so every dsh entry point resolves the same root.
 export function resolveDshHome(): string {
   const env = process.env.DSH_HOME
   if (env && env.trim() !== '') return env
   return path.join(os.homedir(), '.dsh')
 }
 
-// Deliberately outside LOCALAPPDATA/Application Support/XDG data: enterprise policy hits those.
 export function dshBaseDir(
   platform: NodeJS.Platform = process.platform,
   env: Record<string, string | undefined> = process.env,
@@ -26,7 +24,6 @@ export function dshBaseDir(
   return path.join(base, '.dsh-launcher-panel')
 }
 
-// The value is a user setting, so trim and resolve it: a trailing separator would defeat the apps/cli regex.
 export function isDshCheckout(dir: string | undefined): boolean {
   if (!dir) return false
   try {
@@ -67,15 +64,11 @@ export function isDshInstallDirUsable(dir: string): boolean {
   return manifestName(dir) === DSH_INSTALL_MANIFEST_NAME || installedDshVersion(dir) !== undefined
 }
 
-// An unreadable manifest cannot be proven ours, so it is left untouched.
 export function installManifestRepairable(dir: string): boolean {
   const manifest = path.join(dir, 'package.json')
   return !fs.existsSync(manifest) || manifestName(dir) === DSH_INSTALL_MANIFEST_NAME
 }
 
-// The ownership check lives in the writer so no caller can bypass it.
-// Without `packageImportMethod` an existing record is preserved: a plain Start must
-// not claim the configured method was applied when no reinstall happened.
 export function writeInstallManifest(version: string, dir: string, packageImportMethod?: PackageImportMethod): boolean {
   if (!installManifestRepairable(dir)) return false
   try {
@@ -98,15 +91,12 @@ export function writeInstallManifest(version: string, dir: string, packageImport
   }
 }
 
-/** The import method recorded for the current install; absent means "unknown/legacy". */
 export function installedPackageImportMethod(dir: string): PackageImportMethod | undefined {
   const value = readJson<{ dshLauncher?: { packageImportMethod?: string } }>(path.join(dir, 'package.json'))
     ?.dshLauncher?.packageImportMethod
   return value === 'auto' || value === 'copy' || value === 'hardlink' ? value : undefined
 }
 
-// pnpm hardlinks store files into node_modules; a manual or older install left no record.
-// Sampling the installed dsh package tells copy and hardlink installs apart without metadata.
 export function installUsesHardlinks(dir: string): boolean {
   const pkgDir = path.join(dir, 'node_modules', '@deepseek-ai', 'dsh')
   const files: string[] = []
@@ -135,13 +125,11 @@ export function installUsesHardlinks(dir: string): boolean {
   })
 }
 
-/** What the install actually is: the recorded method, else what the files show. */
 export function effectivePackageImportMethod(dir: string): PackageImportMethod | undefined {
   if (!fs.existsSync(dir)) return undefined
   return installedPackageImportMethod(dir) ?? (installUsesHardlinks(dir) ? 'hardlink' : 'copy')
 }
 
-/** True when the install exists and was produced with a different method than configured. */
 export function importMethodNeedsConversion(dir: string, configured: PackageImportMethod): boolean {
   const actual = effectivePackageImportMethod(dir)
   return actual !== undefined && actual !== configured
@@ -176,7 +164,6 @@ export function checkoutReady(checkout: string): boolean {
     || fs.existsSync(path.join(checkout, 'node_modules', '.bin', 'tsx'))
 }
 
-// A missing marker is not evidence of a stale install.
 export function checkoutDepsStale(checkout: string): boolean {
   try {
     return fs.statSync(path.join(checkout, 'pnpm-lock.yaml')).mtimeMs
@@ -193,13 +180,11 @@ export function maskPath(p: string): string {
   return /^[A-Za-z]:$/.test(segs[0]) ? segs[0] + '\\…\\' + segs[segs.length - 1] : '…/' + segs[segs.length - 1]
 }
 
-// Only local drive roots are probed; an offline UNC share could block the probe.
 export function driveRootExists(target: string): boolean {
   const root = path.parse(path.resolve(target)).root
   return !/^[A-Za-z]:[\\/]$/.test(root) || fs.existsSync(root)
 }
 
-// Keys and values dsh's root build writes into .dsh-build; keep in sync with upstream.
 export const DSH_BUILD_PROFILE_SELECTOR = 'DSH_BUILD_CLIENT_PROFILE'
 export const DSH_CLIENT_BUILD_PROFILE_KEY = 'DSH_CLIENT_BUILD_PROFILE'
 export const DSH_CLIENT_COMMIT_HASH = 'DSH_CLIENT_COMMIT_HASH'

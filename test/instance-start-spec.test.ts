@@ -180,6 +180,6 @@ test('profile initialization creates a custom profile from the web template', ()
     '--dump-config',
   ])
   assert.equal(built.spec.cwd, '/src/deepseek-harness')
-  // Profile init is a one-shot compose; it never enables the debug flood.
+
   assert.equal(built.spec.env.NODE_DEBUG, undefined)
 })

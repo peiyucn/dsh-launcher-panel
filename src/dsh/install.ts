@@ -31,7 +31,7 @@ export function managedSourceCheckout(): string {
 
 export function pkgInstallDir(cfg: { pkgPath: string }): string {
   const custom = cfg.pkgPath.trim()
-  // The setting may have been synchronized from a machine that had this drive.
+
   return custom !== '' && driveRootExists(custom) ? custom : managedPackageDir()
 }
 
@@ -69,7 +69,6 @@ async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promis
     await c.update(key, value, vscode.ConfigurationTarget.Global)
     return true
   } catch {
-    // A registry that does not know the setting yet must not abort the install.
     return false
   }
 }
@@ -82,7 +81,7 @@ export async function latestDshVersion(
   const spec = npmSpecForChannel(channel)
   const command = pnpmCmd ?? await findPnpm()
   if (command === undefined) return { error: 'pnpm was not found on PATH', pnpmUnusable: true }
-  // A bare `pnpm` is not spawnable on Windows; resolve the shim to its target.
+
   const resolution = resolveCommandEntry(command)
   if (!resolution.ok) {
     const error = `${maskPath(command)} cannot be launched: ${resolution.reason}`
@@ -111,9 +110,9 @@ export async function ensureDshInstalled(
     )
     return false
   }
-  // Finish or roll back a conversion that a crash interrupted before installing anything.
+
   recoverInterruptedReinstall(dir)
-  // A usable folder can still hold the user's own package.json; never replace it.
+
   if (!installManifestRepairable(dir)) {
     host.addActivity(`ℹ ${maskPath(dir)} already contains a dsh install with its own package.json — leaving that file untouched`)
   } else if (!writeInstallManifest(version, dir, importMethod)) {
@@ -138,12 +137,10 @@ export async function preparePkgStart(
   convertAllowed = false,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
-  // Converge interrupted-conversion leftovers only when no other instance is live:
-  // touching the install while another instance runs would swap files under it.
+
   if (convertAllowed) recoverInterruptedReinstall(dir)
   const installed = installedDshVersion(dir)
   if (installed !== undefined) {
-    // Reinstall in place; only when no other instance is live.
     if (importMethodNeedsConversion(dir, cfg.packageImportMethod)) {
       if (!convertAllowed) {
         host.dbg('import method switch deferred: another instance is running')
@@ -155,23 +152,20 @@ export async function preparePkgStart(
           host.addActivity(`ℹ Switching the dsh install to "${cfg.packageImportMethod}" import (reinstall in place)…`)
           const converted = await reinstallInPlace(installed, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host)
           if (!converted && !installLooksHealthy(dir)) {
-            // The install no longer works; starting it would only fail later with a
-            // less actionable error, so stop here with the recovery instruction.
             return undefined
           }
           if (!converted) host.addActivity('⚠ import method not applied — continuing with the existing install')
         }
       }
     }
-    // The installed version is what runs; the channel only governs future installs.
+
     if (!writeInstallManifest(installed, dir)) {
       host.dbg('install manifest not rewritten (absent ownership or write failure); continuing with the installed dsh')
     }
     host.setDshVersion(installed)
     return installed
   }
-  // No package-manager process belongs on an already-installed start. Both pnpm
-  // discovery and its version probe are deferred until an install is really needed.
+
   const pnpm = await ensurePnpmAvailable(host)
   if (!pnpm) return undefined
   const { command: pnpmCmd, allowBuild } = pnpm
@@ -198,7 +192,7 @@ export async function preparePkgStart(
   if (!cfg.pkgPath) {
     const chosen = await chooseInstallDir('pkg', managedPackageDir())
     if (!chosen) return undefined
-    // Persist the default too: an explicit value pins the install against a future default change.
+
     if (!(await saveDshSetting('pkgPath', chosen))) {
       host.addActivity(`⚠ could not remember dsh.pkgPath — installing to ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
     }
@@ -229,7 +223,7 @@ export async function ensurePnpmAvailable(host: InstallHost): Promise<{ command:
     )
     return undefined
   }
-  // Drop the cached "not found" answer so the shim this just installed is seen.
+
   const after = await findPnpm(true)
   if (!after) {
     reportStepFailure(
@@ -253,17 +247,10 @@ export function findSourceCheckout(cfg: { srcPath: string }): string | undefined
 interface SourceCheckout {
   path: string
   cloned: boolean
-  /** Launcher-owned checkout: safe to move to the newest release tag on start. */
+
   managed: boolean
 }
 
-/**
- * Source mode tracks the newest official release tag exactly. A fresh clone lands on
- * the default branch, whose `git describe` carries a `-N-gsha` suffix; pinning to the
- * tag keeps the shown version and the built source identical to a published release.
- * Never moves a user-supplied checkout that the launcher does not own.
- * @returns true when the checkout already sat on the tag or was moved onto it.
- */
 export async function pinSourceToNewestReleaseTag(checkout: string, host: Pick<InstallHost, 'addActivity' | 'dbg'>): Promise<boolean> {
   const listed = await listLocalReleaseTags(checkout)
   if ('error' in listed) {
@@ -282,7 +269,6 @@ export async function pinSourceToNewestReleaseTag(checkout: string, host: Pick<I
   }
   if (head === target) return true
   if (!(await pinCheckoutToTag(checkout, tag))) {
-    // Keep the checkout usable rather than blocking Start; the version display stays honest.
     host.addActivity(`⚠ could not pin the source checkout to ${tag} — using the current checkout`)
     return false
   }
@@ -295,7 +281,7 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
   if (existing) return { path: existing, cloned: false, managed: existing === managedSourceCheckout() }
   const chosen = await chooseInstallDir('source', managedSourceCheckout())
   if (!chosen) return undefined
-  // Persist the default too: an explicit value pins the clone against a future default change.
+
   if (!(await saveDshSetting('srcPath', chosen))) {
     host.addActivity(`⚠ could not remember dsh.srcPath — using ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
   }
@@ -313,7 +299,6 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
       return undefined
     }
   } catch {
-    // Unreadable or not created yet: let git report the real error.
   }
   host.setDshState('missing')
   host.addActivity('✗ No dsh source checkout found — cloning deepseek-harness…')
@@ -328,7 +313,7 @@ export async function ensureSourceCheckout(cfg: { srcPath: string }, host: Insta
     return undefined
   }
   host.addActivity('✓ deepseek-harness cloned')
-  // A fresh clone lands on the default branch; pin it to the newest release tag before setup.
+
   await pinSourceToNewestReleaseTag(chosen, host)
   return { path: chosen, cloned: true, managed: chosen === managedSourceCheckout() }
 }

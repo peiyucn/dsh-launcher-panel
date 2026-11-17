@@ -4,10 +4,6 @@ import { readRange } from '../../shared/logs.ts'
 
 const LOG_BUFFER_LINES = 500
 
-/**
- * Live tail of one instance log. The source path is re-resolved on every pump
- * because an adopted default instance can switch to the legacy log mid-run.
- */
 export class LogTailPump {
   private buffer = ''
   private offset = 0
@@ -22,11 +18,6 @@ export class LogTailPump {
     this.resolveSource = resolveSource
   }
 
-  /**
-   * Begin tailing `offset` (defaults to the current end of file). A fresh spawn passes the
-   * size captured before spawning, so only this launch's output is captured even when the
-   * server log keeps earlier runs; without an offset, history is skipped as well.
-   */
   start(offset?: number): void {
     this.stop()
     this.buffer = ''
@@ -65,7 +56,6 @@ export class LogTailPump {
     return this.lines.slice(-maxLines)
   }
 
-  /** Everything buffered, oldest first (bounded by the pump's line buffer). */
   all(): string[] {
     return [...this.lines]
   }

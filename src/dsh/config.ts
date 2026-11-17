@@ -37,10 +37,10 @@ const LEGACY_CONFIG_KEYS: [newKey: string, oldKey: string][] = [
 
 export function readConfig(): DshConfig {
   const c = vscode.workspace.getConfiguration('dsh')
-  // Settings Sync or manual edits can carry invalid numbers; probes would fail on them.
+
   const port = c.get<number>('port') ?? DEFAULT_PORT
   const portBase = c.get<number>('instancePortBase') ?? DEFAULT_INSTANCE_PORT_BASE
-  // The legacy keys stay readable during the window before migrateLegacyDshConfig runs.
+
   return {
     runMode: (c.get<string>('runMode') ?? c.get<string>('mode')) === 'source' ? 'source' : 'pnpm',
     npmChannel: parseNpmChannel(c.get<string>('npmChannel') ?? c.get<string>('channel') ?? undefined),
@@ -70,7 +70,6 @@ export async function migrateLegacyDshConfig(): Promise<void> {
       await c.update(newKey, legacy, vscode.ConfigurationTarget.Global)
       await c.update(oldKey, undefined, vscode.ConfigurationTarget.Global)
     } catch (error) {
-      // Activation has no caller to handle a rejection; readConfig still falls back to the old key.
       dbg(`legacy dsh setting "${oldKey}" not migrated: ${error instanceof Error ? error.message : String(error)}`)
     }
   }

@@ -4,6 +4,5 @@ out/
 releases/
 test-report.xml
 
-# OS
 .DS_Store
 Thumbs.db

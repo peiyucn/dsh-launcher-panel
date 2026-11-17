@@ -10,7 +10,6 @@ import {
 import { dshBaseDir, resolveDshHome } from '../dsh/paths.ts'
 import { managedPackageDir, managedSourceCheckout } from '../dsh/install.ts'
 
-/** Shares the migration marker: an emptied list must not resurrect a Default. */
 const LIST_AUTHORITATIVE_KEY = 'dsh.instancesMigrated'
 
 function dshConfig(): vscode.WorkspaceConfiguration {
@@ -47,12 +46,10 @@ export function writeActiveInstance(id: string): Thenable<void> {
   return dshConfig().update('activeInstance', id, vscode.ConfigurationTarget.Global)
 }
 
-/** Best effort: a lost marker only re-synthesizes a Default once. */
 async function writeAuthoritativeMarker(context: Pick<vscode.ExtensionContext, 'globalState'>): Promise<void> {
   try {
     await context.globalState.update(LIST_AUTHORITATIVE_KEY, true)
   } catch {
-    // Ignored: the list itself is what matters.
   }
 }
 

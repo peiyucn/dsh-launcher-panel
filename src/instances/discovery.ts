@@ -2,18 +2,16 @@ import * as fs from 'node:fs'
 import { isPortOpen } from '../dsh/probes.ts'
 import { listProcessEntries, parseDshServerCommand, type ProcessLister } from './process-list.ts'
 
-/** A dsh web server the explicit "detect running dsh" action found. */
 export interface DetectedDsh {
   pid: number
   port: number
-  /** Profile argument; empty when the command does not carry one. */
+
   profile: string
-  /** DSH_HOME from the process environment; empty when it could not be read. */
+
   home: string
   command: string
 }
 
-/** DSH_HOME from a Linux process environment; empty when unreadable. */
 export function readProcessHome(pid: number): string {
   if (process.platform !== 'linux') return ''
   try {
@@ -22,12 +20,10 @@ export function readProcessHome(pid: number): string {
       if (pair.startsWith('DSH_HOME=')) return pair.slice('DSH_HOME='.length)
     }
   } catch {
-    // Process exited or belongs to another user.
   }
   return ''
 }
 
-/** Name shown for a detected server before the user renames it. */
 export function detectedName(profile: string, port: number): string {
   const trimmed = profile.trim()
   if (trimmed !== '' && trimmed !== 'web') return trimmed
@@ -40,11 +36,6 @@ export interface DetectDeps {
   homeOf?: (pid: number) => string
 }
 
-/**
- * One-shot scan for dsh web servers this launcher did not start.
- * Ports owned by configured instances are excluded, so launcher-managed instances
- * never show up as detected duplicates.
- */
 export async function detectDshServers(
   configuredPorts: ReadonlySet<number>,
   excludePids: ReadonlySet<number> = new Set(),

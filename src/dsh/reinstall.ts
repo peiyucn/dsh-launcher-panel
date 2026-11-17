@@ -13,28 +13,20 @@ const PREV_SUFFIX = '.prev'
 const NEXT_SUFFIX = '.next'
 const LOCK_SUFFIX = '.launcher-lock'
 
-/** The stale lock only guards against a crashed reinstall; any real one ends far sooner. */
 const LOCK_STALE_MS = 30 * 60_000
 
 function removeQuietly(target: string): void {
   try {
     fs.rmSync(target, { recursive: true, force: true })
   } catch {
-    // Leftovers only cost disk; never let cleanup break the reinstall.
   }
 }
 
-/** Version readable AND the CLI entry present: a partially installed tree is not healthy. */
 export function installLooksHealthy(dir: string): boolean {
   if (installedDshVersion(dir) === undefined) return false
   return fs.existsSync(path.join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
 }
 
-/**
- * Clean state left by older launcher versions that renamed install folders around.
- * The current scheme never renames anything, but a crash from an old version may have
- * left `.prev`/`.next` behind; converge them instead of asking the user to clean up.
- */
 export function recoverInterruptedReinstall(dir: string): void {
   removeQuietly(`${dir}${NEXT_SUFFIX}`)
   const prev = `${dir}${PREV_SUFFIX}`
@@ -47,7 +39,6 @@ export function recoverInterruptedReinstall(dir: string): void {
   try {
     fs.renameSync(prev, dir)
   } catch {
-    // Leave .prev in place; deleting the folder and starting again also recovers.
   }
 }
 
@@ -72,16 +63,6 @@ function acquireLock(dir: string): string | undefined {
   }
 }
 
-/**
- * Reinstall the same dsh version in place with the configured import method.
- *
- * Deliberately simple: `pnpm install --force` re-imports the files in the existing
- * folder. Copying the tree into a staging folder or renaming install directories was
- * fragile on Windows (absolute pnpm junctions break as soon as a tree is moved) and
- * turned a failed install into an unbootable one. The trade-off is that the install is
- * unusable while the terminal runs, so the caller must not close it; if the install
- * fails, the documented recovery is to delete the install folder and Start again.
- */
 export async function reinstallInPlace(
   version: string,
   dir: string,
@@ -105,8 +86,7 @@ export async function reinstallInPlace(
       host.addActivity('✗ could not write the dsh install manifest — check write permissions')
       return false
     }
-    // A stale workspace file can change pnpm's resolution (and pulled unrelated
-    // cross-platform packages into the install before). Keep it aside, drop on success.
+
     const workspaceFile = path.join(dir, 'pnpm-workspace.yaml')
     const workspaceBackup = `${workspaceFile}${PREV_SUFFIX}`
     let workspaceMoved = false
@@ -131,7 +111,6 @@ export async function reinstallInPlace(
       try {
         fs.renameSync(workspaceBackup, workspaceFile)
       } catch {
-        // The recovery instruction below covers a broken install anyway.
       }
     }
     host.addActivity(

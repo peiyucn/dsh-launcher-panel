@@ -1,11 +1,3 @@
-/**
- * Dashboard CSS, kept as a string so the extension ships no asset files.
- * Colours mirror dsh's design-platform palette; light/dark follow the VS Code
- * theme class on `body`.
- *
- * @module webview/panel-styles
- */
-
 export const PANEL_CSS = `
   html, body { height: 100%; }
   body {

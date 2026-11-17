@@ -25,7 +25,7 @@ async function clientBuildStale(checkout: string): Promise<boolean> {
   const r = await runFile('git', ['-C', checkout, 'rev-parse', 'HEAD'], GIT_OP_TIMEOUT_MS)
   if (!r.ok) return false
   const head = r.stdout.trim()
-  // The build record may hold a short hash; HEAD is the full one.
+
   return head !== '' && !head.startsWith(built)
 }
 
@@ -34,7 +34,7 @@ export async function ensureCheckoutReady(checkout: string, host: CheckoutHost, 
   const depsReady = checkoutReady(checkout) && !staleDeps
   const supportsOfficial = checkoutSupportsOfficialBuild(checkout)
   const needsBrand = supportsOfficial && !checkoutHasOfficialBrand(checkout)
-  // Lockfile mtimes cannot see a tag switch; dsh's own build record can.
+
   const sourceChanged = supportsOfficial && await clientBuildStale(checkout)
   if (depsReady && !needsBrand && !sourceChanged) return true
 
@@ -69,8 +69,6 @@ export async function ensureCheckoutReady(checkout: string, host: CheckoutHost, 
       : 'ℹ Source changed since the last build — rebuilding so the web UI matches the checkout')
   }
 
-  // Leftover lib/ dirs from packages removed in a git pull break tsdown; dsh's
-  // own clean script is the only reliable reset.
   if (checkoutSupportsClean(checkout)) {
     host.addActivity(`▶ Setup: pnpm --dir "${checkout}" run clean`)
     if (!(await setup('Setup deepseek-harness (pnpm run clean)', ['run', 'clean']))) {

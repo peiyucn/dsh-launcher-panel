@@ -7,8 +7,6 @@ import { dirname, join, resolve } from 'node:path'
 import { decodeChildOutput, isProcessAlive, resolveCommand, resolveCommandEntry, runFile, runResolved } from '../src/shared/proc.ts'
 import { parseLocalProxySettings } from '../src/dsh/git.ts'
 
-// Sandboxes that forbid named pipes fail every subprocess capture with EPERM; skip those tests
-// with a stated reason rather than reporting red noise.
 const canSpawnWithPipes = await new Promise<boolean>((resolve) => {
   try {
     execFile(process.execPath, ['-e', 'process.stdout.write("1")'], (error) => {
