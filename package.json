@@ -358,7 +358,7 @@
     "build:icon-font": "node scripts/build-icon-font.mjs",
     "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
     "lint": "npm run lint:code && npm run lint:policy",
-    "lint:code": "eslint src test",
+    "lint:code": "eslint --config meta/lint/project-eslint.mjs src test scripts meta/lint",
     "lint:policy": "node scripts/check-policy.mjs",
     "typecheck": "tsc -p ./ --noEmit",
     "compile": "npm run clean && tsc -p ./",

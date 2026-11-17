@@ -30,7 +30,6 @@ const BASE_FILES: Record<string, string> = {
   'docs/architecture.md': '# architecture\n',
   'docs/instances-spec.md': '# spec\n',
   'docs/positioning-and-retirement.md': '# positioning\n',
-  'docs/checks.md': '# checks\n',
   'docs/release.md': '# release\n',
   'README.md': [
     '# fixture',
@@ -79,7 +78,7 @@ const BASE_FILES: Record<string, string> = {
     '',
   ].join('\n'),
   '.gitignore': 'node_modules/\nout/\nreleases/\n*.vsix\n',
-  '.vscodeignore': 'src/**\ndocs/**\nscripts/**\neslint.config.mjs\ntest/**\nAGENTS.md\nreleases/**\n*.vsix\n',
+  '.vscodeignore': 'src/**\ndocs/**\nscripts/**\nmeta/**\ntest/**\nAGENTS.md\nreleases/**\n*.vsix\n',
   'test/example.test.ts': "import { test } from 'node:test'\ntest('ok', () => {})\n",
 }
 

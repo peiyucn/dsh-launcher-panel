@@ -9,7 +9,6 @@ src/**
 tsconfig.json
 package-lock.json
 scripts/**
-eslint.config.mjs
 **/*.map
 *.vsix
 releases/**

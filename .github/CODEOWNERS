@@ -1,10 +1,9 @@
-# Policy files: changes require an owner review.
 /AGENTS.md @peiyucn
 /.gitattributes @peiyucn
 /meta/ @peiyucn
-/docs/checks.md @peiyucn
+/docs/architecture.md @peiyucn
 /docs/release.md @peiyucn
-/eslint.config.mjs @peiyucn
+/meta/lint/ @peiyucn
 /scripts/check-policy.mjs @peiyucn
 /scripts/check-security-alerts.sh @peiyucn
 /test/policy-lint.test.ts @peiyucn
