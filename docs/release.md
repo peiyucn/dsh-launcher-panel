@@ -34,6 +34,7 @@
 ## 发布前检查
 
 - 检查 `src/holidays.ts` 是否覆盖当前年份；没有就按该年国务院公告补上，并把公告编号与 URL 写进 `CN_HOLIDAY_SOURCES`。漏了不会报错，只会把工作日节假日误显示成 Peak。
+- 有用户可见改动时，先按本地 `meta/playbooks/acceptance.md` 完成验收并留下证据（截图 / DOM / 控制台 / 网络 / CLI 输出），记录环境、版本与操作步骤；只有 `verify`、没有页面证据不算验收，不发布。没有用户可见改动时写「无用户可见改动」。
 - 按本地 `meta/rules/verification.md` 的 QG / L 与 G 段逐项确认，并跑一次 `npm run verify`。
 
 ## 凭据
