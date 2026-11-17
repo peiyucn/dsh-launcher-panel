@@ -2,7 +2,7 @@
   "name": "dsh-launcher-panel",
   "displayName": "DSH Launcher Panel",
   "description": "Start DeepSeek Harness (dsh) and open its web UI in VS Code's built-in browser.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "icon": "resources/icon.png",
   "publisher": "peiyucn",
   "license": "MIT",
@@ -357,21 +357,27 @@
   "scripts": {
     "build:icon-font": "node scripts/build-icon-font.mjs",
     "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
+    "lint": "npm run lint:code && npm run lint:policy",
+    "lint:code": "eslint --config meta/lint/project-eslint.mjs src test scripts meta/lint",
+    "lint:policy": "node scripts/check-policy.mjs",
     "typecheck": "tsc -p ./ --noEmit",
     "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -w -p ./",
     "package": "node -e \"require('node:fs').mkdirSync('releases',{recursive:true})\" && vsce package --out releases --no-dependencies",
     "test": "node --test --test-isolation=none \"test/*.test.ts\"",
-    "verify": "npm run typecheck && npm test && npm run compile && npm run package"
+    "verify": "npm run lint && npm run typecheck && npm test && npm run compile && npm run package"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.14.0",
     "@types/vscode": "1.85.0",
     "@vscode/vsce": "^4.0.0",
+    "eslint": "^10.15.0",
     "svg2ttf": "^6.1.0",
     "svgicons2svgfont": "^16.0.0",
     "ttf2woff": "^3.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.72.2"
   },
   "overrides": {
     "@azure/msal-node": "7.1.0",

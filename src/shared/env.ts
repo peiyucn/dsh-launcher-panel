@@ -1,4 +1,3 @@
-// Keep in sync with the dsh.port default in package.json.
 export const DEFAULT_PORT = 3080
 
 export const DEFAULT_INSTANCE_PORT_BASE = 31000
@@ -13,11 +12,8 @@ export function normalizeBrowser(value: unknown): 'built-in' | 'external' {
 
 export type NpmChannel = 'latest' | 'next' | 'alpha'
 
-/** pnpm `package-import-method`: how installed files land in node_modules. */
 export type PackageImportMethod = 'auto' | 'copy' | 'hardlink'
 
-// Copy by default: hardlinked files are measurably slower to open on machines with
-// third-party file filters, and dsh boot opens thousands of them.
 export function parsePackageImportMethod(value: string | undefined): PackageImportMethod {
   return value === 'auto' || value === 'hardlink' ? value : 'copy'
 }

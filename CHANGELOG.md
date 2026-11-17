@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.6] - 2026-11-18
+
+- The **DeepSeek API Status** card lays the API entries out as pills in a left column and keeps a single `Last checked` block in a right column, separated by a divider; the label and time are on separate lines. The card reports one time for the whole card instead of one per model row.
+- The account balance stays on a single line, so a long balance or error message no longer wraps character by character.
+- No other user-perceivable changes: internal tooling and lint moved to the shared baseline.
+
 ## [0.4.5] - 2026-11-14
 
 - The **DeepSeek API Status** card monitors the official **chat service** again: a `DeepSeek Chat` row shows its status and last-read time, incidents that affect it are listed with the model incidents, and clicking the row opens chat.deepseek.com in the configured browser. The chat section's file-upload and search services stay out of the card.

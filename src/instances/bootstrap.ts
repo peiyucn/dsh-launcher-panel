@@ -16,8 +16,6 @@ export function settingsWriteFailure(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-// A fresh install/update can run before VS Code registers dsh.instances, so the first write may
-// reject; the session must keep its only instance and just warn, then persist on a later write.
 export async function bootstrapInstances(
   host: InstanceBootstrapHost,
   options: InstanceModelOptions,
@@ -33,7 +31,6 @@ export async function bootstrapInstances(
   if (!result.synthesized) return result
 
   try {
-    // Persist the stored form (home '') so the synthesized Default keeps following the default DSH home.
     await host.persist(result.stored, result.activeId)
     await host.markAuthoritative().catch(() => {})
     return result

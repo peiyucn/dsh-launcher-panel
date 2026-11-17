@@ -10,7 +10,6 @@ const COMMAND_NAMES = [
 
 const MESSAGE_TYPE_NAMES = ['update', 'instanceForm', 'instanceFormError', 'instanceFormSaved'] as const
 
-/** Name → same-name map keeps the literal union and the runtime values from one list. */
 function sameNameMap<T extends readonly string[]>(names: T): { readonly [K in T[number]]: K } {
   return Object.fromEntries(names.map((name) => [name, name])) as { readonly [K in T[number]]: K }
 }
@@ -18,7 +17,6 @@ function sameNameMap<T extends readonly string[]>(names: T): { readonly [K in T[
 export const PANEL_COMMANDS = sameNameMap(COMMAND_NAMES)
 export const PANEL_MESSAGE_TYPES = sameNameMap(MESSAGE_TYPE_NAMES)
 
-/** One raw webview message; `value` meaning depends on the command. */
 export interface PanelMessage {
   command?: string
   value?: string
@@ -103,7 +101,6 @@ interface PanelBalance {
   error?: string
 }
 
-/** Only `status` and `pricing` are required; every branch posts the same field set. */
 interface PanelUpdateInput {
   status: PanelStatus
   instances?: readonly PanelInstanceStatus[]

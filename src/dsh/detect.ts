@@ -31,8 +31,7 @@ export async function detectDshVersion(cfg: DetectConfig, host: DetectHost): Pro
       host.setDshVersion('')
       return
     }
-    // Launcher-managed checkouts are pinned to the newest release tag before detection,
-    // so the -N-gsha suffix only shows for user-supplied checkouts that were left off-tag.
+
     const described = await runFile('git', ['-C', checkout, 'describe', '--tags', '--always'], GIT_OP_TIMEOUT_MS)
     if (described.ok && described.stdout.trim() !== '') {
       host.setDshVersion(dshVersionFromDescribe(described.stdout))
@@ -46,7 +45,7 @@ export async function detectDshVersion(cfg: DetectConfig, host: DetectHost): Pro
     }
     return
   }
-  // pkg mode: only the managed install counts; Start installs from the registry on demand.
+
   host.setDshVersion(pkgInstalledVersion(cfg) ?? '')
 }
 
@@ -54,7 +53,7 @@ export async function detectDsh(cfg: DetectConfig, host: DetectHost): Promise<Ds
   if (cfg.runMode === 'source') {
     const checkout = host.findSourceCheckout(cfg)
     if (checkout) return { state: 'ok', path: checkout }
-    // Show the chosen path once it exists — that is how a clone in progress becomes visible.
+
     const chosen = cfg.srcPath.trim() !== '' ? cfg.srcPath : managedSourceCheckout()
     return { state: 'unknown', path: fs.existsSync(chosen) ? chosen : '' }
   }

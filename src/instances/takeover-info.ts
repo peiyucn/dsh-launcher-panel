@@ -1,14 +1,9 @@
 import { isObservedInstance, type DshInstance } from './model.ts'
 
 export interface TakeoverFacts {
-  /** Command line of the detected process; omitted when it cannot be read. */
   command?: string
 }
 
-/**
- * Markdown briefing for an agent that will turn an observed dsh into a
- * launcher-managed instance. It must never contain the launch token.
- */
 export function buildTakeoverInfo(instance: DshInstance, facts: TakeoverFacts = {}): string {
   const observed = isObservedInstance(instance)
   const lines = [

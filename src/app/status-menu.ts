@@ -69,7 +69,7 @@ interface MenuState {
 function actionsFor(status: MenuState): PhaseAction[] {
   const phase = phaseOf(status)
   if (!status.observed) return [...PHASE_ACTIONS[phase]]
-  // Detected instances are read-only: open the Web UI, copy a takeover briefing, nothing else.
+
   const actions: PhaseAction[] = phase === 'running' && status.uiAvailable ? ['open', 'dashboard'] : ['dashboard']
   actions.push('copyInfo')
   return actions

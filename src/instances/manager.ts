@@ -69,7 +69,6 @@ export class InstanceManager {
     }
   }
 
-  /** A failed load stays retryable: caching the rejection would blank the panel for the session. */
   ready(): Promise<void> {
     if (this.readyPromise) return this.readyPromise
     const attempt = this.initialize()
@@ -88,7 +87,6 @@ export class InstanceManager {
     for (const issue of this.settings.issues) addActivity(`⚠ ${issue.message}`)
   }
 
-  /** Match runtimes to settings by id: a runtime owns its child and log pump, so it must be reused. */
   private applySettings(next: NormalizedInstances, keepActiveId?: string): void {
     const previous = this.runtimes
     const runtimes = new Map<string, InstanceRuntime>()
@@ -128,7 +126,6 @@ export class InstanceManager {
     return this.activeId
   }
 
-  /** Synchronous on purpose: the panel's fallback render must not fail with the rest of a refresh. */
   instanceStatuses(): InstanceRuntimeStatus[] {
     return [...this.runtimes.values()].map((runtime) => runtime.status())
   }
@@ -215,14 +212,12 @@ export class InstanceManager {
     return undefined
   }
 
-  /** One-shot scan for running dsh servers this launcher did not start (user-triggered only). */
   async detectRunningDsh(): Promise<DetectedDsh[]> {
     await this.ready()
     const configuredPorts = new Set(this.settings.instances.map((instance) => instance.port))
     return detectDshServersImpl(configuredPorts)
   }
 
-  /** Persist selected detected servers as read-only observed instances. */
   async takeOverDetected(detected: readonly DetectedDsh[]): Promise<{ created: DshInstance[]; error?: string }> {
     await this.ready()
     const knownPorts = new Set(this.settings.instances.map((instance) => instance.port))
@@ -255,7 +250,6 @@ export class InstanceManager {
     return { created: additions }
   }
 
-  /** Rename an observed instance; its home/profile/port stay read-only. */
   async renameObserved(id: string, name: string): Promise<{ instance?: DshInstance; issues: InstanceIssue[] }> {
     await this.ready()
     const current = this.instance(id)
@@ -271,7 +265,6 @@ export class InstanceManager {
     return { instance: updated, issues: result.issues }
   }
 
-  /** Markdown briefing (no token) for handing an observed instance to an agent. */
   async takeoverInfo(id: string): Promise<string | undefined> {
     await this.ready()
     const instance = this.instance(id)
@@ -286,7 +279,6 @@ export class InstanceManager {
       + 'reload the window if the extension was just installed or updated, then try again')
   }
 
-  /** Persist before committing to memory: a failed save must not leave a phantom instance behind. */
   async create(input: InstanceInput): Promise<InstanceMutation> {
     await this.ready()
     const result = validateInstance(input, instanceModelOptions(), this.settings.instances)
@@ -314,7 +306,7 @@ export class InstanceManager {
     await this.ready()
     const current = this.settings.instances.find((instance) => instance.id === id)
     if (current === undefined) return { issues: [issue('entry', 'instance not found')] }
-    // Detected instances are read-only apart from the name (renameObserved).
+
     if (isObservedInstance(current)) return { issues: [issue('entry', 'detected instances are read-only; only the name can be changed')] }
     if (this.isBusy(id)) return { issues: [issue('entry', 'stop the instance before editing it')] }
     const result = validateInstance(input, instanceModelOptions(), this.settings.instances, id)
@@ -331,8 +323,7 @@ export class InstanceManager {
     await this.ready()
     const current = this.settings.instances.find((instance) => instance.id === id)
     if (current === undefined) return false
-    // A detected instance is only the launcher's read-only view: removing it never stops the
-    // external process, so its running state must not block deletion.
+
     if (this.isBusy(id) && !isRemovableWhileRunning(current)) return false
     const next = this.settings.instances.filter((instance) => instance.id !== id)
     const nextActiveId = this.settings.activeId === id ? (next[0]?.id ?? '') : this.settings.activeId
@@ -345,7 +336,7 @@ export class InstanceManager {
     this.runtimes.get(id)?.dispose()
     this.runtimes.delete(id)
     this.settings.activeId = nextActiveId
-    // An empty list is a decision, not a first run; remember it so Default is not resurrected.
+
     if (next.length === 0) await markInstancesAuthoritative(this.context)
     return true
   }
@@ -370,7 +361,6 @@ export class InstanceManager {
     })
   }
 
-  /** A stopping runtime still owns its child, and an error one can hold a live child or port. */
   isHomeRunning(home: string, exceptId: string): boolean {
     for (const [id, runtime] of this.runtimes) {
       if (id !== exceptId && runtime.holdsHome() && sameHome(runtime.status().home, home)) return true
@@ -378,7 +368,6 @@ export class InstanceManager {
     return false
   }
 
-  /** An import-method rebuild must not touch the install while another instance is live. */
   prepare(exceptId?: string): Promise<PreparedDsh | undefined> {
     const otherActive = exceptId !== undefined && [...this.runtimes].some(([id, runtime]) => {
       if (id === exceptId) return false
@@ -396,7 +385,6 @@ export class InstanceManager {
     await this.checkUpdate(true)
   }
 
-  /** Rebuild the install with the configured import method; requires all instances stopped. */
   async reinstallDsh(): Promise<boolean> {
     if (this.anyActive()) throw new Error('Stop all instances before reinstalling dsh')
     const ok = await this.shared.reinstallPkg()
@@ -404,12 +392,10 @@ export class InstanceManager {
     return ok
   }
 
-  /** Stop log pumps; running DSH processes are intentionally left alone. */
   dispose(): void {
     for (const runtime of this.runtimes.values()) runtime.dispose()
   }
 
-  /** Clear one instance's server log and its scoped launcher log/feed. */
   clearConsole(id: string): void {
     if (id === '') return
     this.runtimes.get(id)?.clearLog()
@@ -418,8 +404,7 @@ export class InstanceManager {
 
   async reloadSettings(): Promise<void> {
     await this.ready().catch(() => undefined)
-    // Keep this window's active instance: the settings file is shared by every
-    // window on the machine, so another window's choice must not switch our tab.
+
     this.applySettings(readInstanceSettings(), this.activeId)
   }
 
@@ -432,7 +417,6 @@ export class InstanceManager {
     return status !== undefined && (status.running || status.starting || status.stopping || status.installing)
   }
 
-  /** Write the list, then commit it to memory; resolves to the failure reason instead of throwing. */
   private async writeList(next: DshInstance[]): Promise<string | undefined> {
     const error = await writeResult(writeInstances(next))
     if (error === undefined) this.settings.instances = next

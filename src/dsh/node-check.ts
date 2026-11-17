@@ -1,7 +1,6 @@
 import { NODE_PROBE_TIMEOUT_MS } from '../shared/timing.ts'
 import { runFile } from '../shared/proc.ts'
 
-// The version cannot change without a host restart, and status refreshes would spawn a probe every few seconds.
 const nodeVersionCache = new Map<string, Promise<string>>()
 
 export function probeNodeVersion(nodePath: string): Promise<string> {

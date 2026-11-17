@@ -11,9 +11,6 @@ const LEGACY_INSTANCE_ID = 'default'
 const PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
-// An instance is only a runtime coordinate (DSH home, profile, port); model and credentials belong to the profile.
-// `observed: true` marks an instance created by the explicit "detect running dsh" takeover: it is a
-// read-only view of a process the launcher does not own and must never start, stop or update.
 export interface DshInstance {
   id: string
   name: string
@@ -36,7 +33,6 @@ type InstanceIssueField =
   | 'autoOpenBrowser'
   | 'browser'
 
-// Errors block an instance; warnings keep it usable but are shown in the panel.
 type InstanceIssueSeverity = 'error' | 'warning'
 
 export interface InstanceIssue {
@@ -104,10 +100,13 @@ function nonEmptyString(value: unknown): string | undefined {
 }
 
 function hasControlCharacters(value: string): boolean {
-  return /[\u0000-\u001f\u007f]/.test(value)
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x1f || code === 0x7f) return true
+  }
+  return false
 }
 
-// Empty means the default home; relative paths are rejected because DSH resolves DSH_HOME against its own cwd.
 export function normalizeHome(raw: string, options: InstanceModelOptions): string | undefined {
   const trimmed = raw.trim()
   if (trimmed === '') return path.resolve(options.defaultHome)
@@ -119,7 +118,6 @@ export function normalizeHome(raw: string, options: InstanceModelOptions): strin
   return path.resolve(expanded)
 }
 
-// Windows compares paths case-insensitively.
 export function sameHome(
   left: string,
   right: string,
@@ -211,16 +209,10 @@ function validateHome(
   return home
 }
 
-/** True for "no home given": an observed instance may not know its DSH_HOME. */
 function isBlankHome(raw: unknown): boolean {
   return raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')
 }
 
-/**
- * A Windows drive path on POSIX (or a POSIX absolute path on Windows) almost always means the
- * entry came from a settings layer shared with another host (User settings apply to remote
- * windows too). Those entries are skipped as one concise warning instead of per-entry errors.
- */
 function looksForeignHome(raw: unknown, platform: NodeJS.Platform): boolean {
   if (typeof raw !== 'string') return false
   const trimmed = raw.trim()
@@ -268,7 +260,7 @@ function normalizeInstance(
     return fail(index, 'observed', 'observed must be true when present', issues)
   }
   const observed = observedRaw === true
-  // A detected process may have no readable DSH_HOME; an empty home is valid for observed instances.
+
   const home = observed && isBlankHome(raw.home) ? '' : validateHome(index, raw.home, options, issues)
   if (home === undefined) return undefined
   const profile = validateProfile(index, raw.profile, issues)
@@ -292,7 +284,6 @@ function normalizeInstance(
   }
 }
 
-// Invalid entries are skipped and reported; the settings value is never rewritten here.
 export function normalizeInstances(
   raw: unknown,
   activeRaw: unknown,
@@ -314,8 +305,6 @@ export function normalizeInstances(
   let foreignEntries = 0
 
   raw.forEach((entry, index) => {
-    // Entries configured on another host are not errors for this machine: skip quietly and
-    // report once, instead of one "home must be an absolute path" line per entry.
     if (isRecord(entry) && looksForeignHome(entry.home, platform)) {
       foreignEntries += 1
       return
@@ -365,8 +354,6 @@ export function migrateLegacyInstance(legacyPort: unknown): DshInstance {
   return { id: LEGACY_INSTANCE_ID, name: DEFAULT_INSTANCE_NAME, home: '', profile: DEFAULT_PROFILE, port }
 }
 
-// A freshly installed extension may not be able to persist dsh.instances yet, so the synthesized
-// Default must come from the read alone; the caller saves it best-effort.
 export function resolveInitialInstances(
   raw: unknown,
   activeRaw: unknown,
@@ -383,7 +370,7 @@ export function resolveInitialInstances(
   return {
     instances: normalized.instances,
     activeId: normalized.activeId,
-    // Keep normalization errors so a broken settings value is reported, not silently replaced.
+
     issues: [...current.issues, ...normalized.issues],
     synthesized: normalized.instances.length > 0,
     stored: [migrated],
@@ -401,7 +388,6 @@ export function instanceLogPath(baseDir: string, id: string): string {
   return path.join(baseDir, 'logs', 'instances', id, 'server.log')
 }
 
-// `editingId` keeps the instance being edited from colliding with itself.
 export function validateInstance(
   input: InstanceInput,
   options: InstanceModelOptions,
@@ -452,27 +438,19 @@ export function instanceHome(instance: DshInstance, options: InstanceModelOption
   return instance.home === '' ? path.resolve(options.defaultHome) : path.resolve(instance.home)
 }
 
-/** An observed instance was created by the explicit "detect running dsh" takeover. */
 export function isObservedInstance(instance: Pick<DshInstance, 'observed'>): boolean {
   return instance.observed === true
 }
 
-/**
- * Whether removing this instance only drops the launcher's record instead of a process the
- * launcher owns. A detected instance is a read-only view of an externally started dsh: the
- * launcher never starts or stops it, so deleting it must not ask the user to stop it first.
- */
 export function isRemovableWhileRunning(instance: Pick<DshInstance, 'observed'>): boolean {
   return isObservedInstance(instance)
 }
 
-/** What the UI should show as the instance home; observed instances may have none. */
 export function displayHome(instance: DshInstance, options: InstanceModelOptions): string {
   if (isObservedInstance(instance) && instance.home === '') return ''
   return instanceHome(instance, options)
 }
 
-/** Validate a rename against existing instances; observed instances allow name-only edits. */
 export function validateInstanceName(
   raw: unknown,
   existing: readonly DshInstance[],
@@ -483,12 +461,6 @@ export function validateInstanceName(
   return name === undefined ? { issues } : { name, issues }
 }
 
-/**
- * Pick the active instance for this window: the current one if it still exists,
- * else the persisted setting (seed for a new window), else the first instance.
- * The persisted value is shared by every window on the machine, so it must never
- * override a live window's own choice.
- */
 export function resolveActiveId(instances: readonly DshInstance[], ...candidates: (string | undefined)[]): string {
   for (const candidate of candidates) {
     if (candidate !== undefined && candidate !== '' && instances.some((instance) => instance.id === candidate)) return candidate

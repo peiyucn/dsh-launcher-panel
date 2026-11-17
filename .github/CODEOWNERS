@@ -1,0 +1,12 @@
+/AGENTS.md @peiyucn
+/.gitattributes @peiyucn
+/meta/ @peiyucn
+/docs/architecture.md @peiyucn
+/docs/release.md @peiyucn
+/meta/lint/ @peiyucn
+/scripts/check-policy.mjs @peiyucn
+/scripts/check-security-alerts.sh @peiyucn
+/test/policy-lint.test.ts @peiyucn
+/package.json @peiyucn
+/package-lock.json @peiyucn
+/.github/ @peiyucn

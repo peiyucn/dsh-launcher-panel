@@ -83,7 +83,7 @@ test('parseInstanceFormPayload requires string name and home', () => {
       message: 'Name and home are required',
     })
   }
-  // Empty strings pass here; the manager owns the real field rules.
+
   const empty = parseInstanceFormPayload(rawForm({ name: '', home: '' }))
   assert.equal(empty.ok, true)
 })

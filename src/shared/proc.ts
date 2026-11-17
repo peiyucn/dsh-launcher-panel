@@ -11,7 +11,6 @@ interface RunFileResult {
   error?: string
 }
 
-// Node decodes child output as UTF-8, but Windows console tools answer in the OEM code page (GBK on zh-CN).
 export function decodeChildOutput(buf: Buffer): string {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buf)
@@ -33,7 +32,7 @@ export function runFile(command: string, args: string[], timeoutMs = 0): Promise
         resolve({ ok: true, stdout: out, stderr: err })
         return
       }
-      // execFile reports a timeout as killed + SIGTERM with a null code.
+
       const timedOut = (error as { killed?: boolean }).killed === true
       const code = typeof error.code === 'number' ? error.code : undefined
       const detail = err.trim().split(/\r?\n/).filter(line => line.trim() !== '').pop()?.trim()
@@ -71,12 +70,10 @@ type CommandResolution =
   | { ok: true; command: ResolvedCommand }
   | { ok: false; reason: string }
 
-// Batch shims spell their own directory as %dp0% (npm) or %~dp0 (corepack and hand-written shims).
 function expandShimDir(text: string, dir: string): string {
   return text.replace(/%~?dp0%?/gi, dir)
 }
 
-// Quoted and bare target spellings both occur in real shims.
 function shimCandidates(text: string, pattern: string): string[] {
   const candidates: string[] = []
   for (const match of text.matchAll(new RegExp(`["']([^"'\\r\\n]+?\\.(?:${pattern}))["']`, 'gi'))) {
@@ -88,8 +85,6 @@ function shimCandidates(text: string, pattern: string): string[] {
   return candidates
 }
 
-// Node cannot spawn .cmd/.bat (CVE-2024-27980) and a shell would re-parse the arguments,
-// so the shim is read and its target is run directly.
 export function resolveCommandEntry(command: string): CommandResolution {
   if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(command)) {
     return { ok: true, command: { file: command, args: [] } }
@@ -107,7 +102,6 @@ export function resolveCommandEntry(command: string): CommandResolution {
   const scripts = resolveAll(shimCandidates(text, 'mjs|cjs|js'))
   const programs = resolveAll(shimCandidates(text, 'exe|com'))
 
-  // A script runs with the current Node; an interpreter named alongside it is not the entry.
   if (scripts.length > 0) {
     const script = pick(scripts)
     if (script === undefined) {
@@ -133,7 +127,6 @@ export function resolveCommand(command: string): ResolvedCommand | undefined {
 export function runResolved(command: string, args: string[], timeoutMs = 0): Promise<RunFileResult> {
   const resolution = resolveCommandEntry(command)
   if (!resolution.ok) {
-    // An unresolvable shim and an unreachable registry need different advice, so keep the reason.
     return Promise.resolve({
       ok: false,
       stdout: '',

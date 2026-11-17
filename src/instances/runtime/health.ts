@@ -24,7 +24,7 @@ export async function probeUrl(
 ): Promise<string | undefined> {
   const plain = `${loopbackUrl(port)}/`
   if (await httpOk(plain, HTTP_PROBE_TIMEOUT_MS)) return plain
-  // The launcher's own server.log is the default source; observed instances supply a resolver.
+
   const token = resolveToken === undefined
     ? readTokenFromLog(logPath) ?? readTokenFromLog(legacyLogPath)
     : await resolveToken()
@@ -68,7 +68,6 @@ export interface ReadyHooks {
   killTracked(): void
 }
 
-/** Test seams only: production callers rely on the defaults. */
 export interface ReadyDeps {
   probeUrl?: typeof probeUrl
   sleep?: typeof sleep
@@ -80,8 +79,6 @@ export async function waitForReady(port: number, hooks: ReadyHooks, deps: ReadyD
   const startedAt = Date.now()
   let firstProbe = true
   for (;;) {
-    // A fast local server can already answer when spawn returns; do not add a full poll
-    // interval to that best case. Back off only after a failed probe.
     if (firstProbe) firstProbe = false
     else await wait(PORT_POLL_INTERVAL_MS)
     if (hooks.state() !== 'starting') return false

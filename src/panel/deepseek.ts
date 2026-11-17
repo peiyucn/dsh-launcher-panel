@@ -15,13 +15,13 @@ export interface DsIncident {
 
 export interface DsStatus {
   state: 'ok' | 'degraded' | 'down' | 'maintenance' | 'unknown'
-  /** Model API components only, in status-page order. */
+
   components: DsComponentStatus[]
-  /** The official chat service component, when the status page reports it. */
+
   chat?: DsComponentStatus
-  /** Active incidents that affect a monitored model or the chat service. */
+
   incidents: DsIncident[]
-  /** Epoch ms of the status-page read that produced this snapshot. */
+
   checkedAt: number
 }
 
@@ -33,8 +33,6 @@ export interface DshBalance {
 const DS_STATUS_PAGE_ID = 6410630422455
 const DS_STATUS_PATH = `/api/status-page/${DS_STATUS_PAGE_ID}/summary/active`
 
-// status.deepseek.com's TLS listener rejects some clients (e.g. Windows schannel),
-// so the CNAME backend is tried first and the custom domain kept as fallback.
 const DS_STATUS_HOSTS = [
   'https://statuspage.flashcat.cloud',
   'https://status.deepseek.com',
@@ -71,7 +69,6 @@ async function fetchJson(url: string, timeoutMs: number, headers: Record<string,
   }
 }
 
-/** Cold-cache fetches are coalesced: the refresh tick and a click can both ask. */
 export function getDsStatus(): Promise<DsStatus> {
   const cached = dsStatusCache
   if (cached && Date.now() - cached.at < DS_STATUS_CACHE_TTL_MS) return Promise.resolve(cached.status)
@@ -89,18 +86,11 @@ async function fetchDsStatus(): Promise<DsStatus> {
     try {
       return parseDsStatus(await fetchJson(`${host}${DS_STATUS_PATH}`, FETCH_TIMEOUT_MS))
     } catch {
-      // Try the next host.
     }
   }
   return { state: 'unknown', components: [], incidents: [], checkedAt: Date.now() }
 }
 
-/**
- * The status page names model APIs "DeepSeek V4 Pro API服务(API Service)" and
- * everything else after its function (search/fetch APIs, chat services). Only
- * the DeepSeek-named models are monitored, so this returns a kebab-case id for
- * those and `undefined` for any other component.
- */
 export function dsModelLabel(componentName: string): string | undefined {
   const english = toEnglish(componentName)
   if (!/^deepseek\b/i.test(english)) return undefined
@@ -111,23 +101,38 @@ export function dsModelLabel(componentName: string): string | undefined {
     .replace(/^-+|-+$/g, '')
 }
 
-export function parseDsStatus(json: any): DsStatus {
+function asObject(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function asString(value: unknown): string {
+  return value === undefined || value === null ? '' : String(value)
+}
+
+export function parseDsStatus(json: unknown): DsStatus {
   try {
-    const page = json?.data?.page ?? {}
+    const root = asObject(json)
+    const data = asObject(root.data)
+    const page = asObject(data.page)
     const statusById = new Map<string, string>()
     const monitored: Array<{ id: string; name: string; order: number }> = []
     let chatId = ''
-    for (const c of page.components ?? []) {
-      const id = String(c?.component_id ?? '')
+    for (const rawComponent of asArray(page.components)) {
+      const c = asObject(rawComponent)
+      const id = asString(c.component_id)
       if (!id) continue
-      const rawName = String(c?.name ?? '')
+      const rawName = asString(c.name)
       const name = dsModelLabel(rawName)
       if (name !== undefined) {
         statusById.set(id, 'operational')
-        monitored.push({ id, name, order: Number(c?.order_id ?? 0) || 0 })
+        monitored.push({ id, name, order: Number(c.order_id ?? 0) || 0 })
       } else if (chatId === '' && /chat/i.test(rawName)) {
-        // The chat service is named in the Chinese half ("对话服务(Chatservice)"), so
-        // match the raw label instead of the stripped English half.
         chatId = id
         statusById.set(id, 'operational')
       }
@@ -135,15 +140,16 @@ export function parseDsStatus(json: any): DsStatus {
     monitored.sort((a, b) => a.order - b.order)
 
     const incidents: DsIncident[] = []
-    for (const ch of json?.data?.active_changes ?? []) {
-      const affected = ch?.affected_components ?? []
-      // The page also reports search/file-upload outages; keep only incidents that
-      // touch a monitored model or the chat service.
-      if (!affected.some((ac: any) => statusById.has(String(ac?.component_id ?? '')))) continue
-      incidents.push({ title: toEnglish(String(ch?.title ?? '')), status: String(ch?.status ?? '').trim() })
-      for (const ac of affected) {
-        const id = String(ac?.component_id ?? '')
-        const st = String(ac?.status ?? '').trim()
+    for (const rawChange of asArray(data.active_changes)) {
+      const ch = asObject(rawChange)
+      const affected = asArray(ch.affected_components)
+
+      if (!affected.some((rawAffected) => statusById.has(asString(asObject(rawAffected).component_id)))) continue
+      incidents.push({ title: toEnglish(asString(ch.title)), status: asString(ch.status).trim() })
+      for (const rawAffected of affected) {
+        const ac = asObject(rawAffected)
+        const id = asString(ac.component_id)
+        const st = asString(ac.status).trim()
         if (id !== '' && statusById.has(id) && DS_SEVERITY[st] !== undefined) statusById.set(id, st)
       }
     }
@@ -176,8 +182,7 @@ export function parseDsStatus(json: any): DsStatus {
 export function readCredentialFromFile(name: string, file: string): string | undefined {
   try {
     const text = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter((line) => !/^\s*#/.test(line)).join('\n')
-    // Values must sit on the key's own line, so a valueless parent key (dsh's
-    // `refs:` block) cannot swallow the next line's key.
+
     const re = /(?:^|[{\s,])([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*[:=][ \t]*(?:"([^"]*)"|'([^']*)'|([^\s,}]+))/g
     let m: RegExpExecArray | null
     while ((m = re.exec(text)) !== null) {
@@ -186,13 +191,10 @@ export function readCredentialFromFile(name: string, file: string): string | und
       if (value !== undefined) return value
     }
   } catch {
-    // no such file
   }
   return undefined
 }
 
-// Same precedence as dsh: inherited env wins, then $DSH_HOME's credentials store,
-// then cwd's .env, then $DSH_HOME/.env.
 function readCredential(name: string, home = resolveDshHome()): string | undefined {
   if (process.env[name]) return process.env[name]
   return readCredentialFromFile(name, path.join(home, '.credentials.yaml'))
@@ -218,12 +220,10 @@ export function readDefaultModel(home = resolveDshHome()): { provider: string; m
     }
     if (provider || model) return { provider, model }
   } catch {
-    // no settings file
   }
   return undefined
 }
 
-/** Cached per resolved home: the panel asks on every refresh and this does several file reads. */
 export function hasDeepSeekModel(home = resolveDshHome()): boolean {
   const key = path.resolve(home)
   const now = Date.now()
@@ -234,13 +234,12 @@ export function hasDeepSeekModel(home = resolveDshHome()): boolean {
     const selection = readDefaultModel(home)
     value = selection !== undefined && /deepseek/i.test(`${selection.provider} ${selection.model}`)
   }
-  // The cap keeps a pathological settings list from growing the cache unbounded.
+
   if (hasDeepSeekModelCache.size >= HAS_DEEPSEEK_MODEL_CACHE_MAX) hasDeepSeekModelCache.clear()
   hasDeepSeekModelCache.set(key, { value, at: now })
   return value
 }
 
-/** Test hook: drop the module caches so a test starts cold. */
 export function resetDsCachesForTest(): void {
   dsStatusCache = undefined
   dsStatusInFlight = undefined
@@ -258,13 +257,13 @@ export async function fetchDshBalance(home = resolveDshHome()): Promise<void> {
     return
   }
   try {
-    const json = (await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` })) as any
-    const info = json?.balance_infos?.[0]
+    const json = asObject(await fetchJson('https://api.deepseek.com/user/balance', BALANCE_FETCH_TIMEOUT_MS, { authorization: `Bearer ${key}` }))
+    const rawInfo = asArray(json.balance_infos)[0]
+    const info = rawInfo === undefined ? undefined : asObject(rawInfo)
     setBalance(home, info
-      ? { balance: { currency: String(info.currency ?? ''), total: String(info.total_balance ?? '') } }
+      ? { balance: { currency: asString(info.currency), total: asString(info.total_balance) } }
       : { balance: null, error: 'No balance data returned' })
   } catch (e) {
-    // fetch() hides the real cause (DNS / refused / TLS) in e.cause; surface it.
     const message = e instanceof Error ? e.message : String(e)
     const cause = e instanceof Error && e.cause instanceof Error ? e.cause.message : undefined
     setBalance(home, { balance: null, error: cause ? `${message} (${cause})` : message })

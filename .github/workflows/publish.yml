@@ -9,23 +9,27 @@ jobs:
   publish:
     name: publish
     runs-on: ubuntu-latest
-    # 发布环境：Deployments 页留下每次发布记录（dsh-sparrow / pi 仓库同款做法）
     environment: marketplace-publish
     permissions:
       contents: write
-      # E18 gate needs to read the Dependabot and code scanning alert counts.
       security-events: read
       vulnerability-alerts: read
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag commit is on main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::tag 提交不在 main 上：先把 dev 合并到 main 再打 tag（E16）"
+            exit 1
+          fi
 
       - name: Require zero open security alerts (E18)
-        # E18（根规范）：发布硬门禁。三类未处理告警全部为 0 才允许继续；任一查询失败、
-        # 凭据缺失或计数非 0 都在这里中止，后面的打包与发布步骤不会运行。
-        # Dependabot / CodeQL 用 GITHUB_TOKEN 读；secret scanning 读不了（403
-        # "Resource not accessible by integration"），所以用只读 fine-grained PAT。
-        # 外部调用必须带超时：API 卡住时在 5 分钟内失败而不是挂到默认 6 小时（G6）。
         timeout-minutes: 5
         env:
           REPO: ${{ github.repository }}
@@ -49,8 +53,6 @@ jobs:
       - name: Package extension
         run: |
           mkdir -p releases
-          # 先建目录再打：vsce 只在 --out 指向**已存在目录**时把文件名接上去
-          # （目录不存在就把参数当文件名写，Linux 上直接 ENOTDIR）。尾斜杠同理去掉。
           npx --yes @vscode/vsce package --no-dependencies --out releases
 
       - name: Publish to VS Code Marketplace
@@ -63,8 +65,6 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          # 从两份 CHANGELOG 抽取本版本条目，英文在上、中文在下拼成发布说明。
-          # 用 index() 前缀匹配而非正则：awk 里 \[ 是非法转义会退化成字符类，匹配失效。
           extract() {
             awk -v ver="${VERSION}" '
               BEGIN { found=0; lines="" }

@@ -26,7 +26,6 @@ import type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts
 
 export type { InstanceRuntimeStatus, PreparedDsh, RuntimeHost } from './types.ts'
 
-/** Whole-start bound: a hung install must surface as error, never leave `starting` behind. */
 const START_WATCHDOG_MS = 20 * 60_000
 
 function statOrUndefined(file: string): fs.Stats | undefined {
@@ -66,7 +65,6 @@ export class InstanceRuntime {
   }
 
   private resolveHome(): string {
-    // An observed instance may not know its home; never pin it to the launcher default.
     if (this.isObserved()) return displayHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
     return instanceHome(this.instance, { homeDir: os.homedir(), defaultHome: resolveDshHome() })
   }
@@ -93,8 +91,7 @@ export class InstanceRuntime {
       this.host.dbg(`[${this.instance.id}] ignored state transition ${this.state} --${event}-->`)
       return
     }
-    // Freeze what this start captured: a running dsh keeps logging plugin chatter. Periodic
-    // model-listing lines are dropped and launch tokens masked before anything reaches the panel.
+
     if (this.state === 'starting' && next !== 'starting') {
       this.consoleLog = sanitizeStartupLines(this.logPump.all()).slice(-LOG_TAIL_LINES)
       this.logPump.stop()
@@ -102,7 +99,6 @@ export class InstanceRuntime {
     this.state = next
   }
 
-  /** Pre-multi-instance server log; only an adopted default instance can have one. */
   private get legacyLogPath(): string {
     return path.join(dshBaseDir(), 'logs', 'server.log')
   }
@@ -124,14 +120,12 @@ export class InstanceRuntime {
   private async adopt(): Promise<boolean> {
     let adopted = await this.attemptAdopt()
     if (!adopted && this.isObserved()) {
-      // An externally restarted dsh printed a new token; a cached old one keeps failing.
       clearObservedProcessCache()
       adopted = await this.attemptAdopt()
     }
     if (adopted) return true
     if (!this.isObserved()) return false
-    // The port answers but no usable launch token was found: keep the observed entry visible
-    // (Running (detected)) with a concrete reason instead of pretending it is stopped.
+
     if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return false
     this.error = this.observedState.tokenError !== ''
       ? this.observedState.tokenError
@@ -153,7 +147,7 @@ export class InstanceRuntime {
 
   private fail(message: string): false {
     this.error = message
-    // A dead pid must not keep reserving the home in `holdsHome`.
+
     if (this.pid !== undefined && !isProcessAlive(this.pid)) this.pid = undefined
     this.transition('fail')
     this.activity(`✗ ${message}`)
@@ -248,10 +242,9 @@ export class InstanceRuntime {
     } catch (error) {
       return this.fail(`cannot create home ${home}: ${error instanceof Error ? error.message : String(error)}`)
     }
-    // Stage timings go to the launcher log only: a slow Start has to be diagnosable
-    // without guessing whether the launcher, dsh itself or the profile is responsible.
+
     this.host.dbg(`[${this.instance.id}] start: preflight done at ${elapsed()}`)
-    // Only say Installing when dsh is really missing, or every Start flashes it.
+
     this.installing = this.host.isDshMissing()
     let prepared: PreparedDsh | undefined
     try {
@@ -260,8 +253,7 @@ export class InstanceRuntime {
       this.installing = false
     }
     if (prepared === undefined) return this.fail('dsh install or detection failed — see the launcher log')
-    // dsh 0.2.2+ needs Node.js 24.9 or later. Failing here explains the problem up front
-    // instead of letting the server exit silently right after it is spawned.
+
     const nodeVersion = await probeNodeVersion(cfg.nodePath).catch(() => '')
     if (nodeTooOldForDsh(prepared.version, nodeVersion)) {
       return this.fail(
@@ -287,7 +279,6 @@ export class InstanceRuntime {
     return ready
   }
 
-  /** Observed instances are read-only views; "start" only re-checks whether the process is up. */
   private async startObserved(): Promise<boolean> {
     if (this.state === 'running' || await isListening(this.instance.port)) return this.adopt()
     this.activity('ℹ detected dsh is not running — start it outside the launcher')
@@ -350,18 +341,12 @@ export class InstanceRuntime {
     return true
   }
 
-  /**
-   * Settle a runtime whose port is already gone, or that never had a process to kill. Stop
-   * reports success: the instance is stopped after this call, including a no-op Stop on one
-   * that already was (clearing a stale error left by an earlier unexpected exit).
-   */
   private finishCleanup(): true {
     this.untrackedPort = false
     this.url = ''
     this.error = ''
     this.logPump.stop()
-    // Settle from the state Stop was entered from: a stale `running` (the port vanished
-    // before refresh noticed), the early `stopping` flip, or error/starting.
+
     if (this.state === 'running') this.transition('lost')
     else if (this.state === 'stopping') this.transition('stop-complete')
     else if (this.state !== 'stopped') this.transition('cleanup')
@@ -376,20 +361,17 @@ export class InstanceRuntime {
     }
     this.clearStartWatchdog()
     this.installing = false
-    // Flip to stopping before the port scan: the scan takes about a second on an adopted
-    // instance, and every UI surface should react to the click at once instead of looking idle.
+
     if (nextState(this.state, 'stop') !== undefined) this.transition('stop')
     const tracked = this.hasTrackedChild()
     const portOpen = tracked ? false : await isListening(this.instance.port, STOP_POLL_PROBE_MS)
     let identified: number[] = []
     if (!tracked && portOpen) {
-      // The process scan can take a second; say what is happening instead of looking idle.
       this.activity('■ Stopping…')
       identified = await findDshServerPidsByPort(this.instance.port)
     }
     const plan = stopPlan({ hasTrackedChild: tracked, portOpen, identified: identified.length > 0 })
     if (plan === 'unidentified') {
-      // The server may have exited while we were scanning; do not report a false "still in use".
       if (!(await isListening(this.instance.port, STOP_POLL_PROBE_MS))) return this.finishCleanup()
       this.untrackedPort = true
       return this.fail(`port ${this.instance.port} is in use, but no DSH server for this instance could be identified — not killed`)
@@ -422,7 +404,6 @@ export class InstanceRuntime {
     return this.stopPromise
   }
 
-  /** A start or stop is in flight; port probes must not race their state changes. */
   private isTransitioning(): boolean {
     return this.state === 'starting' || this.state === 'stopping'
   }
@@ -430,12 +411,10 @@ export class InstanceRuntime {
   async refresh(): Promise<void> {
     if (this.isTransitioning()) return
     const open = await isListening(this.instance.port)
-    // Stop/Start can begin while the port probe was in flight; do not adopt or report for them.
+
     if (this.isTransitioning()) return
     if (open) {
       if (this.state === 'running') {
-        // Observed servers can restart outside the launcher with a new token; re-adopt so the
-        // cached URL is refreshed, while launcher-owned instances just clear the flag.
         if (this.isObserved()) await this.adopt()
         else this.untrackedPort = false
         return
@@ -457,7 +436,6 @@ export class InstanceRuntime {
     return statOrUndefined(this.legacyLogPath) !== undefined ? this.legacyLogPath : this.logPath
   }
 
-  /** While starting, live lines; afterwards the startup output frozen at settle time. */
   consoleLines(maxLines = LOG_TAIL_LINES): string[] {
     return this.state === 'starting'
       ? sanitizeStartupLines(this.logPump.all()).slice(-maxLines)
@@ -470,7 +448,6 @@ export class InstanceRuntime {
       fs.mkdirSync(path.dirname(this.logPath), { recursive: true })
       fs.writeFileSync(this.logPath, '')
     } catch {
-      // Best effort; a running server may hold the file.
     }
     this.consoleLog = []
     if (this.state === 'starting') this.logPump.start(0)
@@ -509,9 +486,7 @@ export class InstanceRuntime {
     }
   }
 
-  /** Not a status field: status objects reach the webview, which must not get the token. */
   uiUrl(): string {
-    // An observed instance without a resolved token has no openable URL.
     if (this.isObserved() && this.url === '') return ''
     return this.url || loopbackUrl(this.instance.port)
   }
@@ -521,7 +496,6 @@ export class InstanceRuntime {
   }
 
   holdsHome(): boolean {
-    // Observed instances never own a launcher home.
     return this.isObserved() ? false : holdsHome(this.state, this.hasTrackedChild(), this.untrackedPort)
   }
 }

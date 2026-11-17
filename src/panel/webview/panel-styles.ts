@@ -1,11 +1,3 @@
-/**
- * Dashboard CSS, kept as a string so the extension ships no asset files.
- * Colours mirror dsh's design-platform palette; light/dark follow the VS Code
- * theme class on `body`.
- *
- * @module webview/panel-styles
- */
-
 export const PANEL_CSS = `
   html, body { height: 100%; }
   body {
@@ -145,15 +137,18 @@ export const PANEL_CSS = `
   .ds-pricing { flex: none; font-size: 10px; padding: 0 5px; border-radius: 8px; line-height: 16px; margin-left: auto; }
   .ds-pricing.peak { color: var(--lap-danger); background: var(--lap-danger-bg); }
   .ds-pricing.offpeak { color: var(--lap-success); background: var(--lap-success-bg); }
-  .ds-components { display: flex; flex-direction: column; min-width: 0; }
-  .ds-model-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; border-bottom: 0.5px solid var(--lap-border-soft); }
-  .ds-model-row:last-child { border-bottom: none; }
-  .ds-chat-row { display: flex; align-items: center; gap: 6px; width: 100%; height: auto; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 11px; font-weight: 400; text-align: left; cursor: pointer; }
+  .ds-status-grid { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+  .ds-checked { display: flex; flex: none; flex-direction: column; align-self: stretch; justify-content: center; align-items: flex-end; gap: 1px; padding-left: 10px; border-left: 0.5px solid var(--lap-border-soft); color: var(--lap-fg2); font-size: 10px; line-height: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ds-checked[hidden] { display: none; }
+  .ds-checked-label { color: var(--lap-fg2); font-size: 9px; }
+  .ds-checked-time { color: var(--lap-fg); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ds-components { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-content: flex-start; gap: 4px; min-width: 0; }
+  .ds-model-row { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 2px 7px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; line-height: 14px; }
+  .ds-chat-row { display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; min-width: 0; max-width: 100%; padding: 2px 7px; border: 0.5px solid var(--lap-border-soft); border-radius: 999px; background: transparent; color: var(--lap-fg); font-family: inherit; font-size: 11px; font-weight: 400; line-height: 14px; text-align: left; cursor: pointer; }
   .ds-chat-row:hover .ds-model-name { color: var(--lap-accent); text-decoration: underline; }
-  .ds-chat-row:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: -2px; }
+  .ds-chat-row:focus-visible { outline: 2px solid var(--lap-accent); outline-offset: 2px; }
   .ds-chat-arrow { color: var(--lap-fg2); }
   .ds-model-name { min-width: 0; color: var(--lap-fg); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ds-check-time { margin-left: auto; flex: none; color: var(--lap-fg2); font-size: 10px; font-variant-numeric: tabular-nums; }
   .cdot { width: 6px; height: 6px; margin: 0; border-radius: 50%; background: #888; flex: none; }
   .cdot.ok { background: var(--lap-success); }
   .cdot.degraded { background: var(--lap-warning); }
@@ -164,7 +159,7 @@ export const PANEL_CSS = `
   .ds-empty { font-size: 10px; color: var(--lap-fg2); }
   .ds-balance-row { border-top: 0.5px solid var(--lap-border-soft); padding-top: 5px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
   .ds-balance-label { color: var(--lap-fg2); font-size: 10px; }
-  .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; word-break: break-all; }
+  .balance-value { color: var(--lap-fg); font-size: 11px; margin-left: auto; text-align: right; flex: none; white-space: nowrap; }
   .settings-area { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
   .settings-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .lap-select-title { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--lap-fg2); }

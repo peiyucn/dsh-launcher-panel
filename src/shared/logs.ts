@@ -1,7 +1,6 @@
 import * as fs from 'node:fs'
 import { extractWebToken } from './env.ts'
 
-/** Never read more than the tail: a source-mode log can reach ~90 MB. */
 export const LOG_READ_BYTES = 256 * 1024
 
 export const LOG_TAIL_LINES = 200
@@ -20,7 +19,6 @@ export function readRange(file: string, start: number, length: number): Buffer |
   }
 }
 
-/** Bounded tail of a file as text; a cut mid-line leaves a partial first line. */
 export function readLogTailBytes(file: string, maxBytes = LOG_READ_BYTES): string | undefined {
   try {
     const stat = fs.statSync(file)
@@ -41,20 +39,14 @@ export function readTokenFromLog(file: string): string | undefined {
   const text = readLogTailBytes(file)
   if (text === undefined) return undefined
   let token: string | undefined
-  // The newest start printed the token that is valid now.
+
   for (const line of text.split(/\r?\n/)) token = extractWebToken(line) ?? token
   return token
 }
 
-// Periodic plugin chatter (model catalog refreshes) says nothing about whether a launch
-// succeeded; it only buries the useful startup output. The full text stays in server.log.
 const MODEL_LISTING_LINE = /\bmodel listing from \S+ (?:loaded \d+ model\(s\)|failed \()/u
 const LAUNCH_TOKEN = /([?&]token=)[^\s&"']+/gu
 
-/**
- * Lines from the server log that are safe to show in the panel console: periodic plugin
- * chatter is dropped and launch tokens are masked (the webview must never receive them).
- */
 export function sanitizeStartupLines(lines: readonly string[]): string[] {
   return lines
     .filter((line) => !MODEL_LISTING_LINE.test(line))

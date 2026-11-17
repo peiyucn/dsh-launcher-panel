@@ -1,5 +1,3 @@
-// The webview is three strings plus a host class that needs VS Code, so these
-// tests compare the generated literals against the contract module.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -98,6 +96,36 @@ test('every element id the client script looks up exists in the body', () => {
   assert.deepEqual(missing, [], `ids missing from panelBody: ${missing.join(', ')}`)
 })
 
+test('the DeepSeek status grid has one checked-time block beside the API pills', () => {
+  assert.equal((body.match(/id="dsChecked"/g) || []).length, 1, 'the card must have one checked-time block')
+  assert.equal((body.match(/id="dsCheckedTime"/g) || []).length, 1, 'the checked time needs its own value node')
+  assert.match(body, /<div class="ds-status-grid">[\s\S]*id="dsComponents"[\s\S]*id="dsChecked"/, 'APIs and checked time must share the grid')
+  assert.match(body, /id="dsChecked"[\s\S]*ds-checked-label[\s\S]*ds-checked-time/, 'the checked time must label and value on separate lines')
+  assert.doesNotMatch(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'checked time must stay out of the balance row')
+  assert.match(script, /getElementById\('dsChecked'\)/, 'the client must look up the checked-time block')
+  assert.match(script, /getElementById\('dsCheckedTime'\)/, 'the client must look up the checked-time value')
+  assert.doesNotMatch(script, /ds-check-time/, 'per-row check-time spans must stay removed')
+  assert.match(PANEL_CSS, /\.ds-status-grid\s*\{[^}]*display:\s*flex/u, 'the status area must be a two-column grid')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*border-left:/u, 'the checked-time column must have a divider')
+  assert.match(PANEL_CSS, /\.ds-checked\s*\{[^}]*align-self:\s*stretch/u, 'the divider must span the full grid height')
+})
+
+test('the DeepSeek APIs use pills instead of underlined rows', () => {
+  assert.match(PANEL_CSS, /\.ds-components\s*\{[^}]*flex-wrap:\s*wrap/u, 'API pills must wrap in the left column')
+  assert.match(PANEL_CSS, /\.ds-model-row\s*\{[^}]*border-radius:\s*999px/u, 'model rows must be pills')
+  assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*border-radius:\s*999px/u, 'chat row must share the pill shape')
+  assert.match(PANEL_CSS, /\.ds-model-row\s*\{[^}]*padding:\s*2px 7px/u, 'pills must stay compact')
+  assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*padding:\s*2px 7px/u, 'the chat pill must stay compact')
+})
+
+test('the DeepSeek status grid keeps a real balance on one line', () => {
+  assert.match(body, /<div class="ds-balance-row">[\s\S]*id="balanceValue"/, 'balance row must keep its value node')
+  assert.doesNotMatch(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'checked time must not squeeze the balance')
+  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*flex:\s*none/u, 'the balance must not be squeezed')
+  assert.match(PANEL_CSS, /\.balance-value\s*\{[^}]*white-space:\s*nowrap/u, 'the balance must stay on one line')
+  assert.doesNotMatch(PANEL_CSS, /\.balance-value\s*\{[^}]*word-break:\s*break-all/u, 'character-by-character balance wrapping must not return')
+})
+
 test('the client command set, the host switch and PANEL_COMMANDS are the same set', () => {
   const clientCommands = new Set([
     ...uniqueMatches(/command:\s*'([^']+)'/g, script),
@@ -133,7 +161,7 @@ test('the update builder always emits exactly the fields the client consumes', (
   assert.deepEqual(Object.keys(update).sort(), UPDATE_KEYS)
   assert.equal(update.type, PANEL_MESSAGE_TYPES.update)
   assert.equal(update.status.unknown, false, 'a successful status must not be marked unknown')
-  // Defaults keep the payload complete even for the no-manager / fallback paths.
+
   assert.deepEqual(update.instances, [])
   assert.deepEqual(update.issues, [])
   assert.deepEqual(update.activity, [])
@@ -161,7 +189,7 @@ test('the failure fallback emits the same field set and an unknown status', () =
   })
   assert.deepEqual(Object.keys(fallback).sort(), UPDATE_KEYS)
   assert.equal(fallback.status.unknown, true)
-  assert.equal(fallback.active, fallback.active) // present, not dropped by the fallback path
+  assert.equal(fallback.active, fallback.active)
   assert.equal(fallback.showDs, true)
 })
 
@@ -207,7 +235,6 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
   assert.match(normal, /setBrowserUI\(m\.browser \|\| DEFAULT_BROWSER\)/)
   assert.ok(!normal.includes('${'), 'unfilled template placeholder left in the client script')
 
-  // `</script>` must not close the inline element that wraps this text.
   const closing = panelScript({ peakWindows: '[]', defaultBrowser: '</script><img>' })
   assert.ok(!closing.includes('</script>'), 'the injected literal must not contain a raw </script>')
   const closingLiteral = /const DEFAULT_BROWSER = (.*)/.exec(closing)?.[1]
@@ -217,7 +244,7 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
 
 test('the generated client script is syntactically valid JavaScript', () => {
   assert.equal(typeof script, 'string')
-  // One backtick inside the embedded text would end the host string literal.
+
   assert.ok(!script.includes('`'), 'the client script text must not contain a backtick')
   assert.doesNotThrow(() => new Function(script), 'the normal script must parse')
   assert.doesNotThrow(

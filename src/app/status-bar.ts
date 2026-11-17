@@ -10,7 +10,6 @@ const STATUS_TEXT = '$(dsh-whale)'
 const STATUS_SPLASH_SMALL = '$(dsh-whale-splash-small)'
 const STATUS_SPLASH_LARGE = '$(dsh-whale-splash-large)'
 
-/** The status-bar item plus the refresh the commands need after an action. */
 export interface StatusBar extends vscode.Disposable {
   refresh(): Promise<void>
 }

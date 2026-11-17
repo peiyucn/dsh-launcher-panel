@@ -23,15 +23,13 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
     return hooks.fail(`cannot create the instance log directory: ${error instanceof Error ? error.message : String(error)}`)
   }
   if (hooks.clearServerLogOnStart()) {
-    try { fs.writeFileSync(hooks.logPath(), '') } catch { /* best effort */ }
+    try { fs.writeFileSync(hooks.logPath(), '') } catch {  }
   }
   let logFd: number
-  let startOffset = 0
+  let startOffset: number
   try {
     logFd = fs.openSync(hooks.logPath(), 'a')
-    // Capture the offset before spawn: with clearServerLogOnStart off the file keeps earlier
-    // runs, and the console must show this launch only, not history. Output that appears
-    // between spawn and pump start is still after this offset, so nothing is lost.
+
     startOffset = fs.fstatSync(logFd).size
   } catch (error) {
     return hooks.fail(`cannot open the instance log: ${error instanceof Error ? error.message : String(error)}`)
@@ -41,9 +39,7 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
       cwd: spec.cwd,
       env: spec.env,
       windowsHide: hooks.hideConsole(),
-      // Detach on every platform: VS Code tears down the extension host (and, on
-      // Windows, its process tree) on window reload/close, which would otherwise
-      // take the server down with the window. Stop still kills it by pid tree.
+
       detached: true,
       stdio: ['ignore', logFd, logFd],
     })
@@ -55,13 +51,13 @@ export function spawnServer(spec: SpawnSpec, hooks: SpawnHooks): boolean {
     })
     child.once('close', (code, signal) => {
       hooks.setChild(undefined)
-      // Starting is diagnosed by waitForReady; stopping by stopInternal.
+
       if (hooks.state() === 'running') hooks.handleUnexpectedExit(code, signal)
     })
   } catch (error) {
     return hooks.fail(`failed to start: ${error instanceof Error ? error.message : String(error)}`)
   } finally {
-    try { fs.closeSync(logFd) } catch { /* child owns the duplicate */ }
+    try { fs.closeSync(logFd) } catch {  }
   }
   hooks.startLogPump(startOffset)
   return true

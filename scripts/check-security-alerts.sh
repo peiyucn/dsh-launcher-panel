@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-# E18 hard gate: fail closed unless Dependabot, code scanning and secret scanning
-# all report zero open alerts.
-#
-# Runs in publish.yml after checkout and before anything is built or published.
-# Any query failure is treated as "not clean" (fail-closed).
-#
-# Required environment:
-#   REPO                owner/name (${{ github.repository }} in Actions)
-#   GITHUB_TOKEN_ALERTS token that may read Dependabot + code scanning alerts
-#   SECRET_SCAN_TOKEN   token that may read secret scanning alerts. GITHUB_TOKEN
-#                       cannot read them (HTTP 403 "Resource not accessible by
-#                       integration"), so this is a read-only fine-grained PAT
-#                       stored as the SECURITY_ALERTS_TOKEN environment secret.
 set -euo pipefail
 
 : "${REPO:?REPO is required}"
