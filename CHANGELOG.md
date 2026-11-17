@@ -4,9 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
-## [Unreleased]
+## [0.4.6] - 2026-11-18
 
-- The **DeepSeek API Status** card now lays the API entries out as pills in a left column and keeps a single `Last checked` block in a right column, separated by a divider; the label and time are on separate lines.
+- The **DeepSeek API Status** card lays the API entries out as pills in a left column and keeps a single `Last checked` block in a right column, separated by a divider; the label and time are on separate lines. The card reports one time for the whole card instead of one per model row.
+- The account balance stays on a single line, so a long balance or error message no longer wraps character by character.
+- No other user-perceivable changes: internal tooling and lint moved to the shared baseline.
 
 ## [0.4.5] - 2026-11-14
 
