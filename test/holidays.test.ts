@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { CN_HOLIDAY_RANGES } from '../src/panel/holidays.ts'
+import { CN_HOLIDAY_RANGES, CN_HOLIDAY_SOURCES } from '../src/panel/holidays.ts'
 
 const source = readFileSync(new URL('../src/panel/holidays.ts', import.meta.url), 'utf8')
 
@@ -47,10 +47,10 @@ test('spans within a year are sorted and non-overlapping', () => {
 
 test('every year cites the announcement it came from', () => {
   for (const year of Object.keys(CN_HOLIDAY_RANGES)) {
-    const at = source.search(new RegExp(`^  ${year}: \\[$`, 'm'))
-    assert.notEqual(at, -1, `${year} must have a block`)
-    const preceding = source.slice(0, at).split('\n').slice(-4).join('\n')
-    assert.match(preceding, /gov\.cn/, `${year} must cite its gov.cn source above the block`)
+    const citation = CN_HOLIDAY_SOURCES[Number(year)]
+    assert.ok(citation, `${year} must cite its source`)
+    assert.match(citation.document, /〔\d{4}〕\d+号/, `${year} must name the document`)
+    assert.match(citation.url, /^https:\/\/www\.gov\.cn\//, `${year} must link its announcement on gov.cn`)
   }
 })
 
