@@ -1,5 +1,4 @@
 .vscode/**
-.githooks/**
 .gitattributes
 .gitignore
 .github/**

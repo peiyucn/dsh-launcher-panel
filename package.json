@@ -365,8 +365,6 @@
     "watch": "tsc -w -p ./",
     "package": "node -e \"require('node:fs').mkdirSync('releases',{recursive:true})\" && vsce package --out releases --no-dependencies",
     "test": "node --test --test-isolation=none \"test/*.test.ts\"",
-    "hooks:install": "git config core.hooksPath .githooks",
-    "hooks:uninstall": "git config --unset core.hooksPath",
     "verify": "npm run lint && npm run typecheck && npm test && npm run compile && npm run package"
   },
   "devDependencies": {
