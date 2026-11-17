@@ -1,6 +1,6 @@
 # dsh-launcher-panel — 项目契约
 
-> 默认只加载本文件。共享规则在本地 `meta/`（来自 `pyai-meta-repo@61c4312`），按任务路由，不默认展开。
+> 默认只加载本文件。共享规则在本地 `meta/`（来自 `pyai-meta-repo@00deb1e`），按任务路由，不默认展开。
 > 本地 `meta/` 是完整快照；其中 A/B/I 段、`PROJECTS.md`、`github-policy.json`、`scripts/` 是 meta-repo 自身的仓库/项目/检查工具，不作为本项目规则。冲突时本文件与 `docs/` 优先。
 > 可执行检查：[docs/quality-gates.md](docs/quality-gates.md)；发布步骤：[docs/release.md](docs/release.md)。
 

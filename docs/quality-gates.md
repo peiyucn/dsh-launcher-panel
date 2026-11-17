@@ -1,7 +1,7 @@
-# 质量门禁与纠错沉淀
+# 项目检查登记
 
-> 本文件是 `dsh-launcher-panel` 的可执行规则目录。规则是否生效以 `npm run verify` 的退出码为准。
-> 维护原则：**先有失败样例，再有一条检查，最后才考虑写说明。** 规则变更必须同步本文件、负例测试和 CI。
+> 这是 `dsh-launcher-panel` **项目专属**的可执行检查表。通用分层、登记格式和加检查顺序见 [local meta/rules/verification.md](../meta/rules/verification.md)；重复错误升级见 [local meta/skills/correct/SKILL.md](../meta/skills/correct/SKILL.md)。
+> 维护原则：先有失败样例，再有一条检查，最后才写说明。规则变更同步本文件、负例测试和 CI。
 
 ## 1. 入口
 
@@ -14,24 +14,9 @@ npm run verify           # lint → typecheck → test → compile → package
 
 CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要求的 `typecheck` status 同时覆盖静态检查和类型检查。
 
-## 2. 规则分层
+## 2. 已登记检查
 
-从强到弱；能落在上层的，不要留在下层。
-
-| 层 | 形式 | 适用 |
-|---|---|---|
-| 1 | 类型、API、数据结构 | 让非法状态无法表达 |
-| 2 | ESLint / 静态检查 | 源码模式、禁用 API、依赖方向 |
-| 3 | 仓库策略检查 | 文档、workflow、配置、发布门禁 |
-| 4 | 测试 | 行为、状态迁移、失败路径 |
-| 5 | CI / 发布门禁 | 跨仓库、跨环境、不可提交绕过 |
-| 6 | AGENTS.md 文字 | 判断、授权、取舍、为什么 |
-
-第 6 层不是失败：它承担工具无法判断的部分（例如是否允许一次不可逆操作、方案是否合理）。但**可由自动检查判定的规则不应只停留在第 6 层**。
-
-## 3. 已登记检查
-
-### 3.1 仓库策略检查（`scripts/check-policy.mjs`）
+### 2.1 仓库策略检查（`scripts/check-policy.mjs`）
 
 每条检查都在 `test/policy-lint.test.ts` 有至少一个负例；正例由真实仓库与干净 fixture 覆盖。
 
@@ -48,7 +33,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 | QG009 | `releases/`、`*.vsix` 等产物不进 git / VSIX | 产物污染仓库或发布包 |
 | QG010 | 测试中不得提交 `.only()` | 只跑一个用例却显示全绿 |
 
-### 3.2 代码规则（`eslint.config.mjs`）
+### 2.2 代码规则（`eslint.config.mjs`）
 
 | ID | 规则 | 来源 / 防止的错误 |
 |---|---|---|
@@ -58,28 +43,7 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 | E004 | 禁止显式 `any` | 外部数据未解析就穿过类型边界 |
 | E005 | ESLint recommended + typescript-eslint recommended | 未使用变量、无用赋值、明显错误 |
 
-## 4. 出错后怎么加检查
-
-任何重复错误、或一次代价足够高的错误，按下列顺序沉淀：
-
-1. **留下失败证据**：把出错输入/输出写成最小复现，说明期望行为。
-2. **选最高可行层**：能否改类型/API 让错误写不出来？不能，再写检查。
-3. **先写负例**：在 `test/policy-lint.test.ts` 或 `test/*.test.ts` 增加“这条检查必须失败”的用例。
-4. **实现检查**：代码规则进 `eslint.config.mjs`；仓库规则进 `scripts/check-policy.mjs`；行为规则进 `test/`。
-5. **证明正反都成立**：负例必须红；当前正常仓库必须绿。
-6. **接入执行链**：`npm run verify`，并确认 CI 的实际 job 会跑到。
-7. **登记**：在本文件加一行，写 ID、防的错误、负例位置。
-8. **清理文字**：AGENTS.md 中已被检查完整覆盖的描述可以删；判断依据、例外、不可逆操作仍保留。
-9. **单独提交**：检查与对应修复可以同一主题提交；不要混入无关功能。
-
-### 什么时候还不该加检查
-
-- 规则只出现一次且没有复发迹象：先修问题，观察；
-- 检查会大量误报：先改 API/结构，不要用 lint 硬压；
-- 需要业务判断、授权或不可逆操作：留在 AGENTS + 人审；
-- 规则本身还在快速变化：先写测试，稳定后再提升为强制检查。
-
-## 5. 分支保护
+## 3. 分支保护（项目值）
 
 `main` / `dev` 上启用仓库规则集 `严格 PR 门禁`：
 
@@ -91,12 +55,19 @@ CI 的 `typecheck` job 先跑 lint，再跑 typecheck；因此保护分支上要
 - 禁删除、禁强推、禁重写历史；
 - 直接 push 到 `dev` 会被 GitHub 拒绝（`Changes must be made through a pull request`）。
 
-边界：owner 对自己的 PR 保留合并绕过；直推仍被禁止。仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界。要让 owner 也完全不能改规则，需要独立管理员、组织/企业级治理或自托管 Git 的服务端 hook。
+边界：owner 对自己的 PR 保留合并绕过；直推仍被禁止。仓库 owner 仍可在 GitHub 设置中修改或删除规则集；这是仓库级规则的最终边界。
 
-## 6. 维护边界
+## 4. 新增项目检查
+
+1. 在 `test/policy-lint.test.ts` 或 `test/*.test.ts` 先写负例；
+2. 代码规则进 `eslint.config.mjs`；仓库规则进 `scripts/check-policy.mjs`；行为规则进 `test/`；
+3. 跑 `npm run verify`，确认负例红、正常仓库绿；
+4. 在本文件登记 ID、防的错误、负例位置；
+5. 修改门禁后由 owner 审阅；Agent 不自合并。
+
+## 5. 维护边界
 
 - 规则可以加严；放宽必须说明为什么、并保留历史误报的负例。
 - 修改 `eslint.config.mjs`、`scripts/check-policy.mjs` 或保护分支规则，都属于改变“门禁”，应由 owner 审阅。
 - `meta/` 是 `pyai-meta-repo` 的共享规则快照；改规则先改 meta，再整体覆盖本目录，不单独改快照。
-- 本文件只记录本项目实际执行的检查；通用规则不在本文件复制。
-- `AGENTS.md` 负责本项目对 agent 的行为契约；本文件负责自动检查可判定的质量门禁，不取代行为约定。
+- 本文件只记录本项目实际执行的检查；通用方法不在本文件复制。
