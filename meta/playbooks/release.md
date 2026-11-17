@@ -5,6 +5,13 @@
 
 > 依赖：[rules/engineering.md](../rules/engineering.md)（E 段）、[rules/repo-settings.md](../rules/repo-settings.md)（F 段）、[rules/verification.md](../rules/verification.md)、[skills/review/SKILL.md](../skills/review/SKILL.md)、[playbooks/acceptance.md](acceptance.md)
 
+## 发版前预检
+
+- 重新读本文件，不要复用会话开始时读到的旧版本；
+- 确认项目 `meta/SOURCE.md` 的提交就是本次要用的版本；
+- 发版过程中同步过 meta，必须重新读本文件再继续；
+- 把 meta 版本写进发布记录。
+
 ## 步骤
 
 1. **发布前验证**
@@ -66,6 +73,7 @@ README 与 CHANGELOG 中英双份，英文为默认，顶部互链。只针对�
 
 - `verify` 失败：不发布；
 - 有用户可见改动但没有验收证据：不发布；
+- `meta/SOURCE` 与本次要用的版本不一致：不发布；
 - 告警非零/查询失败：不发布；
 - 没有 owner 当次确认：不发布；
 - tag 不在默认分支：不发布；
@@ -77,6 +85,7 @@ README 与 CHANGELOG 中英双份，英文为默认，顶部互链。只针对�
 版本：
 tag：
 发布通道：
+meta 版本：
 verify：
 验收证据：
 告警：
@@ -89,6 +98,7 @@ owner 确认：
 
 - 任何不可逆步骤前；
 - 有用户可见改动但没有验收证据；
+- `meta/SOURCE` 与本次要用的版本不一致；
 - 告警无法清零；
 - 发布 workflow 失败且原因不明；
 - 版本内容与 CHANGELOG 不一致。
