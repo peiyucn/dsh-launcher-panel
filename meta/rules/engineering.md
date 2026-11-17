@@ -1,22 +1,27 @@
-# 交付与发布规范
-
-> 规范层。被 `AGENTS.md`、`playbooks/`、`skills/` 引用；不反向依赖它们。
-> 来源：原 `AGENTS.md` 的 E、F 段；项目相关值（分支、checks、发布通道）见 [PROJECTS.md](../PROJECTS.md)。
-> 本地验证规则 E8 在 [verification.md](verification.md)；项目管线清单在 [PROJECTS.md](../PROJECTS.md)。
+# 工程管线
 
 ## E 工程管线
 
-[PROJECTS.md](../PROJECTS.md) 中档位为全量或精简的仓库共用的流程标准。各步骤的具体动作见各项目自己的 AGENTS。
+meta-repo 根 `README.md` 的项目清单中档位为全量或精简的仓库共用的流程标准。
 
-E8 本地一键验证已移到 [verification.md](verification.md)。
+### 子项目对照
+
+| 项目 | 开发分支 | CI | 发布 | 部署 / 同步 |
+|---|---|---|---|---|
+| dsh-launcher-panel | dev | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
+| epytor | dev | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
+| dsh-sparrow | dev | `typecheck` → `build` → `test` → `package` | `publish`（npm；不建 Release） | `deploy`（`market.yml`，发布 `dsh.pyai.site`） |
+| pyai.site | main | `typecheck` | `deploy`（build + Pages，push main 即部署） | `sync`（`daily-sync.yml`，cron） |
+
+有测试的仓库，test job 须输出报告。发布工作流统一命名 `publish.yml`。无 CI 的仓库不列入本表。
 
 ### E1｜建仓库〔constructor〕
 
 用 `gh` 创建，按用途选公开或私有。
 
-### E2｜配置安全基线〔constructor〕
+### E2｜配置仓库设置〔constructor〕
 
-按 F 段配置安全开关与分支保护，再按 F4 逐项核验。
+按 [repo-settings.md](repo-settings.md) 的 F 段配置安全开关、分支保护与合并设置，再按 F4 逐项核验。
 
 ### E3｜放置工作流〔constructor〕
 
@@ -24,21 +29,37 @@ E8 本地一键验证已移到 [verification.md](verification.md)。
 
 ### E4｜创建部署环境〔constructor〕
 
-用 `gh` 创建环境级 environment，名称按发布通道命名。publish job 须挂该 environment，不设审批门禁，Deployments 页面据此留存发布记录。
+environment 设置按 [repo-settings.md](repo-settings.md) 的 GitHub 控制映射；用 `gh` 创建环境级 environment，名称按发布通道命名。publish job 须挂该 environment，不设审批门禁，Deployments 页面据此留存发布记录。
 
 托管方提供的内置环境不需要手动创建。
 
 ### E5｜放置文档骨架〔constructor〕
 
-`AGENTS.md` 按 I1 编写，同时提供中英双份 README 与 CHANGELOG。无版本语义的仓库可按该项目 AGENTS 声明豁免。
+`AGENTS.md` 按 base 的继承方式写：文件头声明继承自 `/pyai-meta-repo/AGENTS.md`；`## 1` 从基 AGENTS 逐字复制；`## 2`–`## 5` 按项目实现。同时提供中英双份 README 与 CHANGELOG，写法见 [playbooks/release.md](../playbooks/release.md) 的“文档写法”。无版本语义的仓库可按该项目 `AGENTS.md` 声明豁免。
 
 ### E6｜登记〔constructor〕
 
-在 [PROJECTS.md](../PROJECTS.md) 的项目清单增加一行。有 CI 或发布流程的，另在项目管线增加管线行。owner 发起新增项目即视为许可修改上述登记。
+在 meta-repo 根 `README.md` 的 `## 项目清单` 增加一行（项目本地不维护该清单）。有 CI 或发布流程的，另在本文 E 工程管线第一段的子项目对照增加管线行。owner 发起新增项目即视为许可修改上述登记。
 
 ### E7｜分支约定〔overridable〕
 
-日常改动在 `dev` 分支，默认分支统一为 `main`。例外：[PROJECTS.md](../PROJECTS.md) 项目清单的「开发分支」列为 `main` 的单分支项目直接在 `main` 开发；GitLab 仓库沿用现有分支名。
+日常改动在 `dev` 分支，默认分支统一为 `main`。例外：E 工程管线第一段子项目对照中「开发分支」为 `main` 的单分支项目直接在 `main` 开发；GitLab 仓库沿用现有分支名。分支保护设置见 [repo-settings.md](repo-settings.md) 的 F5。
+
+### E8｜本地一键验证〔interface〕
+
+每个软件项目须在 `package.json` 提供下列四项标准命令；`npm run verify` 覆盖本项目全部检查项：QG、L（定义见 [verification.md](verification.md)）、项目实现的负例和项目自己的检查。无 `package.json` 的文档仓库以 AGENTS 的文档自查清单替代，不适用本表。
+
+| 命令 | 必须做什么 | 失败 |
+|---|---|---|
+| `npm run lint:code` | 代码静态检查；L001–L005 由此执行 | 非零退出 |
+| `npm run lint:policy` | 仓库策略检查；QG001–QG010 由此执行 | 非零退出 |
+| `npm run lint` | 先 `npm run lint:code`，再 `npm run lint:policy` | 任一步失败即停 |
+| `npm run verify` | 先 `npm run lint`，再按项目 AGENTS 的 `## 3. 实现` 跑类型、测试、构建、打包 | 任一步失败即停 |
+
+- `verify` 是本地唯一总入口；提交、PR、发布前都跑它。
+- `lint` 的顺序固定：先代码，后策略。
+- QG/L 表的执行入口列直接写上述命令；项目不得把某个检查只写成文档说明而不接进命令。
+- 项目契约校验：在 meta-repo 根目录运行 `node meta/scripts/check-project-contract.mjs`。它按 meta-repo 根 `README.md` 的 `## 项目清单` 检查 AGENTS 继承方式（文件头继承来源、`## 1` 逐字继承、`## 2`–`## 5` 实现）、本地 `meta/` 共享层快照（不含 `github-policy.json` / `scripts/`；项目清单在 README，不进快照）、QG 负例文件和 `package.json` 标准命令；输出会列出缺什么，失败即项目还没继承完整。
 
 ### E9｜打包产物〔overridable〕
 
@@ -51,6 +72,8 @@ E8 本地一键验证已移到 [verification.md](verification.md)。
 ### E10｜提交粒度〔final〕
 
 一个 commit 只做一件事。描述用中文，保留英文类型前缀。
+
+PR 说明写清：改了什么、为什么、没改什么、证据、风险、未验证项。
 
 ### E11｜推送前置条件〔final〕
 
@@ -106,7 +129,7 @@ tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验
 
 ### E20｜发布凭据〔final〕
 
-发布凭据一律放环境级 secret，仓库级不保留。
+发布凭据一律放环境级 secret，仓库级不保留；environment / secret 设置按 [repo-settings.md](repo-settings.md) 的 GitHub 控制映射。
 
 ### E21｜发布后收尾〔final〕
 
@@ -140,40 +163,4 @@ tag 提交须在默认分支上；发布工作流须对此做 fail-closed 校验
 | `deploy` | 部署上线（对外可见，须 owner 当次确认） |
 | `sync` | 数据同步 |
 
-每个项目只放真实存在的环节，同型项目顺序保持一致。
-
-## F 安全基线
-
-所有 GitHub 仓库共用。新建仓库照此配置，修改基线须同步至所有仓库。非 GitHub 托管仓库不适用本段。
-
-### F1｜公开仓库全部开启〔final〕
-
-Dependabot alerts（仅报警）、CodeQL default setup、secret scanning 与 push protection、private vulnerability reporting、根目录 `SECURITY.md`。
-
-### F2｜私有仓库仅开启 Dependabot alerts〔final〕
-
-免费计划下其余开关、分支保护与 ruleset 均不可用，记「不可用」不算违规。
-
-### F3｜统一保持关闭〔final〕
-
-secret scanning 的非提供商模式、validity checks、Dependabot 自动升级。
-
-### F4｜逐项核验〔final〕
-
-配置完成与每次变更后逐项核验，结果记录在案；套用 I1 的项目记入其 AGENTS 的安全基线章。
-
-核验项：安全开关各项状态、未处理告警数、CodeQL 状态、私有漏洞报告、`SECURITY.md`、ruleset 清单与规则、合并设置、默认分支的经典保护。私有仓库的分支保护相关项按 F2 记「不可用」。
-
-### F5｜分支保护三层〔final〕
-
-三层指：经典分支保护、ruleset 轻量保护、仓库合并设置。
-
-- **经典保护**：只在此层设「要求对话解决」与「不允许绕过」。不设 required status checks，因会挡住 owner 直推。
-- **ruleset**：固定为禁删除、禁强推、禁重建，绕过名单留空。公开仓库的默认分支与 `dev`（如有）各一条。
-- **合并设置**：仅开 squash，关闭 merge commit 与 rebase。该项不在 ruleset 也不在安全开关里，最易漏查。
-
-### F6｜直推权限与外部交互〔final〕
-
-owner 保留 fast-forward 直推能力。公开仓库的外部 PR 与 Issue 一律开放，不设交互限制；不接受的直接关闭。
-
-单仓库可按其 AGENTS 登记例外。
+每个项目只放真实存在的环节，同型项目顺序保持一致。required checks 按 [repo-settings.md](repo-settings.md) 的 GitHub 控制映射对齐。

@@ -24,6 +24,6 @@
 
 ## 关联
 
-- 规则：[rules/behavior.md](../rules/behavior.md) C9
+- 规则：[AGENTS.md](../../AGENTS.md) C10
 - 技能：[skills/correct/SKILL.md](../skills/correct/SKILL.md)
 - 原则：[fix-root-causes.md](fix-root-causes.md)

@@ -22,5 +22,5 @@
 
 ## 关联
 
-- 规则：[rules/delivery.md](../rules/delivery.md) E10
+- 规则：[rules/engineering.md](../rules/engineering.md) E10
 - 步骤：[playbooks/feature.md](../playbooks/feature.md)、[playbooks/refactoring.md](../playbooks/refactoring.md)

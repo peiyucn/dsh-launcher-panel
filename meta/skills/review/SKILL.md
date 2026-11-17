@@ -3,6 +3,11 @@
 > 触发：审查 diff / PR / 设计；完成实现后、合并前；owner 说“看看这个”。
 > 不触发：只查代码怎么工作 → `playbooks/investigate.md`；用户可见验收 → `playbooks/acceptance.md`。
 
+## 输入 / 权限
+
+- 输入：diff / PR / 设计、spec / 验收标准、`verify` 输出；
+- 权限：只读；不改代码、不合并。
+
 ## 目标
 
 不是证明“看起来没问题”，而是找出**有证据的问题**，并给出明确 verdict。
@@ -59,11 +64,18 @@
 剩余风险：
 ```
 
+## 检查
+
+- 每条 finding 有位置、证据、影响；
+- blocker 能被证据复跑；
+- 未验证项和剩余风险写明。
+
 ## 边界
 
 - 不为了显得严格而编造问题；
 - 不因为“整体看起来还行”放过 blocker；
-- review 不替代 acceptance；两者可以串联。
+- review 不替代 acceptance；两者可以串联；
+- 合并由 owner；required checks 全绿；Agent 不自合并。
 
 ## 关联
 

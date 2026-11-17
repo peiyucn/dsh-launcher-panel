@@ -22,6 +22,6 @@
 
 ## 关联
 
-- 规则：[rules/behavior.md](../rules/behavior.md) G3/G4
+- 规则：[rules/verification.md](../rules/verification.md) G3/G4
 - 原则：[model-the-domain.md](model-the-domain.md)
 - 审查：[skills/review/SKILL.md](../skills/review/SKILL.md)

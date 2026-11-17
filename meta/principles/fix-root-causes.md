@@ -22,6 +22,6 @@ Guard 只有在它处理的状态是合法状态时才算修复；否则只是�
 
 ## 关联
 
-- 规则：[rules/behavior.md](../rules/behavior.md) C4/C5
+- 规则：[AGENTS.md](../../AGENTS.md) C4/C5
 - 原则：[boundary-discipline.md](boundary-discipline.md)
 - 步骤：[playbooks/fix.md](../playbooks/fix.md)

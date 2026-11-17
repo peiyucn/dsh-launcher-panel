@@ -22,5 +22,5 @@
 
 ## 关联
 
-- 规则：[rules/behavior.md](../rules/behavior.md) C4
+- 规则：[AGENTS.md](../../AGENTS.md) C4
 - 步骤：[playbooks/refactoring.md](../playbooks/refactoring.md)
