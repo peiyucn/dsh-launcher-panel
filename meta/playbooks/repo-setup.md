@@ -6,7 +6,7 @@
 ## 步骤
 
 1. **建仓库**
-   - 做：用 `gh` 建公开或私有仓库。
+   - 做：owner 用 `gh` 建公开或私有仓库；agent 不代建。
    - 调用：[rules/engineering.md](../rules/engineering.md) E1；[skills/github/SKILL.md](../skills/github/SKILL.md)；需要代理时调 [skills/proxy/SKILL.md](../skills/proxy/SKILL.md)。
    - 证据：仓库 URL、可见性。
 
@@ -21,7 +21,7 @@
    - 证据：工作流文件。
 
 4. **创建部署环境**
-   - 做：按发布通道建 environment，凭据放环境级 secret。
+   - 做：owner 用 `gh` 按发布通道建 environment，凭据放环境级 secret；agent 不代建。
    - 调用：[rules/repo-settings.md](../rules/repo-settings.md) 的 environment 设置；[rules/engineering.md](../rules/engineering.md) E4。
    - 证据：environment 名称、凭据存放位置（不记录值）。
 

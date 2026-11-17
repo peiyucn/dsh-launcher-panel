@@ -54,7 +54,7 @@
    - 走 [skills/review/SKILL.md](../skills/review/SKILL.md)；
    - 提交顺序：删除 → 重塑 → 清理；
    - PR 说明：结构变化、pin、等价证明、reader-load 变化。
-   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；合并前 required checks + owner 批准。
+   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；[skills/github/SKILL.md](../skills/github/SKILL.md)；合并前 required checks + owner 批准。
    - 证据：review verdict、PR 说明。
 
 ## 边界

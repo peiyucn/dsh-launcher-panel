@@ -54,7 +54,7 @@
    - 走 [skills/review/SKILL.md](../skills/review/SKILL.md)；
    - 小提交序列，一个切片一个主题；
    - PR：why / changed / not changed / evidence / risks。
-   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；合并前 required checks + owner 批准。
+   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；[skills/github/SKILL.md](../skills/github/SKILL.md)；合并前 required checks + owner 批准。
    - 证据：review verdict、PR 说明。
 
 8. **重构方案**

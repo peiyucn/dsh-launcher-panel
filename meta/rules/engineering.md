@@ -17,7 +17,7 @@ meta-repo 根 `README.md` 的项目清单中档位为全量或精简的仓库共
 
 ### E1｜建仓库〔constructor〕
 
-用 `gh` 创建，按用途选公开或私有。
+owner 用 `gh` 创建仓库，按用途选公开或私有；agent 不代建仓库。
 
 ### E2｜配置仓库设置〔constructor〕
 
@@ -29,7 +29,7 @@ meta-repo 根 `README.md` 的项目清单中档位为全量或精简的仓库共
 
 ### E4｜创建部署环境〔constructor〕
 
-environment 设置按 [repo-settings.md](repo-settings.md) 的 GitHub 控制映射；用 `gh` 创建环境级 environment，名称按发布通道命名。publish job 须挂该 environment，不设审批门禁，Deployments 页面据此留存发布记录。
+environment 设置按 [repo-settings.md](repo-settings.md) 的 GitHub 控制映射；owner 用 `gh` 创建环境级 environment，名称按发布通道命名；agent 不代建 environment / secret。publish job 须挂该 environment，不设审批门禁，Deployments 页面据此留存发布记录。
 
 托管方提供的内置环境不需要手动创建。
 
@@ -77,7 +77,7 @@ PR 说明写清：改了什么、为什么、没改什么、证据、风险、�
 
 ### E11｜推送前置条件〔final〕
 
-push 前须 `verify` 通过，推送到开发分支（见 E7）。
+push 前须 `verify` 通过，推送到开发分支（见 E7）。agent 的分支用 `git-agent` 推送，保证最后推送者是 agent；owner 不推 agent 分支。
 
 ### E12｜push 后核查安全告警〔final〕
 
