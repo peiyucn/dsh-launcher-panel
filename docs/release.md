@@ -34,7 +34,7 @@
 ## 发布前检查
 
 - 检查 `src/holidays.ts` 是否覆盖当前年份；没有就按该年国务院公告补上，并把公告 URL 写进注释。漏了不会报错，只会把工作日节假日误显示成 Peak。
-- 按 `docs/quality-gates.md` 的检查表逐项确认，并跑一次 `npm run verify`。
+- 按 `docs/checks.md` 的检查表逐项确认，并跑一次 `npm run verify`。
 
 ## 凭据
 

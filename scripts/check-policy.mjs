@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Repository policy checks that do not need a JavaScript parser.
-// Every check has an ID in docs/quality-gates.md. When this command fails, the
+// Every check has an ID in docs/checks.md. When this command fails, the
 // error is the specification: fix the repository or update the check together
 // with its registry entry. Keep this file dependency-free so `npm run lint`
 // stays usable in a clean clone.
@@ -29,7 +29,7 @@ const REQUIRED_DOCS = [
   'docs/architecture.md',
   'docs/instances-spec.md',
   'docs/positioning-and-retirement.md',
-  'docs/quality-gates.md',
+  'docs/checks.md',
   'docs/release.md',
 ]
 

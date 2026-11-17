@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint'
 
 // Flat config. Rules here are meant to encode only checks that this project has
 // actually needed; recurring defects get a rule and a regression fixture rather
-// than another paragraph in AGENTS.md. See docs/quality-gates.md.
+// than another paragraph in AGENTS.md. See docs/checks.md.
 export default tseslint.config(
   {
     ignores: ['out/**', 'releases/**', 'node_modules/**', 'test-report.xml'],

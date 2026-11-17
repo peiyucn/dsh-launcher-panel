@@ -1,8 +1,8 @@
 # dsh-launcher-panel — 项目契约
 
-> 默认只加载本文件。共享规则在本地 `meta/`（来自 `pyai-meta-repo@00deb1e`），按任务路由，不默认展开。
+> 默认只加载本文件。共享规则在本地 `meta/`（来自 `pyai-meta-repo@d146ad9`），按任务路由，不默认展开。
 > 本地 `meta/` 是完整快照；其中 A/B/I 段、`PROJECTS.md`、`github-policy.json`、`scripts/` 是 meta-repo 自身的仓库/项目/检查工具，不作为本项目规则。冲突时本文件与 `docs/` 优先。
-> 可执行检查：[docs/quality-gates.md](docs/quality-gates.md)；发布步骤：[docs/release.md](docs/release.md)。
+> 可执行检查：[docs/checks.md](docs/checks.md)；发布步骤：[docs/release.md](docs/release.md)。
 
 ## 1. 项目是什么
 
@@ -13,7 +13,7 @@
 - 功能契约：[docs/instances-spec.md](docs/instances-spec.md)
 - 模块边界：[docs/architecture.md](docs/architecture.md)
 - 定位与退役：[docs/positioning-and-retirement.md](docs/positioning-and-retirement.md)
-- 可执行规则：[docs/quality-gates.md](docs/quality-gates.md)
+- 可执行规则：[docs/checks.md](docs/checks.md)
 - 发布流程：[docs/release.md](docs/release.md)
 
 ## 2. 一条主规则
@@ -68,7 +68,7 @@
 | 判断原则 | [meta/principles/README.md](meta/principles/README.md) |
 | 本地 meta 来源与范围 | [meta/SOURCE.md](meta/SOURCE.md) |
 
-项目专属检查与负例在 [docs/quality-gates.md](docs/quality-gates.md)；共享规则不重复写进本文件。
+项目专属检查与负例在 [docs/checks.md](docs/checks.md)；共享规则不重复写进本文件。
 
 ## 6. 硬门禁
 
@@ -85,7 +85,7 @@
 1. 留最小复现/反例；
 2. 选择最强可行层：类型/API → lint/策略检查 → 测试 → CI/发布门禁 → 文字；
 3. 负例必须红、正常仓库必须绿；
-4. 登记 [docs/quality-gates.md](docs/quality-gates.md) 并接入 `npm run verify`；
+4. 登记 [docs/checks.md](docs/checks.md) 并接入 `npm run verify`；
 5. 同类错误第二次出现时，按 [meta/skills/correct/SKILL.md](meta/skills/correct/SKILL.md) 升级。
 
 ## 8. 协作与身份

@@ -30,7 +30,7 @@ const BASE_FILES: Record<string, string> = {
   'docs/architecture.md': '# architecture\n',
   'docs/instances-spec.md': '# spec\n',
   'docs/positioning-and-retirement.md': '# positioning\n',
-  'docs/quality-gates.md': '# quality gates\n',
+  'docs/checks.md': '# checks\n',
   'docs/release.md': '# release\n',
   'README.md': [
     '# fixture',
