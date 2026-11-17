@@ -52,7 +52,7 @@
 | 控制 | 规则 | 执行方式 | 证据 |
 |---|---|---|---|
 | 本地验证 | E8、G8 | 项目 `verify` | `verify` 退出码 |
-| 项目检查登记 | E8、G | `docs/checks.md` + `verify` | 负例/退出码 |
+| 项目检查登记 | E8、G | [checks.md](../checks.md) 复制到项目 `docs/checks.md` + `verify` | 负例/退出码 |
 | 提交粒度 | E10 | review | 提交记录 |
 | 分支只能 PR | E7、F5 | GitHub ruleset | ruleset 查询 |
 | required checks | E24、F5 | 分支保护 / ruleset | checks 列表 |
