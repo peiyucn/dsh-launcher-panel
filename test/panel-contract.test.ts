@@ -1,5 +1,3 @@
-// The webview is three strings plus a host class that needs VS Code, so these
-// tests compare the generated literals against the contract module.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -120,9 +118,6 @@ test('the DeepSeek APIs use pills instead of underlined rows', () => {
   assert.match(PANEL_CSS, /\.ds-chat-row\s*\{[^}]*padding:\s*2px 7px/u, 'the chat pill must stay compact')
 })
 
-// Regression: adding the checked time as a sibling once squeezed `.balance-value`
-// to one character per line (`word-break: break-all`). Keep the value non-wrapping
-// and let other columns shrink instead.
 test('the DeepSeek status grid keeps a real balance on one line', () => {
   assert.match(body, /<div class="ds-balance-row">[\s\S]*id="balanceValue"/, 'balance row must keep its value node')
   assert.doesNotMatch(body, /<div class="ds-balance-row">[\s\S]*id="dsChecked"/, 'checked time must not squeeze the balance')
@@ -166,7 +161,7 @@ test('the update builder always emits exactly the fields the client consumes', (
   assert.deepEqual(Object.keys(update).sort(), UPDATE_KEYS)
   assert.equal(update.type, PANEL_MESSAGE_TYPES.update)
   assert.equal(update.status.unknown, false, 'a successful status must not be marked unknown')
-  // Defaults keep the payload complete even for the no-manager / fallback paths.
+
   assert.deepEqual(update.instances, [])
   assert.deepEqual(update.issues, [])
   assert.deepEqual(update.activity, [])
@@ -194,7 +189,7 @@ test('the failure fallback emits the same field set and an unknown status', () =
   })
   assert.deepEqual(Object.keys(fallback).sort(), UPDATE_KEYS)
   assert.equal(fallback.status.unknown, true)
-  assert.equal(fallback.active, fallback.active) // present, not dropped by the fallback path
+  assert.equal(fallback.active, fallback.active)
   assert.equal(fallback.showDs, true)
 })
 
@@ -240,7 +235,6 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
   assert.match(normal, /setBrowserUI\(m\.browser \|\| DEFAULT_BROWSER\)/)
   assert.ok(!normal.includes('${'), 'unfilled template placeholder left in the client script')
 
-  // `</script>` must not close the inline element that wraps this text.
   const closing = panelScript({ peakWindows: '[]', defaultBrowser: '</script><img>' })
   assert.ok(!closing.includes('</script>'), 'the injected literal must not contain a raw </script>')
   const closingLiteral = /const DEFAULT_BROWSER = (.*)/.exec(closing)?.[1]
@@ -250,7 +244,7 @@ test('defaultBrowser is injected as a JSON string literal (S2 regression)', () =
 
 test('the generated client script is syntactically valid JavaScript', () => {
   assert.equal(typeof script, 'string')
-  // One backtick inside the embedded text would end the host string literal.
+
   assert.ok(!script.includes('`'), 'the client script text must not contain a backtick')
   assert.doesNotThrow(() => new Function(script), 'the normal script must parse')
   assert.doesNotThrow(

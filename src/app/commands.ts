@@ -65,11 +65,9 @@ function instanceRow(instance: InstanceRuntimeStatus, activeId: string): MenuPic
   }
 }
 
-// Rows carry the instance id so an action never depends on which tab is active.
 function instanceMenuItems(status: InstanceRuntimeStatus, activeId: string): MenuPick[] {
   const items: MenuPick[] = []
   if (status.observed) {
-    // Read-only view: open the Web UI, hand a briefing to an agent, or make it active.
     if (status.running && status.uiAvailable) items.push(menuItem(status, `Open ${status.name} Web UI`, 'globe', 'open'))
     items.push(menuItem(status, 'Copy takeover info', 'clippy', 'copyInfo', 'for handing this dsh to an agent'))
     if (status.id !== activeId) items.push(menuItem(status, `Make ${status.name} Active`, 'star', 'select'))

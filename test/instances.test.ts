@@ -67,6 +67,20 @@ test('normalizeInstances skips malformed entries and keeps the rest', () => {
   assert.equal(result.issues.filter((entry) => entry.severity === 'error').length, 2)
 })
 
+test('normalizeInstances rejects control characters in names and homes', () => {
+  const result = normalizeInstances(
+    [
+      { id: 'one', name: 'One\u0001', home: '', profile: 'web', port: 3080 },
+      { id: 'two', name: 'Two', home: `${path.resolve(options.homeDir)}\u007f`, profile: 'web', port: 3081 },
+      { id: 'three', name: 'Three', home: '', profile: 'web', port: 3082 },
+    ],
+    undefined,
+    options,
+  )
+  assert.deepEqual(result.instances.map((entry) => entry.id), ['three'])
+  assert.equal(result.issues.filter((entry) => entry.severity === 'error').length, 2)
+})
+
 test('normalizeInstances treats a non-array value as a visible error', () => {
   const result = normalizeInstances('nope', undefined, options)
   assert.deepEqual(result.instances, [])

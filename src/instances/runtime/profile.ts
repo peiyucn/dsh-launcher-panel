@@ -40,7 +40,6 @@ function runInitCommand(
   })
 }
 
-/** DSH owns profile creation: `--dump-config` composes the tree and exits. */
 export async function ensureProfile(
   instance: DshInstance,
   prepared: PreparedDsh,

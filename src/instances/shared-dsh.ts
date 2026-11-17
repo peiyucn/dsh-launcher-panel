@@ -24,7 +24,6 @@ import type { PreparedDsh } from './runtime/types.ts'
 
 const terminalHost: TerminalHost = { addActivity }
 
-/** Host members shared by the install/checkout/update builders. */
 const flowHost = {
   addActivity,
   withBusy,
@@ -32,7 +31,6 @@ const flowHost = {
     runInTerminalInner(title, command, args, terminalHost, env),
 }
 
-/** The one shared dsh install: detection, node/version state and update checks. */
 export class SharedDsh {
   private readonly stopped: () => boolean
   private preparePromise: Promise<PreparedDsh | undefined> | undefined
@@ -137,14 +135,11 @@ export class SharedDsh {
 
   private async prepareInternal(convertAllowed: boolean): Promise<PreparedDsh | undefined> {
     const cfg = readConfig()
-    // Read the source version after readiness: setup may build or change the checkout,
-    // and a warm start needs no throwaway `git describe` before that guard.
+
     if (cfg.runMode === 'source') {
       const checkout = await ensureSourceCheckout(cfg, this.installHost())
       if (!checkout) return undefined
-      // Launcher-owned checkouts sit on the newest release tag; fresh clones were pinned
-      // while cloning. Only move an older managed checkout when nothing is running, so a
-      // live source instance never sees its files switch under it.
+
       if (checkout.managed && !checkout.cloned && this.stopped()) {
         await pinSourceToNewestReleaseTag(checkout.path, this.installHost())
       }
@@ -159,8 +154,7 @@ export class SharedDsh {
       this.dshStateValue = 'ok'
       return { mode: 'source', version, checkout: checkout.path }
     }
-    // A pkgPath synced from another machine may not exist here; say so instead of
-    // silently installing into the managed location.
+
     const installHost = this.installHost()
     await detectDshVersion(cfg, this.detectHost())
     const unreachable = unreachablePkgPathSetting(cfg)
@@ -175,17 +169,11 @@ export class SharedDsh {
     return { mode: 'pnpm', version, installDir: this.dshPathValue }
   }
 
-  /** Requires every instance stopped; the caller checks that before calling. */
   async runUpdate(): Promise<void> {
     await runDshUpdate(this.updateHost())
     this.updateCache = undefined
   }
 
-  /**
-   * Rebuild the same dsh version with the configured package import method.
-   * The rebuild happens in a staging folder and is switched in only on success.
-   * Caller must ensure every instance is stopped.
-   */
   async reinstallPkg(): Promise<boolean> {
     const cfg = readConfig()
     if (cfg.runMode !== 'pnpm') {

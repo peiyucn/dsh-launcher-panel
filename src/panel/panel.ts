@@ -164,8 +164,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
     }
   }
 
-  // Reuse the last good snapshot: a fresh empty one would claim the server
-  // stopped and hide active/showDs, disabling Start while instances exist.
   private async postRefreshFailure(view: vscode.WebviewView, reason: string): Promise<void> {
     try {
       const manager = getInstanceManager()
@@ -191,7 +189,6 @@ ${panelScript({ peakWindows: JSON.stringify(PEAK_WINDOWS_BJ_HOURS), defaultBrows
         pricing: pricingWindowAt(new Date()),
       }))
     } catch {
-      // The webview is gone; the next tick gets a fresh chance.
     }
   }
 }

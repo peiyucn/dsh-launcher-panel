@@ -145,7 +145,7 @@ test('decideSourceUpdate reports an unrecognized listing as failed, never "up to
 
 test('decideSourceUpdate requires HEAD exactly on the newest release tag', () => {
   const newest = { tag: 'dsh-v0.1.7-rc.1', commit: 'abc1234' }
-  // A checkout that merely contains the tag (master after the release merge) is still offered.
+
   assert.deepEqual(decideSourceUpdate(newest, false), { hasUpdate: true, label: 'v0.1.7-rc.1' })
   assert.deepEqual(decideSourceUpdate(newest, true), { hasUpdate: false, label: '' })
   assert.equal(describeDshUpdate(decideSourceUpdate(newest, true)), '✓ dsh is up to date')
@@ -157,7 +157,7 @@ test('nodeTooOldForDsh enforces Node 24.9 only from dsh 0.2.2 on', () => {
   assert.equal(nodeTooOldForDsh('0.2.2-rc.1', '24.9.0'), false)
   assert.equal(nodeTooOldForDsh('0.2.2-rc.1', '24.22.1'), false)
   assert.equal(nodeTooOldForDsh('0.3.0', '24.8.9'), true)
-  // Older release lines still support Node 22; unknown versions never block a start.
+
   assert.equal(nodeTooOldForDsh('0.2.1-rc.5', '22.19.0'), false)
   assert.equal(nodeTooOldForDsh('0.2.2-rc.1', ''), false)
   assert.equal(nodeTooOldForDsh('', '22.19.0'), false)

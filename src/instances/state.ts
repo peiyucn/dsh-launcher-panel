@@ -1,6 +1,5 @@
 export type InstanceState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
 
-// Events are named after the cause, so a caller cannot ask for an arbitrary jump.
 export type InstanceEvent =
   | 'start'
   | 'ready'
@@ -16,8 +15,6 @@ type TransitionTable = {
   readonly [S in InstanceState]: { readonly [E in InstanceEvent]?: InstanceState }
 }
 
-// `starting` has no exit/lost edge: a failed start must go through `fail` so the panel reports
-// a reason instead of looking idle. `cleanup` only serves a Stop requested before any process exists.
 const TRANSITIONS: TransitionTable = {
   stopped: {
     start: 'starting',
@@ -61,8 +58,6 @@ export function canTransition(from: InstanceState, to: InstanceState): boolean {
   return Object.values(TRANSITIONS[from]).includes(to)
 }
 
-// A `stopping` runtime still owns its child, and an `error` runtime can still hold a live child
-// (failed Stop) or a listening port (failed start/stop), so both keep blocking the same home.
 export function holdsHome(state: InstanceState, hasTrackedProcess: boolean, untrackedPort: boolean): boolean {
   if (state === 'running' || state === 'starting' || state === 'stopping') return true
   return state === 'error' && (hasTrackedProcess || untrackedPort)
@@ -74,9 +69,6 @@ export type StopPlan =
   | 'kill-identified'
   | 'unidentified'
 
-// A tracked child is always ours to kill. Without one, the only safe target is a process
-// positively identified as this instance's dsh server (the runtime matches its command line);
-// a port held by anything else is left alone so Stop can never kill a foreign process.
 export function stopPlan(input: {
   hasTrackedChild: boolean
   portOpen: boolean

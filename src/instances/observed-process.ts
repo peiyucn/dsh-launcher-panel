@@ -3,13 +3,12 @@ import * as path from 'node:path'
 import { dshEntryToken, findDshServerEntry, listProcessEntries, type ProcessEntry, type ProcessLister } from './process-list.ts'
 import { tokenForPid, type TokenDeps } from './observed-token.ts'
 
-/** Everything the panel knows about the external process behind a detected instance. */
 export interface ObservedProcessInfo {
   pid?: number
   command?: string
-  /** Absolute path of the dsh CLI entry, when it could be resolved. */
+
   entryPath?: string
-  /** Package root (directory with the dsh package.json), when it could be found. */
+
   packagePath?: string
   version?: string
   token?: string
@@ -47,7 +46,6 @@ function defaultReadFile(file: string): string | undefined {
   }
 }
 
-/** Walk up from the entry file to the nearest package.json that describes dsh. */
 export function findDshPackageJson(
   entryPath: string,
   deps: Pick<ObservedProcessDeps, 'realpath' | 'readFile'> = {},
@@ -68,7 +66,6 @@ export function findDshPackageJson(
           return { packagePath: dir, version }
         }
       } catch {
-        // Keep walking; a malformed package.json is not this lookup's failure.
       }
     }
     const parent = path.dirname(dir)
@@ -101,10 +98,6 @@ async function readObservedProcess(
   }
 }
 
-/**
- * Resolve pid, package path/version and launch token of the dsh serving `port` in one
- * process-list pass (cached briefly). Returns an error instead of throwing.
- */
 export async function resolveObservedProcess(
   port: number,
   deps: ObservedProcessDeps = {},

@@ -1,11 +1,3 @@
-/**
- * Dashboard markup for the webview body.
- *
- * Element ids are the contract with the client script (`panel-script.ts`).
- *
- * @module webview/panel-body
- */
-
 const HTML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -14,7 +6,6 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": '&#39;',
 }
 
-/** Escape the substituted footer version: it is the only interpolated value. */
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
 }
@@ -23,7 +14,6 @@ export interface PanelBodyValues {
   version: string
 }
 
-/** The dashboard body markup, with the footer version filled in. */
 export function panelBody(values: PanelBodyValues): string {
   return `  <div class="loading-overlay" id="loadingOverlay" role="status" aria-label="Loading…">
     <div class="loading-spinner" id="loadingSpinner"></div>

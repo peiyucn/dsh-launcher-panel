@@ -1,23 +1,10 @@
-/**
- * Dashboard client script, inlined into the nonce-guarded script tag.
- *
- * It is a function because two values are substituted at render time:
- * `peakWindows` (host-serialized) and `defaultBrowser` (JSON-encoded here). The
- * text must stay free of backticks and `${}` beyond those placeholders.
- *
- * @module webview/panel-script
- */
-
 export interface PanelScriptValues {
-  /** Peak windows as Beijing hours, already serialized into a JS literal. */
   peakWindows: string
-  /** Browser fallback; JSON-encoded so a quoted value cannot escape its literal. */
+
   defaultBrowser: string
 }
 
 export function panelScript(values: PanelScriptValues): string {
-  // JSON.stringify keeps the value inside its literal; escaping `<` also stops a
-  // value containing "</script>" from closing the host's inline script element.
   const defaultBrowserLiteral = JSON.stringify(values.defaultBrowser).replace(/</g, '\\u003c')
   return `    const vscode = acquireVsCodeApi()
     vscode.postMessage({ command: 'ready' })

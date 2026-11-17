@@ -17,7 +17,6 @@ export function isPortOpen(host: string, port: number, timeoutMs = PORT_PROBE_TI
       try {
         socket.destroy()
       } catch {
-        // Already closed.
       }
       resolve(open)
     }
@@ -51,14 +50,11 @@ export async function httpOk(url: string, timeoutMs = HTTP_PROBE_TIMEOUT_MS): Pr
   try {
     return res.ok
   } finally {
-    // Undici keeps a connection pooled until the body is consumed or cancelled.
     await res.body?.cancel().catch(() => {})
   }
 }
 
 export async function tokenAccepted(url: string, timeoutMs = HTTP_PROBE_TIMEOUT_MS): Promise<boolean> {
-  // dsh >= 0.1.2-alpha.1 answers a valid token with a 303 cookie-minting redirect.
-  // fetch has no cookie jar, so stop at the redirect instead of landing on a 401.
   const res = await request(url, timeoutMs, 'manual')
   if (res === undefined) return false
   try {

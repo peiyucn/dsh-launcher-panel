@@ -9,7 +9,6 @@ import { detectedName, type DetectedDsh } from './instances/discovery.ts'
 import type { InstanceIssue } from './instances/model.ts'
 import type { InstanceRuntimeStatus } from './instances/runtime/runtime.ts'
 
-/** Run `task` with the ready manager; no-op before activation. */
 async function withManager<T>(task: (manager: InstanceManager) => Promise<T>): Promise<T | undefined> {
   const manager = getInstanceManager()
   if (!manager) return undefined
@@ -19,16 +18,13 @@ async function withManager<T>(task: (manager: InstanceManager) => Promise<T>): P
 
 export async function openUrl(url: string, browserOverride?: 'built-in' | 'external'): Promise<void> {
   const browser = browserOverride ?? normalizeBrowser(vscode.workspace.getConfiguration('dsh').get('browser'))
-  // In a Remote-SSH window the Simple Browser and the system browser run on the client, so a
-  // raw 127.0.0.1 URL points at the local machine. asExternalUri makes VS Code forward the
-  // remote port and returns a client-usable URI (a no-op locally).
+
   let target = vscode.Uri.parse(url)
   try {
     target = await vscode.env.asExternalUri(target)
   } catch {
-    // Keep the local URL when the host cannot forward (e.g. non-remote hosts).
   }
-  // Token-free diagnostic: which authority the client will actually open.
+
   dbg(`open web ui: remote=${vscode.env.remoteName ?? 'local'} target=${target.scheme}://${target.authority}`)
   if (browser === 'external') {
     await vscode.env.openExternal(target)
@@ -42,7 +38,6 @@ export async function openUrl(url: string, browserOverride?: 'built-in' | 'exter
   }
 }
 
-// Guards a start click against a second click while the spawn/poll is still running.
 let startInFlight = false
 let lastOpenAt = 0
 const OPEN_DEBOUNCE_MS = 2_000
@@ -95,8 +90,7 @@ export async function actionStop(id?: string): Promise<void> {
       void vscode.window.showInformationMessage(`"${instance.name}" is a detected dsh — stop it outside the launcher.`)
       return
     }
-    // A failed stop is reported by the runtime itself (panel error line + activity feed);
-    // Stop never kills a port owner it cannot identify, so there is nothing to ask about.
+
     await manager.stop(target)
   })
 }
@@ -112,7 +106,7 @@ export async function actionRestart(id?: string): Promise<void> {
     }
     const status = manager.statusOf(target)
     const occupied = instanceBusy(status) || status?.adopted === true || status?.untrackedPort === true
-    // A refused or failed stop leaves the port taken; starting would only hit "port already in use".
+
     if (occupied && !(await manager.stop(target))) return
     await actionStart(target)
   })
@@ -122,7 +116,7 @@ export async function actionOpen(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
     if (!target) return
-    // A detected dsh may have restarted with a new token since the last refresh.
+
     if (manager.statusOf(target)?.observed) await manager.refresh()
     const status = manager.statusOf(target)
     if (status?.observed && !status.uiAvailable) {
@@ -319,7 +313,6 @@ export async function actionUpdateDsh(): Promise<void> {
   await withManager((manager) => manager.updateDsh())
 }
 
-/** Explicitly rebuild dsh with the configured import method (staged, never in place). */
 export async function actionReinstallDsh(): Promise<void> {
   await withManager(async (manager) => {
     if (manager.anyActive()) {
@@ -343,11 +336,8 @@ interface DetectPick extends vscode.QuickPickItem {
   addAll?: true
 }
 
-/** One-shot, user-triggered detection of dsh servers the launcher did not start. */
 export async function actionDetectDsh(): Promise<void> {
   await withManager(async (manager) => {
-    // One QuickPick for the whole interaction: a busy spinner while the process scan runs,
-    // then a plain single-select list (no checkboxes/OK) — clicking a server adds it.
     const selected = await new Promise<DetectedDsh[] | undefined>((resolve) => {
       const quickPick = vscode.window.createQuickPick<DetectPick>()
       let settled = false
@@ -406,7 +396,6 @@ export async function actionDetectDsh(): Promise<void> {
   })
 }
 
-/** Copy a token-free takeover briefing for an observed instance. */
 export async function actionCopyObservedInfo(id?: string): Promise<void> {
   await withManager(async (manager) => {
     const target = id ?? manager.activeInstance()?.id
@@ -416,8 +405,7 @@ export async function actionCopyObservedInfo(id?: string): Promise<void> {
     const info = await manager.takeoverInfo(target)
     if (info === undefined) return
     await vscode.env.clipboard.writeText(info)
-    // Show the briefing itself (read-only preview) so the user can review what was copied
-    // before handing it to an agent, instead of a blind clipboard write.
+
     const doc = await vscode.workspace.openTextDocument({ content: info, language: 'markdown' })
     await vscode.window.showTextDocument(doc, { preview: true })
     void vscode.window.showInformationMessage('Takeover info opened as a preview and copied to the clipboard.')

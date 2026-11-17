@@ -61,15 +61,13 @@ export async function buildDashboard(source: DashboardSource): Promise<InstanceD
   try {
     await source.ready()
   } catch {
-    // The failure is surfaced through issues().
   }
   await source.refresh()
   const facts = source.facts()
   const cfg = readConfig()
   const active = facts.instances.find((instance) => instance.id === facts.activeId)
   const consoleLogPath = active ? instanceActivityLogFile(active.id) : activityLogFile()
-  // A detected instance is not backed by the launcher-managed install: show its own package
-  // root and version instead of the shared install's (which would be misleading).
+
   const observed = active?.observed === true
   const observedVersion = active?.observedVersion ?? ''
   return {

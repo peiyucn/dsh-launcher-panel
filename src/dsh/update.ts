@@ -40,7 +40,6 @@ type SourceInspection =
   | { kind: 'release'; release: RemoteReleaseTag; atRelease: boolean }
   | { kind: 'failed'; reason: string }
 
-// One probe for both callers: resolve the newest release and whether HEAD sits exactly on it.
 async function inspectSource(checkout: string): Promise<SourceInspection> {
   const listed = await listReleaseTags(checkout)
   if ('error' in listed) return { kind: 'failed', reason: listed.error }
@@ -48,7 +47,6 @@ async function inspectSource(checkout: string): Promise<SourceInspection> {
   if (release === undefined) return { kind: 'failed', reason: 'origin lists no official dsh release tag' }
   const head = await headCommit(checkout)
   if (head === undefined) {
-    // An unanswered probe is not "not at the release": it must not offer a downgrade.
     const cause = await explainGitFailure(checkout)
     return { kind: 'failed', reason: cause ?? 'git could not read the checkout HEAD' }
   }
@@ -117,8 +115,7 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
       }
       const installed = pkgInstalledVersion(cfg)
       const dir = pkgInstallDir(cfg)
-      // A configured import method that differs from the recorded one needs a forced
-      // re-import even when the version is unchanged (hardlink <-> copy conversion).
+
       const methodChange = installed !== undefined && effectivePackageImportMethod(dir) !== cfg.packageImportMethod
       if (installed === latest.version && !methodChange) {
         host.addActivity('↑ dsh is already up to date')
@@ -130,8 +127,7 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
         host.addActivity(`↑ Updating dsh to v${latest.version}…`)
       }
       if (!mayProceed(host)) return
-      // A method change rebuilds from scratch: forcing an in-place re-import keeps the
-      // old lockfile/workspace state and can pull unrelated packages into the install.
+
       const ok = methodChange
         ? await reinstallInPlace(latest.version, dir, pnpm.command, pnpm.allowBuild, cfg.packageImportMethod, host.installHost)
         : await ensureDshInstalled(latest.version, pnpm.command, pnpm.allowBuild, dir, host.installHost, cfg.packageImportMethod)
@@ -160,7 +156,7 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
     }
     const { tag } = inspected.release
     const version = releaseVersion(tag)
-    // A far-behind fetch can take minutes; re-check Stop at every destructive boundary.
+
     if (!mayProceed(host)) return
     const fetched = await host.withBusy(
       `↑ Fetching ${tag} (this can take a while on a checkout that is far behind)…`,
@@ -177,7 +173,7 @@ export async function runDshUpdate(host: UpdateHost): Promise<void> {
       host.addActivity(`↑ Update failed — git checkout ${tag} did not finish (see the terminal output above)`)
       return
     }
-    // A different tag usually carries a different lockfile; refresh the checkout.
+
     if (await ensureCheckoutReady(checkout, host.checkoutHost)) {
       host.addActivity(`↑ dsh updated to v${version}`)
     } else {

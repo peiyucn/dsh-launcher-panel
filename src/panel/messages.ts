@@ -37,7 +37,6 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** The provider services a message handler needs; kept small so the split has one seam. */
 export interface PanelMessageHost {
   hasView(): boolean
   busy(): boolean
@@ -49,7 +48,6 @@ export class PanelMessages {
   constructor(private readonly host: PanelMessageHost) {}
 
   handleRaw(raw: unknown): void {
-    // Escaping this handler would become an unhandled rejection in VS Code.
     if (typeof raw !== 'object' || raw === null) {
       dbg(`ignored non-object webview message: ${String(raw)}`)
       return
@@ -57,8 +55,6 @@ export class PanelMessages {
     const message = raw as PanelMessage
     dbg(`message from webview: ${JSON.stringify(message)}`)
     if (message.command === PANEL_COMMANDS.ready) {
-      // The initial refresh may still be in flight and posts after the webview
-      // listens; when it already finished, ask for a fresh snapshot instead.
       if (!this.host.busy()) void this.host.requestRefresh()
       return
     }
@@ -74,7 +70,7 @@ export class PanelMessages {
       dbg(`webview command "${command}" failed: ${msg}`)
       addActivity(`✗ Command failed (${command}): ${msg}`)
     }
-    // Every command ends in the single-flight refresh; no handler refreshes.
+
     await this.host.requestRefresh()
   }
 
@@ -113,7 +109,7 @@ export class PanelMessages {
       case 'clearConsole': {
         if (!manager) return
         const id = manager.activeInstance()?.id ?? ''
-        // No active instance means the panel is showing the global launcher feed.
+
         if (id === '') clearConsole()
         else manager.clearConsole(id)
         return
@@ -123,7 +119,6 @@ export class PanelMessages {
     }
   }
 
-  /** "+" menu: create a normal instance or detect running dsh servers. */
   private async newInstanceMenu(): Promise<void> {
     const picked = await vscode.window.showQuickPick([
       { label: 'New instance…', description: 'create an empty DSH home and profile', value: 'new' as const },
@@ -196,7 +191,7 @@ export class PanelMessages {
     const manager = getInstanceManager()
     if (!manager) return this.postInstanceFormError(NOT_READY)
     if (!this.host.hasView()) return
-    // Prefill from the same list the save validates against.
+
     await manager.ready().catch(() => {})
     if (value === 'new') {
       const name = `Instance ${manager.instances().length + 1}`
@@ -204,7 +199,7 @@ export class PanelMessages {
     }
     const instance = manager.instance(value)
     if (!instance) return this.postInstanceFormError('Instance was not found')
-    // Detected instances allow name-only edits; the host asks for the new name.
+
     if (instance.observed === true) {
       await actionEditInstance(instance.id)
       return
@@ -223,7 +218,7 @@ export class PanelMessages {
   private async saveInstanceForm(value: string | undefined): Promise<void> {
     const manager = getInstanceManager()
     if (!manager) return this.postInstanceFormError(NOT_READY)
-    // Waiting for the bootstrap keeps validation consistent with the prefill.
+
     await manager.ready().catch(() => {})
     const parsed = parseInstanceFormPayload(value)
     if (!parsed.ok) return this.postInstanceFormError(parsed.message)

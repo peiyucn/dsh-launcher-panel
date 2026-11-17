@@ -41,7 +41,7 @@ function instanceEnv(baseEnv: NodeJS.ProcessEnv | undefined, home: string): Node
 
 function instanceArgs(profile: string, port: number, version: string): string[] {
   const args = [profile, '--port', String(port)]
-  // Older dsh rejects the flag instead of ignoring it.
+
   if (version !== '' && dshVersionAtLeast(version, DSH_NO_OPEN_MIN_VERSION)) args.push('--no-open')
   return args
 }
@@ -68,8 +68,7 @@ function buildCommand(input: CommandBuild): SpawnSpecResult {
       ok: true,
       spec: {
         file: input.nodePath || 'node',
-        // pnpm owns installation, not the hot start path: invoking its CLI adds another
-        // package-manager startup and dependency check before the actual dsh process.
+
         args: [path.join(input.installDir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'), ...args],
         cwd: input.installDir,
         env,

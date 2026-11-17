@@ -91,3 +91,9 @@ shared/ ───────► 仅 node 内建
 
 * `panel/webview/panel-script.ts` 仍是单个内联脚本字符串，属刻意取舍（见上）。
 * 测试代码尚未纳入 `tsc` 类型检查（历史缺口；`npm run verify` 只对 `src/` 做 typecheck）。
+
+## 6. 运行时与资源约定
+
+* 活动流 busy 用 `withBusy` 成对收尾；timer / watch / 子进程 / AbortController 在成功和失败路径都释放。
+* 覆写或删除前确认文件归属；不是本扩展自己的产物不动；实例 profile 的归属规则见 `docs/instances-spec.md` 第十三节。
+* 部分失败必须可观察；权限、状态迁移和并发入口要能被打断且保持一致（meta G3 / G6 / G7 在本项目的落地）。

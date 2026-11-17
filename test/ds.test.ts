@@ -27,9 +27,6 @@ test('readCredentialFromFile reads flow style written by dsh', () => {
 })
 
 test('readCredentialFromFile reads the first key under a valueless parent (dsh refs block)', () => {
-  // The real ~/.dsh/.credentials.yaml structure: a nested refs block whose
-  // first entry is DEEPSEEK_API_KEY. The valueless `refs:` line must not
-  // swallow the next line's key as its value.
   const content = [
     'version: 1',
     'refs:',
@@ -75,11 +72,10 @@ test('readCredentialFromFile ignores commented-out keys', () => {
 })
 
 test('dsModelLabel maps DeepSeek model names and ignores every other component', () => {
-  // Live status-page names: the Chinese half and the trailing API suffix are dropped.
   assert.equal(dsModelLabel('DeepSeek V4 Pro API服务(API Service)'), 'deepseek-v4-pro')
   assert.equal(dsModelLabel('DeepSeek V4.1 Flash API服务(API Service)'), 'deepseek-v4.1-flash')
   assert.equal(dsModelLabel('DeepSeek V3 Chat API'), 'deepseek-v3-chat')
-  // Other APIs and chat services are named after the function, not after a model.
+
   assert.equal(dsModelLabel('搜索API服务(Search API Service)'), undefined)
   assert.equal(dsModelLabel('抓取API服务(Fetch API Service)'), undefined)
   assert.equal(dsModelLabel('对话服务(Chatservice)'), undefined)
@@ -290,12 +286,6 @@ test('readDefaultModel returns undefined when the section is absent', () => {
   }
 })
 
-/**
- * Run one test against a scratch DSH home with the environment made
- * deterministic: a real `DEEPSEEK_API_KEY` in the test runner's environment
- * would otherwise win over the home files (the credential lookup checks the
- * environment first) and make these assertions meaningless.
- */
 function withDsHome(fn: (dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-home-'))
   const prevHome = process.env.DSH_HOME
@@ -319,7 +309,7 @@ test('hasDeepSeekModel caches the per-home answer until the cache is dropped', (
   withDsHome((dir) => {
     assert.equal(hasDeepSeekModel(dir), false)
     writeFileSync(join(dir, '.credentials.yaml'), 'DEEPSEEK_API_KEY: sk-test\n')
-    // The panel asks on every 4s refresh; reusing the answer is the point.
+
     assert.equal(hasDeepSeekModel(dir), false, 'the answer must be reused inside the TTL window')
     resetDsCachesForTest()
     assert.equal(hasDeepSeekModel(dir), true, 'a cold read sees the new credential')
@@ -354,7 +344,7 @@ test('getDsStatus coalesces concurrent cold-cache fetches', async () => {
     const [a, b] = await Promise.all([first, second])
     assert.equal(a.state, 'ok')
     assert.deepEqual(a, b)
-    // A cached answer must not trigger another fetch.
+
     await getDsStatus()
     assert.equal(calls, 1)
   } finally {
@@ -375,8 +365,7 @@ test('getDsStatus falls back to unknown when every host fails', async () => {
     const status = await getDsStatus()
     assert.equal(status.state, 'unknown')
     assert.equal(calls, 2, 'both status hosts are tried')
-    // The fallback is cached like any other answer, so a dead network does not
-    // turn every refresh tick into two more requests.
+
     await getDsStatus()
     assert.equal(calls, 2)
   } finally {

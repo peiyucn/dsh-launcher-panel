@@ -1,12 +1,3 @@
-// Builds resources/dsh-icon.woff — the status bar icon font.
-//
-// resources/icon.svg is the single source of the whale artwork: a silhouette
-// with the eye and the belly line punched as counter-wound sub-paths (holes
-// under nonzero winding). This script turns it into one glyph plus two splash
-// animation frames (the spout shrinks/grows), which the status bar alternates
-// while starting/installing so the whale's spout pulses.
-//
-// Run: npm run build:icon-font
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,15 +9,12 @@ import ttf2woff from 'ttf2woff'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const icon = readFileSync(join(root, 'resources', 'icon.svg'), 'utf8')
 
-// Path order in resources/icon.svg: merged body (with punched eye + belly
-// holes), tail, spout, spout.
 const ds = [...icon.matchAll(/<path[^>]*d="([^"]+)"/g)].map((m) => m[1])
 if (ds.length < 4) throw new Error('unexpected icon.svg structure — expected 4 paths')
 
 const path = (d) => `<path fill="#000000" d="${d}"/>`
 const silhouette = ds.map((d) => path(d)).join('')
 
-// The spout (last two paths) is wrapped in a scale group for the frames.
 const spout = path(ds[2]) + path(ds[3])
 const frame = (scale) =>
   silhouette.replace(
@@ -40,7 +28,6 @@ const glyphs = [
   { name: 'dsh-whale-splash-large', unicode: '\uE902', body: frame(1.25) },
 ]
 
-// Same 6% padding as resources/icon.svg so glyph and icon render alike.
 const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><g transform="translate(2.16 2.16) scale(0.88)">${body}</g></svg>`
 
 const fontStream = new SVGIcons2SVGFontStream({ fontName: 'dsh-icon', normalize: true, fontHeight: 1000 })

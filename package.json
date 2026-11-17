@@ -358,15 +358,13 @@
     "build:icon-font": "node scripts/build-icon-font.mjs",
     "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
     "lint": "npm run lint:code && npm run lint:policy",
-    "lint:code": "eslint src test",
+    "lint:code": "eslint --config meta/lint/project-eslint.mjs src test scripts meta/lint",
     "lint:policy": "node scripts/check-policy.mjs",
     "typecheck": "tsc -p ./ --noEmit",
     "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -w -p ./",
     "package": "node -e \"require('node:fs').mkdirSync('releases',{recursive:true})\" && vsce package --out releases --no-dependencies",
     "test": "node --test --test-isolation=none \"test/*.test.ts\"",
-    "hooks:install": "git config core.hooksPath .githooks",
-    "hooks:uninstall": "git config --unset core.hooksPath",
     "verify": "npm run lint && npm run typecheck && npm test && npm run compile && npm run package"
   },
   "devDependencies": {

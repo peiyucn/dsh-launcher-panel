@@ -16,7 +16,6 @@ type InstanceFormParseResult =
 const MALFORMED = 'Malformed instance form'
 const REQUIRED = 'Name and home are required'
 
-/** Untrusted client input: every field is type-checked here, not in the modal. */
 export function parseInstanceFormPayload(raw: unknown): InstanceFormParseResult {
   if (typeof raw !== 'string') return { ok: false, message: MALFORMED }
   let value: unknown

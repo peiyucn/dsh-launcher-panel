@@ -4,13 +4,6 @@ import { PANEL_CSS } from '../src/panel/webview/panel-styles.ts'
 import { panelScript } from '../src/panel/webview/panel-script.ts'
 import { panelBody } from '../src/panel/webview/panel-body.ts'
 
-/**
- * Pins the panel's loading spinner to the official dsh StateDot look (geometry,
- * timing, reduced-motion fallback). The geometry is copied rather than imported
- * (VS Code webview, zero runtime deps), so this test exists to fail on drift.
- * Source: dsh-v0.2.0-rc.2 packages/client/ui-primitives/src/StateDot.module.css
- */
-
 function ruleBody(css: string, selector: string): string {
   const re = new RegExp(`(?:^|\\n)\\s*${selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*\\{([^}]*)\\}`, 'u')
   const m = re.exec(css)
@@ -37,7 +30,6 @@ const script = panelScript({ peakWindows: '[]', defaultBrowser: 'built-in' })
 const body = panelBody({ version: '0.0.0-test' })
 
 test('面板指示器与官方 StateDot 同形：圆弧 spinner，不再是点阵', () => {
-  // The old matrix variant must be gone from CSS, script and body alike.
   for (const [what, text] of [['PANEL_CSS', PANEL_CSS], ['panel-script', script], ['panel-body', body]] as const) {
     assert.ok(!/dot-matrix|DOT_MATRIX|lap-dot-chase|loadingMatrix/u.test(text), `${what} 里仍有旧的官方点阵实现`)
     assert.ok(!/matrix-size/u.test(text), `${what} 里仍有 --matrix-size（点阵尺寸变量）`)
@@ -46,7 +38,7 @@ test('面板指示器与官方 StateDot 同形：圆弧 spinner，不再是点�
 
 test('脚本把官方几何的 SVG 注入 spinner 挂载点', () => {
   assert.match(script, /getElementById\('loadingSpinner'\)\.innerHTML = SPINNER_SVG/u, '注入目标应为 loadingSpinner')
-  // Official ongoing branch: 24 viewBox, one track + one arc, both radius 9.5.
+
   assert.match(script, /viewBox="0 0 24 24"/u, '用官方的 24 viewBox')
   assert.equal((script.match(/r="9\.5"/gu) ?? []).length, 2, 'track 与 arc 两根 9.5 半径圆')
   assert.match(script, /class="state-spinner-motion"/u, '旋转组')

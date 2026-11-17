@@ -13,7 +13,7 @@ export interface ActivityEntry {
   id: number
   text: string
   busy: boolean
-  /** Set for instance-scoped entries; global launcher entries leave it undefined. */
+
   instanceId?: string
 }
 
@@ -43,7 +43,6 @@ function trimLogFile(file: string): void {
     const text = readTailText(file, ACTIVITY_LOG_KEEP_BYTES)
     if (text !== undefined) fs.writeFileSync(file, text, 'utf8')
   } catch {
-    // Best effort: the next load retries the trim.
   }
 }
 
@@ -68,7 +67,6 @@ export function setLogPath(value: string): void {
       if (!line.includes('[dbg]')) pushActivity(line)
     }
   } catch {
-    // Best effort: the feed is usable without a replay.
   }
 }
 
@@ -84,7 +82,6 @@ function appendLog(entry: string, instanceId?: string): void {
     }
     fs.appendFileSync(file, clampLine(entry) + '\n')
   } catch {
-    // Best effort: a failed write must not disturb the panel.
   }
 }
 
@@ -106,10 +103,6 @@ export function addActivity(line: string, isBusy = false, instanceId?: string): 
   return id
 }
 
-/**
- * Feed slice for one tab: launcher-wide entries (no instance) plus the given
- * instance's own entries. Without an id every entry is returned.
- */
 export function getActivity(instanceId?: string): ReadonlyArray<ActivityEntry> {
   const source = instanceId === undefined
     ? activity
@@ -117,7 +110,6 @@ export function getActivity(instanceId?: string): ReadonlyArray<ActivityEntry> {
   return source.map((entry) => ({ ...entry }))
 }
 
-/** Push the tail of one instance's launcher log back into the feed (window reload). */
 export function replayInstanceActivity(instanceId: string): void {
   const file = instanceActivityLogFile(instanceId)
   if (file === '' || !fs.existsSync(file)) return
@@ -128,7 +120,6 @@ export function replayInstanceActivity(instanceId: string): void {
     const lines = text.split(/\r?\n/).filter((line) => line.length > 0)
     for (const line of lines.slice(-LOG_RELOAD_LINES)) pushActivity(line, false, instanceId)
   } catch {
-    // Best effort: a broken file must not break activation.
   }
 }
 
@@ -138,7 +129,6 @@ export function finishBusy(id: number): void {
 }
 
 export async function withBusy<T>(label: string, task: () => Promise<T>): Promise<T> {
-  // The feed has no reaper: a throw between add and finish would spin forever.
   const id = addActivity(label, true)
   try {
     return await task()
@@ -147,7 +137,6 @@ export async function withBusy<T>(label: string, task: () => Promise<T>): Promis
   }
 }
 
-/** Clear one tab's console: its scoped feed entries and its launcher log file. */
 export function clearInstanceConsole(instanceId: string): void {
   for (let i = activity.length - 1; i >= 0; i--) {
     if (activity[i].instanceId === instanceId) activity.splice(i, 1)
@@ -158,11 +147,9 @@ export function clearInstanceConsole(instanceId: string): void {
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.writeFileSync(file, '')
   } catch {
-    // Best effort: the feed is already cleared.
   }
 }
 
-/** Clear every feed entry and the global launcher log. */
 export function clearConsole(): void {
   activity.length = 0
   if (!consolePath) return
@@ -170,7 +157,6 @@ export function clearConsole(): void {
     fs.mkdirSync(path.dirname(consolePath), { recursive: true })
     fs.writeFileSync(consolePath, '')
   } catch {
-    // The feed is already cleared; a failed write only leaves the old log file.
   }
 }
 

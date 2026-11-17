@@ -10,8 +10,6 @@ export function windowsPnpmCandidates(env: Record<string, string | undefined>): 
   return out
 }
 
-// Spawn on Windows appends only .exe (never PATHEXT) and `where` lists the extensionless shim
-// first, so answer with a launchable entry rather than the bare name.
 export function pickPnpmFromPath(matches: readonly string[], platform: NodeJS.Platform = process.platform): string | undefined {
   const usable = matches.map((match) => match.trim()).filter(Boolean)
   if (platform !== 'win32') return usable[0]
@@ -20,7 +18,6 @@ export function pickPnpmFromPath(matches: readonly string[], platform: NodeJS.Pl
 
 let pnpmResolution: Promise<string | undefined> | undefined
 
-// Cached for the session because resolving it spawns where/which and the panel polls repeatedly.
 export function findPnpm(refresh = false): Promise<string | undefined> {
   if (refresh) pnpmResolution = undefined
   pnpmResolution ??= (async () => {

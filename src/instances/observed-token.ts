@@ -3,7 +3,6 @@ import { runFile } from '../shared/proc.ts'
 import { readLogTailBytes } from '../shared/logs.ts'
 import { extractWebToken } from '../shared/env.ts'
 
-/** A supervisor command is local; a hung journalctl/docker must not stall the panel. */
 const TOKEN_COMMAND_TIMEOUT_MS = 10_000
 
 const TOKEN_LOG_LINES = '500'
@@ -25,16 +24,13 @@ export interface TokenDeps {
   readStdoutTarget?: (pid: number) => string | undefined
 }
 
-/** The newest launch token in a log-like text, or undefined. */
 export function newestLaunchToken(text: string): string | undefined {
   let token: string | undefined
   for (const line of text.split(/\r?\n/)) token = extractWebToken(line) ?? token
   return token
 }
 
-/** Parse a Linux cgroup line into the supervisor that owns the process. */
 export function parseCgroupSource(cgroup: string): SupervisorSource | undefined {
-  // /proc/<pid>/cgroup ends with a newline; a trailing newline must not defeat the match.
   const line = cgroup.trim()
   const unit = /(?:^|\/)([^/\n]+\.service)(?:\/|$)/.exec(line)?.[1]
   if (unit !== undefined) return { kind: 'systemd', unit }
@@ -100,7 +96,6 @@ async function tokenFromSupervisor(cgroup: string, deps: TokenDeps): Promise<Obs
     : { token }
 }
 
-/** Resolve the launch token for an observed dsh process id. */
 export async function tokenForPid(pid: number, deps: TokenDeps = {}): Promise<ObservedTokenResult> {
   const platform = deps.platform ?? process.platform
   if (platform !== 'linux') {
@@ -111,7 +106,7 @@ export async function tokenForPid(pid: number, deps: TokenDeps = {}): Promise<Ob
   if (cgroup !== undefined) {
     const fromSupervisor = await tokenFromSupervisor(cgroup, deps)
     if (fromSupervisor.token !== undefined) return fromSupervisor
-    // A supervisor that cannot answer still leaves the stdout-file fallback worth trying.
+
     const fromFile = await tokenFromStdoutFile(pid, deps)
     return fromFile.token !== undefined ? fromFile : fromSupervisor
   }
