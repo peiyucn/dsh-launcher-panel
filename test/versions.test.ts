@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   compareDshVersions,
+  decidePkgUpdate,
   decideSourceUpdate,
   describeDshUpdate,
   dshVersionAtLeast,
@@ -176,4 +177,16 @@ test('describeDshUpdate reports the underlying failure reason when captured', ()
     '⚠ Update check failed — timed out after 10s',
   )
   assert.equal(describeDshUpdate({ hasUpdate: false, label: '', failed: true, failedReason: '' }), '⚠ Update check failed')
+})
+test('decidePkgUpdate reports a missing install instead of "up to date"', () => {
+  const missing = decidePkgUpdate(undefined, '0.2.2-rc.5')
+  assert.equal(missing.hasUpdate, false)
+  assert.equal(missing.missing, true)
+  assert.equal(describeDshUpdate(missing), 'ℹ dsh is not installed yet')
+})
+
+test('decidePkgUpdate compares the installed version against the channel version', () => {
+  assert.deepEqual(decidePkgUpdate('0.2.2-rc.5', '0.2.2-rc.5'), { hasUpdate: false, label: '' })
+  assert.deepEqual(decidePkgUpdate('0.2.2-rc.4', '0.2.2-rc.5'), { hasUpdate: true, label: 'v0.2.2-rc.5' })
+  assert.deepEqual(decidePkgUpdate('0.2.2-rc.6', '0.2.2-rc.5'), { hasUpdate: false, label: '' })
 })

@@ -467,3 +467,8 @@ test('driveRootExists accepts a reachable location and never probes a UNC root',
   }
   assert.equal(driveRootExists('\\\\dsh-test-server\\share\\package'), true)
 })
+
+test('driveRootExists rejects a Windows drive path off Windows', () => {
+  if (process.platform === 'win32') return
+  assert.equal(driveRootExists('C:\\Users\\DJ028191\\.dsh-launcher-panel\\package'), false)
+})
