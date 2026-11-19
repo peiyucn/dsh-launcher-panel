@@ -108,6 +108,19 @@ export interface UpdateCheckOutcome {
   label: string
   failed?: boolean
   failedReason?: string
+  missing?: boolean
+}
+
+export function missingDshUpdate(): UpdateCheckOutcome {
+  return { hasUpdate: false, label: '', missing: true }
+}
+
+export function decidePkgUpdate(installed: string | undefined, latestVersion: string): UpdateCheckOutcome {
+  if (installed === undefined) return missingDshUpdate()
+  if (latestVersion !== installed && dshVersionAtLeast(latestVersion, installed)) {
+    return { hasUpdate: true, label: `v${latestVersion}` }
+  }
+  return { hasUpdate: false, label: '' }
 }
 
 export function decideSourceUpdate(newest: RemoteReleaseTag | undefined, atRelease: boolean): UpdateCheckOutcome {
@@ -118,8 +131,9 @@ export function decideSourceUpdate(newest: RemoteReleaseTag | undefined, atRelea
   return { hasUpdate: true, label: `v${newest.tag.slice('dsh-v'.length)}` }
 }
 
-export function describeDshUpdate(update: { hasUpdate: boolean; label: string; failed?: boolean; failedReason?: string } | undefined): string {
+export function describeDshUpdate(update: UpdateCheckOutcome | undefined): string {
   if (update?.failed) return update.failedReason ? `⚠ Update check failed — ${update.failedReason}` : '⚠ Update check failed'
+  if (update?.missing) return 'ℹ dsh is not installed yet'
   if (update?.hasUpdate) return `✓ Update available → ${update.label}`
   return '✓ dsh is up to date'
 }
