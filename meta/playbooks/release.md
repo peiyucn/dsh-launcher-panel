@@ -49,7 +49,7 @@
    - 调用：AGENTS `## 1` 的 C8；发布门禁在本 playbook 的步骤 1–6。
 
 6. **合并发布 PR 并打 tag**
-   - 发布 PR 用 **merge commit** 合并，不用 squash；合并后确认 `git merge-base --is-ancestor origin/<集成分支> origin/<默认分支>` 为真（否则下一次发布 PR 会冲突）；
+   - 有集成分支的项目：发布 PR 用 **merge commit** 合并，不用 squash；合并后确认 `git merge-base --is-ancestor origin/<集成分支> origin/<默认分支>` 为真（否则下一次发布 PR 会冲突）；没有集成分支的项目跳过本条（没有发布 PR）；
    - tag 从默认分支提交打，annotated tag；
    - 单次推送不超过 3 个 tag；
    - 发布 workflow 挂 environment；凭据用环境级 secret；

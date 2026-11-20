@@ -86,7 +86,7 @@ GitHub 操作先读 [meta/skills/github/SKILL.md](meta/skills/github/SKILL.md)�
 
 ## 3. 实现
 
-- 集成分支 `dev`；默认分支 `main`。
+- 单分支 `main`：PR 直接合入 `main`，不设集成分支；发布即打 tag。
 - `verify` 顺序：`lint → typecheck → test → compile → package`；`lint` = `lint:code` + `lint:policy`。
 - CI required checks：`typecheck`、`test`、`build`、`package`；`typecheck` job 先跑 `lint`。
 - 发布工作流：`.github/workflows/publish.yml`；environment：`marketplace-publish`；tag：`v*.*.*`。

@@ -484,7 +484,7 @@ node · launcher
 - `README.md` / `README.zh-CN.md`：已含 Features/Usage/Settings 中的实例说明；`DSH_HOME`、profile、port、机器本地、删除不删数据、共享 home 不能同时运行均有说明。
 - `CHANGELOG.md` / `CHANGELOG.zh-CN.md`：0.3.0 已写功能条目，含旧 `dsh.port` 迁移；后续实例相关改动按用户可感知变化补条目。
 - 本文 `docs/instances-spec.md` 是开发文档，不进 README / CHANGELOG / VSIX。
-- 发布走项目既有流程：`dev` → `verify` → `main` → owner 当次确认 → tag。本规格只定义功能，不构成发布许可。
+- 发布走项目既有流程：`verify` → PR 合入 `main` → owner 当次确认 → tag。本规格只定义功能，不构成发布许可。
 
 ## 十六、分期（历史记录：四个 Stage 均已于 0.3.0 前完成）
 
