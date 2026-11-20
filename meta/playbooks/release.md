@@ -48,7 +48,8 @@
    - 确认发布通道、版本、tag。
    - 调用：AGENTS `## 1` 的 C8；发布门禁在本 playbook 的步骤 1–6。
 
-6. **打 tag / 发布**
+6. **合并发布 PR 并打 tag**
+   - 发布 PR 用 **merge commit** 合并，不用 squash；合并后确认 `git merge-base --is-ancestor origin/<集成分支> origin/<默认分支>` 为真（否则下一次发布 PR 会冲突）；
    - tag 从默认分支提交打，annotated tag；
    - 单次推送不超过 3 个 tag；
    - 发布 workflow 挂 environment；凭据用环境级 secret；
@@ -76,6 +77,7 @@ README 与 CHANGELOG 中英双份，英文为默认，顶部互链。只针对�
 - `meta/SOURCE` 与本次要用的版本不一致：不发布；
 - 告警非零/查询失败：不发布；
 - 没有 owner 当次确认：不发布；
+- 发布 PR 用 squash 合并、集成分支没有成为默认分支祖先：不发布；
 - tag 不在默认分支：不发布；
 - 发布凭据不是环境级 secret：不发布。
 
