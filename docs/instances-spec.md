@@ -117,7 +117,7 @@ interface DshInstance {
 - **写 `dsh.instances` 可能失败**：刚安装 / 更新扩展、窗口还没 reload 时，运行中的窗口配置注册表里可能还没有这个键，`update()` 会报 `Unable to write to User Settings because dsh.instances is not a registered configuration.`。这不是错误配置，重载窗口即可。启动路径必须容忍它：
   - 合成实例、创建/编辑/删除实例都**先落盘、成功后再改内存**；写失败就报错并回滚，绝不留下「面板看不见但校验时存在」的幽灵实例（否则重试会报 `name "…" is already used`）。
   - 面板必须把设置/初始化问题渲染出来（`issues`），不能只显示空的实例列表。
-  - 首次安装时 `dsh.pkgPath` / `dsh.srcPath` 的写入失败同样只警告、不阻断 Start。
+  - 首次安装选择自定义位置时，`dsh.pkgPath` / `dsh.srcPath` 的写入失败同样只警告、不阻断 Start；选择默认位置则保持为空。不可达的旧值（例如别的机器带来的盘符路径）会回退到自管位置，并在 Start 时清除该设置。
 - 如果 `dsh.instances` 已有内容，不覆盖。
 - `dsh.port` 保留在 schema 中并标注 deprecated；迁移后不再读取。
 - README / CHANGELOG 已写明这次迁移和 `dsh.port` 的变化（0.3.0）。

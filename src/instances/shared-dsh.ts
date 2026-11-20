@@ -12,10 +12,9 @@ import {
   pinSourceToNewestReleaseTag,
   pkgInstallDir,
   preparePkgStart,
-  unreachablePkgPath as unreachablePkgPathSetting,
   type InstallHost,
 } from '../dsh/install.ts'
-import { installedDshVersion, maskPath } from '../dsh/paths.ts'
+import { installedDshVersion } from '../dsh/paths.ts'
 import { reinstallInPlace } from '../dsh/reinstall.ts'
 import { DETECTION_CACHE_TTL_MS, UPDATE_CHECK_TTL_MS } from '../shared/timing.ts'
 import { versionFromDescribe } from '../dsh/versions.ts'
@@ -157,10 +156,6 @@ export class SharedDsh {
 
     const installHost = this.installHost()
     await detectDshVersion(cfg, this.detectHost())
-    const unreachable = unreachablePkgPathSetting(cfg)
-    if (unreachable !== undefined) {
-      addActivity(`⚠ dsh.pkgPath ${maskPath(unreachable)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
-    }
     const version = await preparePkgStart(cfg, installHost, convertAllowed)
     if (!version) return undefined
     this.dshVersionValue = version

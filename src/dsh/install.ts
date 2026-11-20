@@ -44,13 +44,18 @@ export function pkgInstalledVersion(cfg: { pkgPath: string }): string | undefine
   return installedDshVersion(pkgInstallDir(cfg))
 }
 
-async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: string): Promise<string | undefined> {
+interface InstallDirChoice {
+  dir: string
+  custom: boolean
+}
+
+async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: string): Promise<InstallDirChoice | undefined> {
   const pick = await vscode.window.showInformationMessage(
     `Install dsh (${kind}) to the default location?`,
     'Use default location',
     'Choose folder…',
   )
-  if (pick === 'Use default location') return defaultDir
+  if (pick === 'Use default location') return { dir: defaultDir, custom: false }
   if (pick !== 'Choose folder…') return undefined
   const picked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
@@ -59,18 +64,33 @@ async function chooseInstallDir(kind: 'pkg' | 'source', defaultDir: string): Pro
     openLabel: 'Select install folder',
     title: `Choose where to install dsh (${kind})`,
   })
-  return picked?.[0]?.fsPath
+  const dir = picked?.[0]?.fsPath
+  return dir === undefined ? undefined : { dir, custom: true }
 }
 
 async function saveDshSetting(key: 'srcPath' | 'pkgPath', value: string): Promise<boolean> {
   const c = vscode.workspace.getConfiguration('dsh')
   if ((c.get<string>(key) ?? '') === value) return true
   try {
-    await c.update(key, value, vscode.ConfigurationTarget.Global)
+    await c.update(key, value === '' ? undefined : value, vscode.ConfigurationTarget.Global)
     return true
   } catch {
     return false
   }
+}
+
+async function rememberInstallDir(key: 'srcPath' | 'pkgPath', choice: InstallDirChoice): Promise<boolean> {
+  return saveDshSetting(key, choice.custom ? choice.dir : '')
+}
+
+async function dropUnreachablePkgPath(cfg: { pkgPath: string }, dir: string, host: InstallHost): Promise<void> {
+  const configured = cfg.pkgPath.trim()
+  if (configured === '' || configured === dir) return
+  if (await saveDshSetting('pkgPath', '')) {
+    host.addActivity(`ℹ dsh.pkgPath ${maskPath(configured)} is not reachable on this machine — using the managed install location and clearing the setting`)
+    return
+  }
+  host.addActivity(`⚠ dsh.pkgPath ${maskPath(configured)} is not reachable on this machine — using the managed install location (clear the setting to drop this warning)`)
 }
 
 export async function latestDshVersion(
@@ -137,6 +157,7 @@ export async function preparePkgStart(
   convertAllowed = false,
 ): Promise<string | undefined> {
   const dir = pkgInstallDir(cfg)
+  await dropUnreachablePkgPath(cfg, dir, host)
 
   if (convertAllowed) recoverInterruptedReinstall(dir)
   const installed = installedDshVersion(dir)
@@ -190,13 +211,13 @@ export async function preparePkgStart(
   const version = resolved.version
   let installDir = dir
   if (!cfg.pkgPath) {
-    const chosen = await chooseInstallDir('pkg', managedPackageDir())
-    if (!chosen) return undefined
+    const choice = await chooseInstallDir('pkg', managedPackageDir())
+    if (!choice) return undefined
 
-    if (!(await saveDshSetting('pkgPath', chosen))) {
-      host.addActivity(`⚠ could not remember dsh.pkgPath — installing to ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
+    if (!(await rememberInstallDir('pkgPath', choice))) {
+      host.addActivity(`⚠ could not remember dsh.pkgPath — installing to ${maskPath(choice.dir)} for this session; reload the window if the extension was just installed or updated`)
     }
-    installDir = chosen
+    installDir = choice.dir
   }
   host.addActivity(`ℹ dsh v${version} — installing it now (first run, can take a few minutes)`)
   host.setDshVersion(version)
@@ -279,10 +300,11 @@ export async function pinSourceToNewestReleaseTag(checkout: string, host: Pick<I
 export async function ensureSourceCheckout(cfg: { srcPath: string }, host: InstallHost): Promise<SourceCheckout | undefined> {
   const existing = findSourceCheckout(cfg)
   if (existing) return { path: existing, cloned: false, managed: existing === managedSourceCheckout() }
-  const chosen = await chooseInstallDir('source', managedSourceCheckout())
-  if (!chosen) return undefined
+  const choice = await chooseInstallDir('source', managedSourceCheckout())
+  if (!choice) return undefined
+  const chosen = choice.dir
 
-  if (!(await saveDshSetting('srcPath', chosen))) {
+  if (!(await rememberInstallDir('srcPath', choice))) {
     host.addActivity(`⚠ could not remember dsh.srcPath — using ${maskPath(chosen)} for this session; reload the window if the extension was just installed or updated`)
   }
   if (isDshCheckout(chosen)) {

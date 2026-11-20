@@ -181,6 +181,7 @@ export function maskPath(p: string): string {
 }
 
 export function driveRootExists(target: string): boolean {
+  if (process.platform !== 'win32' && /^[A-Za-z]:[\\/]/.test(target)) return false
   const root = path.parse(path.resolve(target)).root
   return !/^[A-Za-z]:[\\/]$/.test(root) || fs.existsSync(root)
 }

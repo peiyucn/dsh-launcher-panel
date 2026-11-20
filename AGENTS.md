@@ -16,6 +16,8 @@
 
 匹配后：把 playbook 的步骤拷进 todo；步骤里再调用 skill / principle / rule。
 
+GitHub 操作先读 [meta/skills/github/SKILL.md](meta/skills/github/SKILL.md)；agent 的 API / PR 用 `gh-agent`，push 用 `git-agent`；`gh` 只用于 owner / Forge 动作。
+
 ### C2｜用中文表述
 
 与 owner 交流、编写 commit 描述一律用中文，commit 保留英文类型前缀。代码不写注释；只有 owner 明确要求时才写。
