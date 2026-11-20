@@ -7,12 +7,12 @@
 - 当前 `dev` 工作区干净，`npm run verify` 全绿；
 - 两份 CHANGELOG 已加入本次版本条目，`package.json` 版本号已更新；
 - README 有用户可感知变化时已同步；
-- `dev` → `main` 只能通过 PR 合并（squash），required checks 为 `typecheck` / `test` / `build` / `package`。
+- `dev` → `main` 只能通过 PR 合并，且必须用 **merge commit**（squash 会让下一次发布 PR 因历史分叉冲突），required checks 为 `typecheck` / `test` / `build` / `package`。
 
 ## 发版步骤
 
 1. 确认 `dev` 的 CI 全绿，`git diff --check` 干净。
-2. 创建 `dev` → `main` 的 PR，等待四个 required checks 通过后 squash 合并；**不得直接 push main**。
+2. 创建 `dev` → `main` 的 PR，等待四个 required checks 通过后用 **merge commit** 合并（不用 squash）；合并后确认 `git merge-base --is-ancestor origin/dev origin/main` 为真；**不得直接 push main**。
 3. 发布前确认：打 tag / 发布市场前，向 owner 明确报出「要发什么、版本号、目标通道、影响范围」，获得当次确认；上一次批准不适用于本次。
 4. 在 `main` 上创建 annotated tag 并推送。`v*` tag 受保护，只有 owner 能创建/移动/删除；Agent 不得推送 tag：
 
