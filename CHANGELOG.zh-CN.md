@@ -4,6 +4,11 @@
 
 简体中文 | [English](CHANGELOG.md)
 
+## [0.4.7] - 2026-11-20
+
+- 修复：未安装 dsh 时面板不再显示「✓ dsh is up to date」，改为「ℹ dsh is not installed yet」，Start 会正常触发安装；在 macOS / Linux 上，设置里来自其它机器的 `dsh.pkgPath` 不再被误判为可达目录。
+- 只有选择自定义目录时才会把安装位置写入 `dsh.pkgPath` / `dsh.srcPath`；选择默认位置则保持为空，自管位置跟随本机。设置里记录的位置在本机不存在时会被忽略，并在下次 Start 时清除，不再每次启动都重复告警。
+
 ## [0.4.6] - 2026-11-18
 
 - **DeepSeek API Status** 卡片改为左右两列：左侧 API 以胶囊排列，右侧单列显示 `Last checked` 标签与时间（分两行），中间用竖线分隔；整卡只显示一个检查时间，不再在每个模型行重复。

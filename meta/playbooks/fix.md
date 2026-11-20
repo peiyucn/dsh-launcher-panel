@@ -53,7 +53,7 @@
    - 走 [skills/review/SKILL.md](../skills/review/SKILL.md)；
    - PR 说明：broken / root cause / fix / verification；
    - 贴失败到通过的输出。
-   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；合并前 required checks + owner 批准。
+   - 调用：[rules/engineering.md](../rules/engineering.md) E8、E10；[skills/github/SKILL.md](../skills/github/SKILL.md)；合并前 required checks + owner 批准。
    - 证据：review verdict、PR 说明。
 
 ## 输出

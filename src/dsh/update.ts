@@ -1,6 +1,7 @@
 import {
+  decidePkgUpdate,
   decideSourceUpdate,
-  dshVersionAtLeast,
+  missingDshUpdate,
   newestReleaseTag,
   type RemoteReleaseTag,
   type UpdateCheckOutcome,
@@ -69,18 +70,15 @@ export async function checkDshUpdateStatus(host: UpdateHost): Promise<DshUpdate>
   const cfg = host.readConfig()
   if (cfg.runMode === 'pnpm') {
     const installed = pkgInstalledVersion(cfg)
-    if (!installed) return { hasUpdate: false, label: '' }
+    if (installed === undefined) return missingDshUpdate()
     const latest = await latestDshVersion(cfg.npmChannel, host.dbg)
     if ('error' in latest) {
       return { hasUpdate: false, label: '', failed: true, failedReason: latest.error }
     }
-    if (latest.version !== installed && dshVersionAtLeast(latest.version, installed)) {
-      return { hasUpdate: true, label: `v${latest.version}` }
-    }
-    return { hasUpdate: false, label: '' }
+    return decidePkgUpdate(installed, latest.version)
   }
   const checkout = host.findSourceCheckout()
-  if (!checkout) return { hasUpdate: false, label: '' }
+  if (!checkout) return missingDshUpdate()
   const inspected = await inspectSource(checkout)
   if (inspected.kind === 'failed') {
     return { hasUpdate: false, label: '', failed: true, failedReason: inspected.reason }

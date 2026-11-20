@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 English | [简体中文](CHANGELOG.zh-CN.md)
 
+## [0.4.7] - 2026-11-20
+
+- Fixed: with no dsh installed, the panel no longer reports `✓ dsh is up to date`; it shows `ℹ dsh is not installed yet`, so Start installs dsh as expected. A `dsh.pkgPath` recorded on another machine is no longer treated as a reachable folder on macOS and Linux.
+- The install location is recorded in `dsh.pkgPath` / `dsh.srcPath` only when you pick a custom folder. Choosing the default location leaves them empty, so the launcher-managed location keeps following this machine; a recorded location that does not exist here is ignored and cleared on the next Start instead of warning on every Start.
+
 ## [0.4.6] - 2026-11-18
 
 - The **DeepSeek API Status** card lays the API entries out as pills in a left column and keeps a single `Last checked` block in a right column, separated by a divider; the label and time are on separate lines. The card reports one time for the whole card instead of one per model row.

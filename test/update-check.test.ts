@@ -13,3 +13,9 @@ test('the panel refresh handler delegates to the instance manager', () => {
   assert.match(messages, /await this\.host\.requestRefresh\(\)/, 'the message path must end in the scheduled refresh')
   assert.match(panel, /createRefreshScheduler/, 'refreshes must be serialized and merged')
 })
+test('an absent install never falls through to "up to date"', () => {
+  const update = readFileSync(new URL('../src/dsh/update.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(update, /if \(!installed\) return \{ hasUpdate: false, label: '' \}/)
+  assert.doesNotMatch(update, /if \(!checkout\) return \{ hasUpdate: false, label: '' \}/)
+  assert.match(update, /missingDshUpdate\(\)/)
+})
