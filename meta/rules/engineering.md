@@ -8,9 +8,9 @@ meta-repo 根 `README.md` 的项目清单中档位为全量或精简的仓库共
 
 | 项目 | 开发分支 | CI | 发布 | 部署 / 同步 |
 |---|---|---|---|---|
-| dsh-launcher-panel | dev | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
-| epytor | dev | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
-| dsh-sparrow | dev | `typecheck` → `build` → `test` → `package` | `publish`（npm；不建 Release） | `deploy`（`market.yml`，发布 `dsh.pyai.site`） |
+| dsh-launcher-panel | main | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
+| epytor | main | `typecheck` → `test` → `build` → `package` | `publish`（vsce + GitHub Release） | — |
+| dsh-sparrow | main | `typecheck` → `build` → `test` → `package` | `publish`（npm；不建 Release） | `deploy`（`market.yml`，发布 `dsh.pyai.site`） |
 | pyai.site | main | `typecheck` | `deploy`（build + Pages，push main 即部署） | `sync`（`daily-sync.yml`，cron） |
 
 有测试的仓库，test job 须输出报告。发布工作流统一命名 `publish.yml`。无 CI 的仓库不列入本表。
